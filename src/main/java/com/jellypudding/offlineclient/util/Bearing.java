@@ -11,7 +11,6 @@ public record Bearing(double x, double z, double yaw, double blur, double beyond
 
     private static final double QUARTER_TURN = Math.PI / 2;
 
-    // An exact yaw that can point at anything along the line.
     public Bearing(double x, double z, double yaw) {
         this(x, z, yaw, 0, 0);
     }
@@ -28,7 +27,6 @@ public record Bearing(double x, double z, double yaw, double blur, double beyond
         return Math.cos(yaw);
     }
 
-    // The point this far along the line at the given height.
     public Vec3 along(double distance, double y) {
         return new Vec3(x + dirX() * distance, y, z + dirZ() * distance);
     }
@@ -38,7 +36,6 @@ public record Bearing(double x, double z, double yaw, double blur, double beyond
         return dirX() * (px - x) + dirZ() * (pz - z);
     }
 
-    // How far a point sits to one side of the line.
     public double offset(double px, double pz) {
         return Math.cos(yaw) * (px - x) + Math.sin(yaw) * (pz - z);
     }
@@ -47,12 +44,10 @@ public record Bearing(double x, double z, double yaw, double blur, double beyond
         return Math.hypot(x - other.x, z - other.z);
     }
 
-    // The yaw in degrees as the game shows it.
     public float degrees() {
         return Mth.wrapDegrees((float) Math.toDegrees(yaw));
     }
 
-    // The nearest of the eight compass points such as north east.
     public String compass() {
         return CompassPoint.nearest(degrees()).words();
     }

@@ -72,7 +72,6 @@ public final class NoteSong {
         return author;
     }
 
-    // Every distinct note the song plays. One note block is needed for each.
     public Set<Note> needed() {
         return needed;
     }
@@ -112,7 +111,7 @@ public final class NoteSong {
         return new NoteSong(title, author, result);
     }
 
-    // Remaps or drops each instrument. A null in the map drops that note.
+    // A null in the map drops the instrument.
     public NoteSong remapped(Map<NoteBlockInstrument, NoteBlockInstrument> map) {
         if (map.isEmpty()) {
             return this;
@@ -137,8 +136,7 @@ public final class NoteSong {
         return new NoteSong(title, author, result);
     }
 
-    // The instrument whose note block makes the sound. Null for any other sound and for a mob
-    // head which plays no notes.
+    // Null for any other sound and for a mob head which plays no notes.
     public static NoteBlockInstrument instrumentOf(SoundEvent sound) {
         for (NoteBlockInstrument instrument : NoteBlockInstrument.values()) {
             if (instrument.isTunable() && instrument.getSoundEvent().value() == sound) {
@@ -155,8 +153,8 @@ public final class NoteSong {
         return Math.clamp(Math.round(steps) + OCTAVE, LOWEST, HIGHEST);
     }
 
-    // Saves notes as the plain lines a song is read back from. Each line holds the tick and
-    // the pitch and the number of the instrument. False after logging why it could not be written.
+    // Each line holds the tick and the pitch and the number of the instrument. False after logging
+    // why it could not be written.
     public static boolean write(Path file, String title, String author, SortedMap<Integer, List<Note>> ticks) {
         List<String> lines = new ArrayList<>();
         lines.add(NAME_HEADER + " " + title);

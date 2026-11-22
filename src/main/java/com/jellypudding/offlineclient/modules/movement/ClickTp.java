@@ -30,9 +30,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-// Teleports you onto the block you click whichever face of it the click meets. A long way is
-// covered a hop at a time and a wall on the way is climbed over. With no room on top the spot
-// beside the face is taken and with none there the nearest one.
 public final class ClickTp extends Module {
 
     public enum Trigger { USE, ATTACK, BOTH }
@@ -90,7 +87,6 @@ public final class ClickTp extends Module {
         }
     }
 
-    // True when the click was taken for a teleport.
     private boolean teleport(boolean attack) {
         Landing landing = landing(attack);
         if (landing == null) {
@@ -132,7 +128,6 @@ public final class ClickTp extends Module {
         return mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.ENTITY;
     }
 
-    // The preview follows whichever button would teleport now.
     @Subscribe
     private void onTick(TickEvent event) {
         if (!showLanding.isOn() || !ready() || onEntity()) {
@@ -158,7 +153,6 @@ public final class ClickTp extends Module {
         }
     }
 
-    // Where a click would put the mover. Null when the click keeps its own meaning.
     private Landing landing(boolean attack) {
         BlockHitResult hit = lookRay();
         if (hit.getType() != HitResult.Type.BLOCK) {
@@ -181,8 +175,6 @@ public final class ClickTp extends Module {
         return new Landing(beside, Hop.nearestFit(mover, beside));
     }
 
-    // The height a mover stands at on the block. Water with nothing solid in it holds it
-    // at the surface.
     private double top(BlockPos pos, BlockState state) {
         VoxelShape shape = state.getCollisionShape(mc.level, pos);
         if (shape.isEmpty() && water.isOn() && !state.getFluidState().isEmpty()) {

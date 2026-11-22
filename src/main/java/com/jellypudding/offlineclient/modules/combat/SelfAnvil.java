@@ -13,7 +13,6 @@ import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.AnvilBlock;
 
-// Drops an anvil onto your own head. Nobody can walk into a hole with an anvil in it.
 public final class SelfAnvil extends Module {
 
     private final BoolSetting rotate = new BoolSetting("Rotate",

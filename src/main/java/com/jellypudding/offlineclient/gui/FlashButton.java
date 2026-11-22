@@ -9,9 +9,8 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-// A vanilla button that says what its press did in place of its label for a moment. Words too
-// wide for it show as its tip instead. A press leaves the keyboard focus where it was because the
-// button sits beside a box being typed in.
+// A press leaves the keyboard focus where it was because the button sits beside a box being typed
+// in.
 public final class FlashButton extends Button.Plain {
 
     // The game keeps this much room either side of a button's label.

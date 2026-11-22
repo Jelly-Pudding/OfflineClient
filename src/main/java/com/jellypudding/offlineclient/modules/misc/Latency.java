@@ -32,8 +32,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Holds the packets you pick for a while before they go on. Kinds that must keep their order
-// travel as a group. A held position waits for MoveGate like every other position.
+// Kinds that must keep their order travel as a group. A held position waits for MoveGate like every
+// other position.
 public final class Latency extends Module {
 
     public enum SwitchOff { SEND, DROP }
@@ -194,7 +194,7 @@ public final class Latency extends Module {
         release();
     }
 
-    // True whilst packets of this kind on their way out are held. Reached from any thread.
+    // Reached from any thread.
     public boolean delays(PacketType<?> type) {
         return holding() && holdOutgoing.contains(type);
     }
@@ -216,7 +216,6 @@ public final class Latency extends Module {
         holdIncoming = withGroups(PacketNames.incomingTypes(incoming.getValue()), INCOMING_GROUPS, NEVER_INCOMING);
     }
 
-    // Adds the rest of every group a picked kind belongs to.
     private static Set<PacketType<?>> withGroups(Set<PacketType<?>> picked, List<Set<PacketType<?>>> groups,
                                                  Set<PacketType<?>> never) {
         Set<PacketType<?>> held = new HashSet<>(picked);

@@ -18,7 +18,6 @@ import java.util.UUID;
 // name sits right before a chat mark.
 public final class ChatSender {
 
-    // What one player wrote with their name taken off the front.
     public record Line(UUID sender, String name, String text) {
 
         public boolean isOwn() {
@@ -37,7 +36,7 @@ public final class ChatSender {
     private ChatSender() {
     }
 
-    // True for the packets a chat line comes in. The action bar is left out.
+    // The action bar is left out.
     public static boolean isChat(Packet<?> packet) {
         return packet instanceof ClientboundPlayerChatPacket
             || packet instanceof ClientboundSystemChatPacket system && !system.overlay();
@@ -57,12 +56,10 @@ public final class ChatSender {
         };
     }
 
-    // The text of a line with any colour codes taken out.
     public static String plain(Component text) {
         return ChatFormatting.stripFormatting(text.getString());
     }
 
-    // True when the words stand whole in the text whatever their case.
     public static boolean holds(String text, String words) {
         return ChatUtil.wholeWordIndex(text.toLowerCase(Locale.ROOT), words.toLowerCase(Locale.ROOT), 0) != -1;
     }
@@ -92,8 +89,6 @@ public final class ChatSender {
         }
     }
 
-    // The one word that stands before the first chat mark of a line. Null when there is no
-    // mark or more than one word comes before it.
     public static String soleWriter(String text) {
         int mark = firstMark(text);
         return mark == -1 ? null : soleName(text.substring(0, mark));
@@ -115,15 +110,13 @@ public final class ChatSender {
         return before.isEmpty() || before.chars().anyMatch(Character::isWhitespace) ? null : before;
     }
 
-    // The name a player on the tab list goes by whatever case it was written in. Null when
-    // nobody listed goes by it. It reads the tab list and belongs on the game thread.
+    // Null when nobody listed goes by the name. Game thread only.
     public static String listedName(String name) {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         PlayerInfo info = connection == null ? null : connection.getPlayerInfoIgnoreCase(name);
         return info != null && connection.getListedOnlinePlayers().contains(info) ? info.getProfile().name() : null;
     }
 
-    // The text with any tags in square brackets at its front taken off.
     private static String afterTags(String text) {
         String rest = text.stripLeading();
         int close;
@@ -133,8 +126,6 @@ public final class ChatSender {
         return rest;
     }
 
-    // The one name a stretch of text holds with nothing but signs and spaces round it. Null
-    // when a letter or a digit stands anywhere else or a tilde marks the name as a nickname.
     private static String soleName(String text) {
         int from = 0;
         int to = text.length();
@@ -149,8 +140,7 @@ public final class ChatSender {
         return !nickname && !name.isEmpty() && name.chars().allMatch(c -> ChatUtil.isNameChar((char) c)) ? name : null;
     }
 
-    // True when the name of anyone online stands whole in the text. It reads the tab list and
-    // belongs on the game thread.
+    // Game thread only.
     public static boolean namesAnyone(String text) {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         if (connection == null) {
@@ -174,9 +164,8 @@ public final class ChatSender {
         return -1;
     }
 
-    // The writer of a line of server text. That is the earliest online name with a chat mark
-    // after it. Null off a server and when no name has one. It reads the tab list and belongs
-    // on the game thread.
+    // The earliest online name with a chat mark after it. Null off a server and when no name has
+    // one. Game thread only.
     static Line writerOf(Component line) {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         if (connection == null) {
@@ -207,7 +196,6 @@ public final class ChatSender {
             text.substring(markAt + 1).trim());
     }
 
-    // Where the mark sits once spaces are skipped. Minus one when anything else comes first.
     private static int markAfter(String text, int from) {
         int at = from;
         while (at < text.length() && text.charAt(at) == ' ') {

@@ -8,17 +8,14 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Where a player set down at a spot comes to rest on the floor beneath it.
 public final class SafeDrop {
 
-    // How far under the landing a block that burns or pricks still counts.
     private static final double GROUND_PROBE = 0.1;
 
     private SafeDrop() {
     }
 
-    // The spot on the floor under the given one. Null when the player would not fit there or
-    // the drop would hurt or the ground burns.
+    // Null when the player would not fit there or the drop would hurt or the ground burns.
     public static Vec3 below(Entity player, Vec3 spot) {
         Level level = player.level();
         AABB box = Hop.boxAt(player, spot);

@@ -20,24 +20,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// The proxies you join through saved to offlineclient/proxylist.json with the one picked. Their
-// logins are kept apart in proxies.json under the name of each proxy. Names match whatever their
-// case and a proxy saved under a name takes the place of the one there.
+// Their logins are kept apart in proxies.json under the name of each proxy.
 public final class ProxyStore {
 
-    // One saved proxy.
     public record Entry(String name, ProxyTunnel.Kind kind, String host, int port) {
 
-        // The host and port the way proxy lists write them. An IPv6 host goes in brackets.
+        // An IPv6 host goes in brackets.
         public String address() {
             return ProxyText.address(host, port);
         }
     }
 
-    // The file an import reads and the kind its proxies are without a word of their own.
     public record Request(String file, ProxyTunnel.Kind kind) {
 
-        // Words such as my list.txt socks4. Either part can be left out.
         public static Request of(String words) {
             List<String> parts = new ArrayList<>(List.of(ProxyText.WHITESPACE.split(words.strip())));
             ProxyTunnel.Kind kind = ProxyText.KIND_WORDS.get(parts.getLast().toLowerCase(Locale.ROOT));
@@ -48,13 +43,11 @@ public final class ProxyStore {
             return new Request(file.isEmpty() ? DEFAULT_FILE : file, kind == null ? ProxyText.DEFAULT_KIND : kind);
         }
 
-        // The file name without the folders before it.
         public String shownFile() {
             return file.substring(Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1);
         }
     }
 
-    // What an import came to. A problem stands for a file that could not be read at all.
     public record Imported(String file, int added, int known, int unread, int leftOut, String problem) {
 
         private static Imported failed(String problem) {
@@ -65,7 +58,6 @@ public final class ProxyStore {
             return added > 0;
         }
 
-        // What happened as a few sentences.
         public String words() {
             if (problem != null) {
                 return problem;
@@ -93,7 +85,6 @@ public final class ProxyStore {
     private record Saved(List<Entry> entries, String picked) {
     }
 
-    // An address and the login that goes with it. Hosts match whatever their case.
     private record Held(String host, int port, ProxyTunnel.Login login) {
 
         private Held {
@@ -111,9 +102,7 @@ public final class ProxyStore {
     private static final String HOST = "host";
     private static final String PORT = "port";
 
-    // Far more than any list of proxies a player keeps.
     private static final long LARGEST_FILE = 1L << 20;
-    // A line of a list that starts with this is a remark.
     private static final String REMARK = "#";
     // Two proxies with the same address get a number after the name. The second gets two.
     private static final String NUMBERED = "#";
@@ -122,7 +111,6 @@ public final class ProxyStore {
     private static ProxyStore instance;
 
     private final Path file;
-    // The proxies in the order they were saved under the lower case of their names.
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private String picked;
 
@@ -146,13 +134,11 @@ public final class ProxyStore {
         return List.copyOf(entries.values());
     }
 
-    // Null when nothing is saved under that name.
     public synchronized Entry find(String name) {
         return entries.get(key(name));
     }
 
-    // The proxy joins go through whilst Proxy is on. Null whilst none is picked. The thread that
-    // opens a connection reads it.
+    // The thread that opens a connection reads it.
     public synchronized Entry picked() {
         return picked == null ? null : find(picked);
     }
@@ -166,8 +152,6 @@ public final class ProxyStore {
         return entries.size() >= MOST_SAVED;
     }
 
-    // Saves the proxy in place of one saved under its name. An import keeps logins by the same
-    // rule. Null when the list is full.
     public synchronized Entry save(Typed typed) {
         Entry entry = new Entry(typed.savedName(), typed.kind(), typed.host(), typed.port());
         String key = key(entry.name());
@@ -197,8 +181,6 @@ public final class ProxyStore {
         return true;
     }
 
-    // Forgets every one of these proxies that is still saved and their logins. Hands back how many
-    // went.
     public synchronized int removeAll(Collection<Entry> gone) {
         List<Entry> going = new ArrayList<>();
         for (Entry entry : gone) {
@@ -217,7 +199,7 @@ public final class ProxyStore {
         return going.size();
     }
 
-    // Null when the proxy has no login saved. Read on the network threads as each join opens.
+    // Read on the network threads as each join opens.
     public synchronized ProxyTunnel.Login login(Entry entry) {
         return logins().get(key(entry.name()));
     }
@@ -230,9 +212,7 @@ public final class ProxyStore {
         return logins().remove(key(entry.name()));
     }
 
-    // Adds every proxy in a text file with one on each line in any of the usual forms. A proxy
-    // saved already is left alone and a line that holds none is counted. A relative file name is
-    // read from the offlineclient folder.
+    // A relative file name is read from the offlineclient folder.
     public synchronized Imported importFrom(Request request) {
         String shown = request.shownFile();
         String text;
@@ -263,17 +243,13 @@ public final class ProxyStore {
         return new Imported(shown, batch.added, batch.known, batch.unread, batch.leftOut, null);
     }
 
-    // One import. Every line costs a few lookups however long the list and the file are.
     private final class Batch {
 
         private final ProxyTunnel.Kind kind;
-        // The login of every saved proxy by its name with what this import changed. Null for none.
         private final Map<String, ProxyTunnel.Login> logins = new HashMap<>();
-        // What this import changed in the logins. Null stands for one taken away.
+        // Null stands for a login taken away.
         private final Map<String, ProxyTunnel.Login> written = new HashMap<>();
-        // How many saved proxies have each address and login.
         private final Map<Held, Integer> held = new HashMap<>();
-        // The number the next proxy of each address tries after its name.
         private final Map<String, Integer> numbers = new HashMap<>();
         private int added;
         private int known;
@@ -329,8 +305,6 @@ public final class ProxyStore {
                 (was, more) -> was + more == 0 ? null : was + more);
         }
 
-        // The address as a name or the address with the first free number after it. An address
-        // that comes again carries on from the number it reached.
         private String freeName(String address) {
             if (find(address) == null) {
                 return address;
@@ -344,9 +318,8 @@ public final class ProxyStore {
         }
     }
 
-    // The login a proxy ends up with when it is saved over the one saved under its name before. A
-    // login typed with it replaces the saved one. Without one the saved login stays whilst the
-    // host and port do. Null for none.
+    // A login typed with it replaces the saved one. Without one the saved login stays whilst the
+    // host and port do.
     private static ProxyTunnel.Login kept(Entry before, Typed typed, ProxyTunnel.Login saved) {
         if (typed.login() != null) {
             return typed.login();
@@ -363,8 +336,6 @@ public final class ProxyStore {
         return name.toLowerCase(Locale.ROOT);
     }
 
-    // Rows that cannot be read are left out and a name that comes again loads once. The list keeps
-    // no more than it can hold.
     private static Saved decode(JsonElement root) {
         JsonObject object = root.getAsJsonObject();
         Map<String, Entry> decoded = new LinkedHashMap<>();
@@ -376,7 +347,6 @@ public final class ProxyStore {
         return new Saved(List.copyOf(decoded.values()), JsonFields.text(object, USE));
     }
 
-    // Null for a row a hand edit broke.
     private static Entry entry(JsonElement element) {
         JsonObject saved = element.getAsJsonObject();
         String name = saved.get(NAME).getAsString();

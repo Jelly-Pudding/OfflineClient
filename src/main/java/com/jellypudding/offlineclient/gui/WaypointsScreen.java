@@ -41,12 +41,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Every waypoint of this server in one window. The rows narrow to a dimension or to a search and
-// each can be hidden or walked to or removed. A click on one opens its name and spot and every
-// option it can have of its own.
 public final class WaypointsScreen extends ListWindow {
 
-    // One waypoint and how far off it lies. The distance is below nought in another dimension.
+    // The distance is below nought in another dimension.
     private record Row(Waypoint waypoint, double distance) {
 
         boolean here() {
@@ -54,7 +51,6 @@ public final class WaypointsScreen extends ListWindow {
         }
     }
 
-    // The buttons at the end of a row. Walking only works in the dimension you are in.
     private enum RowAction implements RowList.Button {
         SHOWN("shown", "Drawn in the world. Click to hide it."),
         HIDDEN("hidden", "Kept but not drawn. Click to show it again."),
@@ -89,14 +85,11 @@ public final class WaypointsScreen extends ListWindow {
     private static final int SORT_WIDTH = 72;
     private static final int ADD_WIDTH = 60;
     private static final int BACK_WIDTH = 48;
-    // The rows of one waypoint keep to this width however wide the window is.
     private static final int EDIT_WIDTH = 300;
     private static final int EDIT_PAD = 4;
-    // Distances move as you do. The rows are worked out again this often.
     private static final long REFRESH_MS = 500;
     private static final String SEPARATOR = " · ";
     private static final String ALL = "All";
-    // A waypoint marked from the list is named after this with the first free number.
     private static final String STEM = "Waypoint";
     private static final String LIST_HINT = "Click a waypoint to edit it. Shown and hidden switch it in the world. "
         + "Go walks there. The cross removes it.";
@@ -114,14 +107,11 @@ public final class WaypointsScreen extends ListWindow {
     private final SettingWidget.Drag drag = new SettingWidget.Drag();
     private final Map<String, Integer> counts = new HashMap<>();
 
-    // The dimensions of this server that hold a waypoint with the one you are in first.
     private List<String> dimensions = List.of();
     // Null lists every dimension.
     private String filter;
     private boolean byName;
-    // The waypoint whose rows are open. Null whilst the list shows.
     private Editor editor;
-    // The button of the press being handled and whether it is still down.
     private int pressedButton;
     private boolean pressed;
     private boolean stale = true;
@@ -134,12 +124,10 @@ public final class WaypointsScreen extends ListWindow {
         }
     }
 
-    // Opens the list over whatever screen is open.
     public static void open() {
         openOver(parent -> new WaypointsScreen(parent, null));
     }
 
-    // Opens the list on the rows of one waypoint.
     public static void edit(Waypoint waypoint) {
         openOver(parent -> new WaypointsScreen(parent, waypoint));
     }
@@ -157,8 +145,6 @@ public final class WaypointsScreen extends ListWindow {
         return cornerX() - 4 - ADD_WIDTH;
     }
 
-    // The rows are worked out again when something here changes and twice a second for the
-    // distances and for whatever a command or a module did to the waypoints meanwhile.
     private void refresh() {
         long now = System.currentTimeMillis();
         if (!stale && now - refreshedAt < REFRESH_MS) {
@@ -212,7 +198,6 @@ public final class WaypointsScreen extends ListWindow {
         list.show(shown);
     }
 
-    // The second line of a row such as 120 64 300 · Nether · 40 blocks · removes itself within 8 blocks.
     private String detail(Row row) {
         Waypoint waypoint = row.waypoint();
         StringBuilder text = new StringBuilder(BlockUtil.text(waypoint.pos()));
@@ -230,7 +215,6 @@ public final class WaypointsScreen extends ListWindow {
         return text.toString();
     }
 
-    // A distance to the nearest whole block such as 1 block or 40 blocks.
     private static String blocks(double distance) {
         return Tally.counted(Math.clamp(Math.round(distance), 0, Integer.MAX_VALUE), "block");
     }
@@ -272,7 +256,6 @@ public final class WaypointsScreen extends ListWindow {
         footer.render(context, font, wx, wy, ww, wh, editor == null ? LIST_HINT : EDIT_HINT);
     }
 
-    // The waypoints a tab holds. The first tab counts them all.
     private String tally(int tab) {
         if (tab > 0) {
             return String.valueOf(counts.getOrDefault(dimensions.get(tab - 1), 0));
@@ -325,7 +308,6 @@ public final class WaypointsScreen extends ListWindow {
         return SettingWidget.blockHeight(editor.block) + 2 * EDIT_PAD;
     }
 
-    // Where the rows of the open waypoint start once they have scrolled.
     private int editTop() {
         return contentTop() + EDIT_PAD - editScroll.getOffset();
     }
@@ -443,8 +425,7 @@ public final class WaypointsScreen extends ListWindow {
         changed();
     }
 
-    // The rows open when a picked block comes back take it and the foot says how that went. A
-    // rename may have rebuilt them whilst the list stood aside.
+    // A rename may have rebuilt the rows whilst the list stood aside.
     private void takePicked(BlockPos pos) {
         if (editor != null) {
             footer.say(editor.moveTo(pos));
@@ -456,7 +437,6 @@ public final class WaypointsScreen extends ListWindow {
         editScroll.setOffset(0);
     }
 
-    // Whatever is being typed is taken first and the rows are written back one last time.
     private void leaveEditor() {
         if (editor == null) {
             return;
@@ -497,7 +477,6 @@ public final class WaypointsScreen extends ListWindow {
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
-    // A row being typed into takes the keys. Escape on a waypoint goes back to the list.
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (editor == null) {
@@ -524,9 +503,8 @@ public final class WaypointsScreen extends ListWindow {
         super.removed();
     }
 
-    // The rows of one waypoint. An option row shows what the waypoint is drawn with and its reset mark
-    // puts it back to what the module gives. Only a row the player moves is written back and one moved
-    // onto what the module gives follows the module again.
+    // Only a row the player moves is written back and one moved onto what the module gives follows
+    // the module again.
     private final class Editor {
 
         private final Options defaults;
@@ -545,10 +523,8 @@ public final class WaypointsScreen extends ListWindow {
         private final NumberSetting nearDistance;
         private final SettingBlock block;
 
-        // The waypoint as the store last took it.
         private Waypoint saved;
-        // What the option rows held when the waypoint was last read or written. A row that differs
-        // from it is one the player moved.
+        // A row that differs from it is one the player moved.
         private Options shownRows;
 
         private Editor(Waypoint waypoint) {
@@ -630,7 +606,6 @@ public final class WaypointsScreen extends ListWindow {
             return null;
         }
 
-        // Puts the waypoint on a block of the dimension you are in and says how that went.
         private String moveTo(BlockPos pos) {
             String here = ServerInfo.dimension();
             if (!here.equals(dimension())) {
@@ -682,8 +657,8 @@ public final class WaypointsScreen extends ListWindow {
                 Near.of(near.getValue(), nearDistance.getValue()));
         }
 
-        // Writes the rows back once they differ from the waypoint. A name or a spot that cannot
-        // be read goes back to what it was. False once the waypoint has gone from the store.
+        // A name or a spot that cannot be read goes back to what it was. False once the waypoint
+        // has gone from the store.
         private boolean sync() {
             WaypointStore store = WaypointStore.get();
             if (!store.holds(saved)) {

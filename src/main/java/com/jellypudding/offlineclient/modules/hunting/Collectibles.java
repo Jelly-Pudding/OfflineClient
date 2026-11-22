@@ -65,11 +65,11 @@ import java.util.List;
 // patterns and names.
 public final class Collectibles extends Module {
 
-    // One entity showing a picked item. The kind groups its messages and the words follow found.
+    // The kind groups its messages and the words follow found.
     private record Find(Entity entity, String kind, String label, String words) {
     }
 
-    // A banner with the corners of its cloth in order round the edge. The first two run along the top.
+    // The corners of the cloth run in order round the edge and the first two along the top.
     private record Banner(BlockPos pos, Vec3[] cloth, int color, String label, String words) {
 
         Vec3 centre() {
@@ -81,11 +81,9 @@ public final class Collectibles extends Module {
         }
     }
 
-    // A shelf showing at least one picked item.
     private record Shelf(BlockPos pos, String label, String words) {
     }
 
-    // A pattern laid over a banner in one dye.
     private record Motif(ResourceKey<BannerPattern> pattern, DyeColor color) {
 
         boolean matches(BannerPatternLayers.Layer layer) {
@@ -96,7 +94,6 @@ public final class Collectibles extends Module {
     private static final String MUSIC_DISC = "music_disc_";
     private static final String NETHERITE = "netherite";
 
-    // Finds are gold until the player picks another colour.
     private static final float GOLD_HUE = 45;
 
     // Besides the raid banner of outposts two structures hang patterned banners. Mansions show
@@ -105,7 +102,6 @@ public final class Collectibles extends Module {
     private static final List<Motif> END_CITY_BANDS = List.of(new Motif(BannerPatterns.TRIANGLE_TOP, DyeColor.BLACK),
         new Motif(BannerPatterns.TRIANGLE_BOTTOM, DyeColor.BLACK));
 
-    // Twice a second is quick enough for a banner that was just hung or an item just shelved.
     private static final int SCAN_TICKS = 10;
 
     // The banner renderer draws its model in sixteenths of a block at two thirds size.
@@ -156,9 +152,7 @@ public final class Collectibles extends Module {
     // A find at your feet would hide under its own box.
     private final NearFade fade = new NearFade(3);
 
-    // Rebuilt once a tick.
     private List<Find> found = List.of();
-    // Rebuilt by every block scan.
     private List<Banner> hung = List.of();
     private List<Shelf> stocked = List.of();
     private int wait;
@@ -250,7 +244,6 @@ public final class Collectibles extends Module {
         return finds;
     }
 
-    // Null when the entity shows nothing picked or its kind is switched off.
     private Find findOn(Entity entity) {
         return switch (entity) {
             case ItemEntity item -> dropped.isOn() ? shown(item, item.getItem(), "dropped item", " on the ground") : null;
@@ -266,7 +259,6 @@ public final class Collectibles extends Module {
         return !stack.isEmpty() && items.contains(stack.getItem()) && gear.passes(stack);
     }
 
-    // Null unless the stack is one of the picked items.
     private Find shown(Entity entity, ItemStack stack, String kind, String where) {
         if (!picked(stack)) {
             return null;
@@ -275,7 +267,6 @@ public final class Collectibles extends Module {
         return new Find(entity, kind, name, ChatUtil.withArticle(name) + where);
     }
 
-    // Null unless the holder holds or wears a picked item.
     private Find carried(LivingEntity holder, String kind) {
         List<Carried.Piece> pieces = Carried.pieces(holder,
             stack -> picked(stack) ? stack.getHoverName().getString() : null);
@@ -320,7 +311,6 @@ public final class Collectibles extends Module {
         }
     }
 
-    // Null for a shelf showing nothing picked. Such as an oak shelf showing Elytra and Mace.
     private Shelf shelfOf(ShelfBlockEntity shelf) {
         List<Carried.Piece> pieces = new ArrayList<>();
         for (ItemStack stack : shelf.getItems()) {
@@ -336,8 +326,7 @@ public final class Collectibles extends Module {
         return new Shelf(shelf.getBlockPos(), Carried.label(pieces), words);
     }
 
-    // True for a banner a structure is built with. Every one hangs on a wall with no name in
-    // one of six designs. Outposts fly the raid banner.
+    // Every banner a structure is built with hangs on a wall with no name in one of six designs.
     private boolean builtIn(BannerBlockEntity banner) {
         if (!(banner.getBlockState().getBlock() instanceof WallBannerBlock) || banner.getCustomName() != null) {
             return false;
@@ -369,8 +358,6 @@ public final class Collectibles extends Module {
             .get(DataComponents.BANNER_PATTERNS);
     }
 
-    // Named after its item such as a light gray banner with 2 patterns named Home. The label
-    // is the name a player gave it when there is one.
     private static Banner bannerOf(BannerBlockEntity banner) {
         BlockPos pos = banner.getBlockPos();
         int layers = banner.getPatterns().layers().size();
@@ -382,8 +369,8 @@ public final class Collectibles extends Module {
             name == null ? looks : name.getString(), words);
     }
 
-    // The cloth as the renderer draws it. A standing banner turns in steps of a sixteenth of
-    // a circle and a hanging one faces away from its wall.
+    // A standing banner turns in steps of a sixteenth of a circle and a hanging one faces away from
+    // its wall.
     private static Vec3[] cloth(BlockPos pos, BlockState state) {
         boolean wall = state.getBlock() instanceof WallBannerBlock;
         double yaw = wall ? state.getValue(WallBannerBlock.FACING).toYRot()
@@ -397,8 +384,8 @@ public final class Collectibles extends Module {
             clothPoint(pos, yaw, -CLOTH_HALF_WIDTH, top + CLOTH_HEIGHT, depth)};
     }
 
-    // A point of the banner model in the world. The renderer scales the model upside down and
-    // back to front and turns it about the middle of the block.
+    // The renderer scales the model upside down and back to front and turns it about the middle of
+    // the block.
     private static Vec3 clothPoint(BlockPos pos, double yaw, double x, double y, double z) {
         double turn = Math.toRadians(-yaw);
         double across = x * BANNER_SCALE;
@@ -407,7 +394,6 @@ public final class Collectibles extends Module {
             depth * Math.cos(turn) - across * Math.sin(turn));
     }
 
-    // The banners and shelves to draw. Turning a switch off hides them before the next scan.
     private List<Banner> shownBanners() {
         return banners.isOn() ? hung : List.of();
     }

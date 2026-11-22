@@ -37,7 +37,7 @@ public final class Notifier extends Module {
     record ModeChange(String name, GameType mode) implements Pending {
     }
 
-    // A player put on the tab list or taken off it. The tab name is null unless the server set one.
+    // The tab name is null unless the server set one.
     record Presence(boolean shown, String name, Component tabName) implements Pending {
     }
 
@@ -50,13 +50,10 @@ public final class Notifier extends Module {
     record Swung(int entityId) implements Pending {
     }
 
-    // Ticks after a join or respawn whilst the entities and effects the server sends stay quiet.
     static final int SETTLE_TICKS = 40;
 
-    // The most players or entities a part keeps track of at once.
     static final int MAX_TRACKED = 512;
 
-    // Packets held whilst the game thread is busy. Anything past this is dropped.
     private static final int MAX_PENDING = 4096;
 
     private final Queue<Pending> queue = new LinkedBlockingQueue<>(MAX_PENDING);
@@ -187,7 +184,6 @@ public final class Notifier extends Module {
         self.tick();
     }
 
-    // Ticks counted in a world whilst the module is on. The parts time their waits by it.
     int clock() {
         return clock;
     }
@@ -200,7 +196,6 @@ public final class Notifier extends Module {
         return ignoreFriends.isOn() && friend(name);
     }
 
-    // True for a player the alarms may ring for.
     boolean alarms(String name) {
         return !skip(name)
             && (!enemiesOnly.isOn() || OfflineClient.INSTANCE.getFriendManager().isEnemy(name));

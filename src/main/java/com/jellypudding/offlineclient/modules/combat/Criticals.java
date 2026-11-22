@@ -91,20 +91,15 @@ public final class Criticals extends Module {
     private final ChatWarning warning = new ChatWarning();
 
     private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();
-    // The punch of the click whose hit is held. It follows the hit out.
     private boolean punchOwed;
-    // The player whose hit is held. The id of its target means nothing to the next player.
-    // It is let go with the hold. A player kept here keeps its whole world alive.
+    // A player kept here keeps its whole world alive. It is let go with the hold.
     private LocalPlayer heldBy;
     private Stage stage = Stage.IDLE;
-    // The height the game last sent whilst a jump is under way.
     private double lastY;
 
-    // How far the next outgoing packet moves the reported height.
     private double offset;
     private int waited;
 
-    // The smash under way. Hits after the first go out as fresh attacks on the target.
     private int smashTarget;
     private boolean struck;
     private boolean followingUp;
@@ -134,7 +129,7 @@ public final class Criticals extends Module {
         SprintPause.detach(this);
     }
 
-    // Read by Knockback. True whilst a hit held back for a critical goes out.
+    // Read by Knockback.
     public boolean releasing() {
         return held.releasing() || followingUp;
     }
@@ -209,7 +204,7 @@ public final class Criticals extends Module {
         return !living.isBlocking() && !untouchable;
     }
 
-    // Plans every lift and drop at once. Without room above the click goes out as it was.
+    // Without room above the click goes out as it was.
     private void smash(PacketSendEvent event, ServerboundAttackPacket attack) {
         int wanted = totemBypass.isOn() ? hits.getInt() : 1;
         Hop.Plan plan = Hop.plan();
@@ -229,8 +224,6 @@ public final class Criticals extends Module {
         plan.go(this::smashFinished);
     }
 
-    // The first hit is the one the player swung. Later ones go out fresh whilst the mace
-    // is still in hand.
     private void strike(int hit) {
         if (stage != Stage.SMASH || !inGame()) {
             return;
@@ -265,7 +258,6 @@ public final class Criticals extends Module {
         resetStage();
     }
 
-    // True when a hit on the entity from where the player stands would be made critical.
     public boolean makesCritical(Entity target) {
         return !mode.is(Mode.NONE) && wantsCrit(target.getId()) && !skipCrit();
     }
@@ -366,7 +358,6 @@ public final class Criticals extends Module {
         }
     }
 
-    // Sends the held hit now that the server sees a fall.
     private void release() {
         resetStage();
         letOut();

@@ -35,7 +35,6 @@ public final class ChatGames {
     // What tells a game from a line that only asks you to type something.
     private static final List<String> GAME_WORDS = List.of("first", "fastest", "quickest", "win", "wins", "winner",
         "reward", "prize", "chat game", "chat games", "chatgame", "chatgames");
-    // What a game may call itself in front of a chat mark such as ChatGames or Unscramble.
     private static final List<String> GAME_NAMES = Stream.of(UNSCRAMBLE_WORDS, REVERSE_WORDS, FILL_WORDS,
         SUM_WORDS, TYPE_WORDS, GAME_WORDS, List.of("game", "games", "trivia", "quiz")).flatMap(List::stream).toList();
 
@@ -43,17 +42,14 @@ public final class ChatGames {
     private static final String OPENING = "\"'`“‘«";
     private static final String CLOSING = "\"'`”’»";
 
-    // What a puzzle of missing letters has in place of each one.
     private static final char GAP = '_';
 
-    // A longer answer than this is no chat game.
     private static final int LONGEST_ANSWER = 64;
 
-    // A word shorter than this is not looked for among the words of a line.
     private static final int SHORTEST_SCRAMBLE = 3;
 
-    // A list of words ready for the games. A scrambled word is found by its letters in one look.
-    // That look up is built the first time a game unscrambles.
+    // A scrambled word is found by its letters in one look. That look up is built the first time a
+    // game unscrambles.
     public static final class Words {
 
         private final List<String> listed;
@@ -63,7 +59,6 @@ public final class ChatGames {
             listed = List.copyOf(words);
         }
 
-        // The listed words made of the same letters in the order they were listed.
         private List<String> withLetters(String scrambled) {
             if (byLetters == null) {
                 Map<String, List<String>> built = new HashMap<>();
@@ -86,10 +81,8 @@ public final class ChatGames {
     private ChatGames() {
     }
 
-    // The answer the line asks for. Null for a line that is no game or a game of a kind that
-    // is left out or one that has no answer among the words and trivia given. The words are only
-    // fetched for a game that needs them. A question of the trivia is the text before its answer
-    // in lower case.
+    // Null for a line that is no game or one that has no answer. The words are only fetched for a
+    // game that needs them. A question of the trivia is the text before its answer in lower case.
     public static String solve(String line, Set<Kind> kinds, Supplier<Words> words, Map<String, String> trivia) {
         String text = BoundedRegex.cut(line.strip());
         String lower = text.toLowerCase(Locale.ROOT);
@@ -108,7 +101,6 @@ public final class ChatGames {
         return sendable(answer) ? answer : null;
     }
 
-    // Null for a line that asks for nothing.
     private static Kind kindOf(String text, String lower, Map<String, String> trivia) {
         if (triviaAnswer(lower, trivia) != null) {
             return Kind.TRIVIA;
@@ -141,7 +133,6 @@ public final class ChatGames {
         return writer == null || holdsAny(writer.toLowerCase(Locale.ROOT), GAME_NAMES);
     }
 
-    // The puzzle of a game that echoes it when it is one word. Null for more.
     private static String single(String puzzle) {
         return puzzle == null || puzzle.chars().anyMatch(Character::isWhitespace) ? null : puzzle;
     }
@@ -170,7 +161,6 @@ public final class ChatGames {
         return null;
     }
 
-    // What the line sets apart as its puzzle. Null when it sets nothing apart.
     private static String puzzle(String text) {
         String quoted = quoted(text);
         if (quoted != null) {
@@ -187,7 +177,7 @@ public final class ChatGames {
         return rest.isEmpty() ? null : rest;
     }
 
-    // The first stretch between a pair of quotes. An apostrophe inside a word is no quote.
+    // An apostrophe inside a word is no quote.
     private static String quoted(String text) {
         for (int open = 0; open < text.length(); open++) {
             int pair = OPENING.indexOf(text.charAt(open));
@@ -237,8 +227,6 @@ public final class ChatGames {
         return null;
     }
 
-    // The listed word made of the same letters. A puzzle that is a listed word as it stands
-    // answers itself unless it must differ. Null when there is none.
     private static String unscrambled(String scrambled, Words words, boolean mustDiffer) {
         String found = null;
         String itself = null;
@@ -258,8 +246,6 @@ public final class ChatGames {
         return inCaseOf(scrambled, found != null ? found : itself);
     }
 
-    // The answer in small letters for a puzzle in small letters and in capitals for one in
-    // capitals. A puzzle of mixed case gets the word as it was listed. Null stays null.
     private static String inCaseOf(String puzzle, String word) {
         if (word == null) {
             return null;
@@ -270,15 +256,12 @@ public final class ChatGames {
         return puzzle.equals(puzzle.toUpperCase(Locale.ROOT)) ? word.toUpperCase(Locale.ROOT) : word;
     }
 
-    // The letters of a word in small letters and in order. Words made of the same letters share it.
     private static String letters(String word) {
         char[] letters = word.toLowerCase(Locale.ROOT).toCharArray();
         Arrays.sort(letters);
         return new String(letters);
     }
 
-    // The word of the line with gaps in it. Letters spaced out with gaps between them are
-    // drawn together. Null when no word has both a gap and a letter.
     private static String gapped(String text) {
         String puzzle = puzzle(text);
         if (puzzle != null && puzzle.indexOf(GAP) != -1) {
@@ -299,7 +282,6 @@ public final class ChatGames {
         return word.chars().anyMatch(Character::isLetterOrDigit);
     }
 
-    // The first listed word that fits the letters given round the gaps.
     private static String fillIn(String gapped, Words words) {
         if (gapped == null) {
             return null;
@@ -325,8 +307,6 @@ public final class ChatGames {
         return true;
     }
 
-    // The answer to the longest stretch of the line that reads as a sum. A question mark that
-    // only ends the sentence is left off.
     private static String sum(String text) {
         String best = null;
         int bestLength = 0;
@@ -360,7 +340,6 @@ public final class ChatGames {
         return numbers(sum) > 1 ? ChatSum.solve(sum) : null;
     }
 
-    // How many numbers the stretch holds with a question mark or an underscore counted as one.
     private static int numbers(String sum) {
         int count = 0;
         boolean inNumber = false;
@@ -374,7 +353,6 @@ public final class ChatGames {
         return count;
     }
 
-    // True when the last sign of the stretch follows a number or a bracket and is no unknown.
     private static boolean closesOperand(String sum) {
         String before = sum.substring(0, sum.length() - 1).strip();
         return !before.isEmpty() && (Character.isDigit(before.charAt(before.length() - 1)) || before.endsWith(")"));

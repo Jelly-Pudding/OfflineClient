@@ -20,14 +20,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-// What you wear and what you hold with how worn each piece is.
 public final class ArmourElement extends HudElement {
 
     public enum Wear { NONE, NUMBER, PERCENT }
 
     private static final int SLOT = 16;
     private static final int GAP = 2;
-    // Labels side by side need more air than bare items do.
     private static final int LABEL_GAP = 4;
     private static final String FULL = "100%";
 
@@ -57,7 +55,6 @@ public final class ArmourElement extends HudElement {
         return isActive() && !pieces().isEmpty();
     }
 
-    // Nothing whilst every slot shown is empty. In the editor a worn netherite set stands in.
     private List<ItemStack> pieces() {
         Player player = OfflineClient.MC.player;
         List<ItemStack> worn = player == null ? List.of() : piecesOf(player::getItemBySlot);
@@ -67,7 +64,6 @@ public final class ArmourElement extends HudElement {
         return editing() ? piecesOf(ArmourElement::sampleOf) : List.of();
     }
 
-    // The armour and then the hands that are switched on.
     private List<ItemStack> piecesOf(Function<EquipmentSlot, ItemStack> source) {
         List<EquipmentSlot> slots = new ArrayList<>(ItemUtil.ARMOR_SLOTS);
         if (flip.isOn()) {
@@ -89,7 +85,6 @@ public final class ArmourElement extends HudElement {
         return stacks;
     }
 
-    // Each piece worn down to a different depth shows the wear colours.
     private static ItemStack sampleOf(EquipmentSlot slot) {
         return switch (slot) {
             case HEAD -> worn(Items.NETHERITE_HELMET, 0.9);
@@ -102,7 +97,6 @@ public final class ArmourElement extends HudElement {
         };
     }
 
-    // A piece with this share of its durability left.
     private static ItemStack worn(Item item, double left) {
         ItemStack stack = new ItemStack(item);
         stack.setDamageValue((int) Math.round(stack.getMaxDamage() * (1 - left)));
@@ -117,8 +111,7 @@ public final class ArmourElement extends HudElement {
         return wear.is(Wear.NONE) ? 0 : font.lineHeight;
     }
 
-    // Room for the item or the longest label it could ever carry. A piece that
-    // wears down keeps its place.
+    // A piece that wears down keeps its place.
     private int column(Font font, List<ItemStack> stacks) {
         int widest = SLOT;
         for (ItemStack stack : stacks) {

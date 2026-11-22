@@ -9,30 +9,24 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.material.MapColor;
 import org.joml.Matrix3x2fStack;
 
-// The land of a map as one texture with a texel for every block or more. It paints a margin past
-// what the view shows and only paints again once the view leaves what it painted or the land
-// changes. The pose moves and turns it between paints. Render thread only.
+// The picture paints a margin past what the view shows and only paints again once the view leaves
+// what it painted or the land changes. The pose moves and turns it between paints. Render thread
+// only.
 public final class TerrainPicture implements AutoCloseable {
 
-    // Texels painted past each side of the view. The view moves this far before a repaint.
     private static final int MARGIN = 32;
-    // The texture grows in steps of this many texels.
     private static final int GROWTH = 64;
     // The most texels the view itself takes across or down. A wider view gives each texel more land.
     private static final int MOST_TEXELS = 2048;
     // From this many blocks a texel each texel takes the colour of its whole chunk.
     private static final double COARSE = SectionPos.SECTION_SIZE;
-    // Land seen to hold nothing such as the void.
     private static final int VOID_COLOUR = 0xFF0C0C12;
-    // One colour for every value a packed byte can hold.
     private static final int PACKED_COLOURS = 256;
     private static final int[] PALETTE = palette();
 
     private DynamicTexture texture;
     private int textureWidth;
     private int textureHeight;
-    // What the texture holds. Its corner texel counted in steps from the world origin and how
-    // many texels across and down were painted.
     private int left;
     private int top;
     private int across;
@@ -44,9 +38,8 @@ public final class TerrainPicture implements AutoCloseable {
     private int tintRevision;
     private long paintedAt;
 
-    // Draws the layer into the view with the tints over it. Null tints paint none. A change to
-    // the land is painted once the gap has passed since the last paint. A picture that shows each
-    // block keeps the tiles of the land it painted.
+    // Null tints paint none. A change to the land is painted once the gap has passed since the last
+    // paint.
     public void draw(GuiGraphicsExtractor context, MapView view, TerrainLayer layer, ChunkTints tints, long gapMs) {
         double reachX = view.reachAcross() * view.zoom();
         double reachZ = view.reachDown() * view.zoom();
@@ -110,7 +103,6 @@ public final class TerrainPicture implements AutoCloseable {
         paintedAt = System.currentTimeMillis();
     }
 
-    // A texture at least this big. It only ever grows.
     private void fit(int across, int down) {
         if (texture != null && textureWidth >= across && textureHeight >= down) {
             return;
@@ -127,7 +119,6 @@ public final class TerrainPicture implements AutoCloseable {
         return (texels + GROWTH - 1) / GROWTH * GROWTH;
     }
 
-    // Lets go of the texture. The next draw makes a new one.
     @Override
     public void close() {
         if (texture != null) {
@@ -136,7 +127,6 @@ public final class TerrainPicture implements AutoCloseable {
         }
     }
 
-    // The colour of every packed map colour. A colour of none is clear apart from the void.
     private static int[] palette() {
         int[] colours = new int[PACKED_COLOURS];
         for (int packed = 0; packed < colours.length; packed++) {

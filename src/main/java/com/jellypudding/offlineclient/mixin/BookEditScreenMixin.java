@@ -22,8 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 
-// Copy and Paste beside a book and quill and a button for every colour and style a page can
-// carry. The wheel turns its pages. The server keeps the colour codes of a page as they are sent.
+// The server keeps the colour codes of a page as they are sent.
 @Mixin(BookEditScreen.class)
 public abstract class BookEditScreenMixin extends Screen {
 
@@ -60,7 +59,6 @@ public abstract class BookEditScreenMixin extends Screen {
         BookButtons.palette(this, this::offlineclient$insert).forEach(this::addRenderableWidget);
     }
 
-    // What the paste button says once the clipboard is in the book.
     @Unique
     private String offlineclient$paste() {
         BookText.Pasted pasted = BookText.paste(pages, currentPage, minecraft.keyboardHandler.getClipboard(),
@@ -76,9 +74,8 @@ public abstract class BookEditScreenMixin extends Screen {
         return pasted.taken() < pasted.offered() ? Tally.counted(pasted.taken(), "page") : "Pasted";
     }
 
-    // The code goes in where the caret is and the caret ends up behind it. The box never takes a
-    // section sign that is typed or pasted into it. False when the page has no room for the code.
-    // The box turns down a value with more lines than a page holds and leaves the page untouched.
+    // The box never takes a section sign that is typed or pasted into it and turns down a value
+    // with more lines than a page holds.
     @Unique
     private boolean offlineclient$insert(ChatFormatting format) {
         String code = format.toString();
@@ -96,7 +93,7 @@ public abstract class BookEditScreenMixin extends Screen {
         return true;
     }
 
-    // The wheel towards you turns to the next page. It never adds a page the way the arrow does.
+    // It never adds a page the way the arrow does.
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (scrollY == 0 || Modules.dormant()) {

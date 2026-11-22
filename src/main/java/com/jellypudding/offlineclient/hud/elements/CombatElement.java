@@ -44,8 +44,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
 
-// Whoever you are fighting with their gear and how hurt they are. The target of any combat
-// module that is on comes first and then whoever is under the crosshair.
 public final class CombatElement extends HudElement {
 
     private static final int BAR_WIDTH = 80;
@@ -53,12 +51,10 @@ public final class CombatElement extends HudElement {
     private static final int GAP = 2;
     private static final int SLOT = 16;
 
-    // Their main hand then head to feet then the other hand.
     private static final List<EquipmentSlot> GEAR = List.of(EquipmentSlot.MAINHAND, EquipmentSlot.HEAD,
         EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.OFFHAND);
 
-    // Enchantments are written at half size under each piece. Four letters tell Protection
-    // from Projectile Protection.
+    // Four letters tell Protection from Projectile Protection.
     private static final float ENCHANT_SIZE = 0.5f;
     private static final int ENCHANT_LETTERS = 4;
 
@@ -67,19 +63,15 @@ public final class CombatElement extends HudElement {
     private static final int ABSORPTION_COLOR = 0xFFFFCC33;
     private static final int POPS_COLOR = 0xFFFFC040;
 
-    // The body stands in a box this size beside the writing and fills most of its height.
     private static final int MODEL_WIDTH = 30;
     private static final int MODEL_HEIGHT = 48;
     private static final float MODEL_FILL = 0.85f;
 
-    // Anything in hand that wins a fight or blows one up.
     private static final Predicate<ItemStack> THREAT = stack -> stack.is(ItemTags.SWORDS)
         || stack.is(ItemTags.AXES) || stack.is(ItemTags.SPEARS) || stack.is(Items.MACE)
         || stack.is(Items.TRIDENT) || stack.is(Items.END_CRYSTAL) || stack.is(Items.RESPAWN_ANCHOR)
         || stack.is(ItemTags.BEDS);
 
-    // What the element shows of one target. The gear is empty whilst it is hidden or they
-    // carry nothing. The effects are empty whilst they are hidden or none are seen.
     private record Shown(LivingEntity target, List<TextRow> lines, List<Holder<MobEffect>> effects,
                          List<ItemStack> gear, List<List<EnchantText.Label>> enchants) {
     }
@@ -110,7 +102,6 @@ public final class CombatElement extends HudElement {
         "Draws a bar of their health with any absorption in gold after it.", true);
     private final BoolSetting model = new BoolSetting("Combat model",
         "Draws their body beside the name.", true);
-    // Each gathering reads every piece of their gear and its enchantments.
     private final RowCache<Shown> built = new RowCache<>(this::build);
 
     public CombatElement() {
@@ -123,7 +114,6 @@ public final class CombatElement extends HudElement {
         return isActive() && shown() != null;
     }
 
-    // You stand in as the target whilst the editor is open and nobody else is picked.
     private Shown shown() {
         List<Shown> found = built.get();
         if (!found.isEmpty()) {
@@ -187,8 +177,6 @@ public final class CombatElement extends HudElement {
             OfflineClient.MC.player.distanceTo(target));
     }
 
-    // Friend or Enemy and then Naked or Threat and then the ping and the pops each in its own
-    // colour. A friend is no threat and gets the one word.
     private TextRow details(Font font, Player player) {
         List<String> words = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
@@ -217,7 +205,6 @@ public final class CombatElement extends HudElement {
         return TextRow.of(font, words, colors);
     }
 
-    // Every word after the first keeps a space from the one before.
     private static void say(List<String> words, List<Integer> colors, String word, int color) {
         words.add(words.isEmpty() ? word : " " + word);
         colors.add(color);
@@ -257,8 +244,7 @@ public final class CombatElement extends HudElement {
         }
     }
 
-    // The box is given in screen pixels because this draw ignores the pose. Any body from a
-    // bat to a ghast is fitted to it at its standing size. Sneaking or gliding never resizes it.
+    // The box is given in screen pixels because this draw ignores the pose.
     private void drawModel(GuiGraphicsExtractor context, LivingEntity target) {
         LivingEntityRenderState state = EntityPreview.flatState(target,
             OfflineClient.MC.getDeltaTracker().getGameTimeDeltaPartialTick(true));
@@ -276,8 +262,6 @@ public final class CombatElement extends HudElement {
             new Vector3f(0, state.boundingBoxHeight / 2, 0), left, top, right, bottom);
     }
 
-    // Their health then their absorption in gold. The whole bar stands for their most health and
-    // their absorption. A player's keeps the absorption room even whilst they have none.
     private static void drawBar(GuiGraphicsExtractor context, LivingEntity target, int x, int y, int width) {
         float max = target.getMaxHealth();
         float health = Math.max(0, Math.min(target.getHealth(), max));
@@ -291,12 +275,10 @@ public final class CombatElement extends HudElement {
         context.fill(healthEnd, y, Math.min(x + width, absorptionEnd), y + BAR_HEIGHT, ABSORPTION_COLOR);
     }
 
-    // Where the writing and gear start. The body stands left of them.
     private int left() {
         return model.isOn() ? MODEL_WIDTH + GAP : 0;
     }
 
-    // As wide as the widest line or the effects or the gear or the bar.
     private int columnWidth(Font font, Shown shown) {
         int widest = TextRow.widest(shown.lines());
         if (!shown.effects().isEmpty()) {
@@ -308,12 +290,10 @@ public final class CombatElement extends HudElement {
         return bar.isOn() ? Math.max(widest, BAR_WIDTH) : widest;
     }
 
-    // The effect icons stand as tall as a line in one row under the writing.
     private static int effectsTop(Font font, Shown shown) {
         return TextRow.height(font, shown.lines().size()) + GAP;
     }
 
-    // The bottom of the effect icons or of the writing when no effect shows.
     private static int textBottom(Font font, Shown shown) {
         return shown.effects().isEmpty() ? TextRow.height(font, shown.lines().size())
             : effectsTop(font, shown) + font.lineHeight;
@@ -323,7 +303,6 @@ public final class CombatElement extends HudElement {
         return textBottom(font, shown) + GAP;
     }
 
-    // How far below the gear the enchantments of the most enchanted piece reach.
     private static int enchantDepth(Font font, Shown shown) {
         int deepest = 0;
         for (List<EnchantText.Label> labels : shown.enchants()) {
@@ -332,7 +311,6 @@ public final class CombatElement extends HudElement {
         return (int) Math.ceil(deepest * font.lineHeight * ENCHANT_SIZE);
     }
 
-    // The bottom of the gear and its enchantments or of what stands above it when no gear shows.
     private static int contentBottom(Font font, Shown shown) {
         return shown.gear().isEmpty() ? textBottom(font, shown)
             : gearTop(font, shown) + SLOT + enchantDepth(font, shown);

@@ -41,7 +41,6 @@ public abstract class AbstractContainerScreenMixin extends Screen {
     private static final int BUTTON_WIDTH = 40;
     @Unique
     private static final int BUTTON_HEIGHT = 14;
-    // Room either side of a label inside its button and between two buttons.
     @Unique
     private static final int BUTTON_PADDING = 8;
     @Unique
@@ -69,7 +68,6 @@ public abstract class AbstractContainerScreenMixin extends Screen {
     @Shadow
     public abstract AbstractContainerMenu getMenu();
 
-    // One row of buttons above the container. Each runs its pass on click.
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         if (Conceal.hides(Conceal.Part.SCREENS)) {
@@ -95,13 +93,11 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         }
     }
 
-    // Hands back where the next button starts.
     @Unique
     private int offlineclient$button(String label, int x, Runnable press) {
         return offlineclient$button(label, x, press, () -> "");
     }
 
-    // The tip says what a press would do and shows whilst the pointer rests on the button.
     @Unique
     private int offlineclient$button(String label, int x, Runnable press, Supplier<String> tip) {
         int width = Math.max(BUTTON_WIDTH, font.width(label) + BUTTON_PADDING);
@@ -168,7 +164,6 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         }
     }
 
-    // The number goes on after the item and sits over it.
     @Inject(method = "extractSlot", at = @At("TAIL"))
     private void afterExtractSlot(GuiGraphicsExtractor graphics, Slot slot, int mouseX, int mouseY,
                                   CallbackInfo ci) {
@@ -220,7 +215,6 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         }
     }
 
-    // Shift and a held left button move every stack the cursor is dragged over.
     @Inject(method = "mouseDragged(Lnet/minecraft/client/input/MouseButtonEvent;DD)Z",
         at = @At("HEAD"))
     private void onMouseDragged(MouseButtonEvent event, double dragX, double dragY,

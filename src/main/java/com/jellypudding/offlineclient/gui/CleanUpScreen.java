@@ -22,10 +22,8 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-// Thins out the server list. Every server is looked up and pinged from a thread of its own and
-// one that fails is tried again after a pause. A rule down the side lists the servers it would
-// take. Nothing goes until the player has the list in front of them and presses remove twice. A
-// click spares a single server.
+// Every server is looked up and pinged from a thread of its own and one that fails is tried again
+// after a pause.
 public final class CleanUpScreen extends ListWindow {
 
     private enum Finding { WAITING, CHECKING, ANSWERS, OTHER_VERSION, NO_ANSWER, UNKNOWN_HOST }
@@ -54,7 +52,6 @@ public final class CleanUpScreen extends ListWindow {
         }
     }
 
-    // The one button of a row. It says whether the server stays.
     private enum Keep implements RowList.Button {
         KEEP("keep", "Leaves this server on your list when the rest shown here go."),
         KEPT("kept", "This server stays. Click to let it go with the rest shown here.");
@@ -83,12 +80,10 @@ public final class CleanUpScreen extends ListWindow {
         }
     }
 
-    // What a server said about itself. Any try that got through hands it over.
     private record Answer(String version, int protocol, long ping) {
     }
 
-    // One try at a server. Its thread says when the address led nowhere or the connection was
-    // turned down. Silence until the deadline counts as no answer.
+    // Silence until the deadline counts as no answer.
     private static final class Look {
 
         private final long deadline;
@@ -100,16 +95,14 @@ public final class CleanUpScreen extends ListWindow {
         }
     }
 
-    // One server of the list and what the checks found. The answer comes from another thread.
+    // The answer comes from another thread.
     private static final class Entry {
 
         private final ServerData server;
         private Finding finding = Finding.WAITING;
         private boolean spared;
         private int tries;
-        // A try after a failed one starts no sooner than this.
         private long notBefore;
-        // True until a try fails for any reason but an address that led nowhere.
         private boolean unknownEveryTime = true;
         private Look look;
         private volatile Answer answer;
@@ -125,12 +118,9 @@ public final class CleanUpScreen extends ListWindow {
 
     // A failed ping alone says little. A server has to fail this often to count as gone.
     private static final int TRIES = 2;
-    // How long one try may take and how many run side by side.
     private static final long TRY_MS = TimeUnit.SECONDS.toMillis(8);
-    // A server that just failed gets this long before it is tried again.
     private static final long RETRY_MS = TimeUnit.SECONDS.toMillis(5);
     private static final int MOST_AT_ONCE = 8;
-    // A server names its own version. No more of it than this is shown.
     private static final int LONGEST_VERSION = 24;
 
     private static final int REMOVE_WIDTH = 84;
@@ -151,7 +141,6 @@ public final class CleanUpScreen extends ListWindow {
     private boolean removedAny;
     // Set once the screen is gone. A try that has not begun yet then never does.
     private volatile boolean closed;
-    // The servers the remove button takes on its second press.
     private final Armed<List<Entry>> armed = new Armed<>();
 
     public CleanUpScreen(JoinMultiplayerScreen parent, Supplier<Screen> reopened) {
@@ -168,7 +157,6 @@ public final class CleanUpScreen extends ListWindow {
         stale = true;
     }
 
-    // Settles the tries that are over and starts new ones whilst there is room for them.
     @Override
     public void tick() {
         super.tick();
@@ -191,8 +179,7 @@ public final class CleanUpScreen extends ListWindow {
         }
     }
 
-    // Brings what the threads found into the entry. True whilst its try is still running. An
-    // answer counts whichever try it came from and turns a server that seemed gone back.
+    // An answer counts whichever try it came from and turns a server that seemed gone back.
     private boolean settle(Entry entry, long now) {
         Answer answer = entry.answer;
         if (answer != null) {
@@ -224,8 +211,8 @@ public final class CleanUpScreen extends ListWindow {
         return false;
     }
 
-    // The lookup and the ping work on a copy. The list itself is only touched by a removal. The
-    // connection blocks its thread until the server takes it or turns it down.
+    // The lookup and the ping work on a copy. The connection blocks its thread until the server
+    // takes it or turns it down.
     private void start(Entry entry, long now) {
         Look look = new Look(now + TRY_MS);
         entry.look = look;
@@ -254,7 +241,7 @@ public final class CleanUpScreen extends ListWindow {
         });
     }
 
-    // Runs on the connection thread once the server has answered. Its version is its own words.
+    // Runs on the connection thread.
     private static Answer answerOf(ServerData pinged) {
         String version = pinged.version.getString();
         return new Answer(version.length() > LONGEST_VERSION ? version.substring(0, LONGEST_VERSION) : version,
@@ -274,7 +261,6 @@ public final class CleanUpScreen extends ListWindow {
         return shown;
     }
 
-    // The servers a removal would take. A spared one stays.
     private List<Entry> doomed() {
         List<Entry> doomed = shown();
         doomed.removeIf(entry -> entry.spared);
@@ -308,8 +294,7 @@ public final class CleanUpScreen extends ListWindow {
         };
     }
 
-    // True once every server is settled and not one answered. Then the fault is more likely
-    // on this side.
+    // Then the fault is more likely on this side.
     private boolean nobodyAnswers() {
         boolean any = false;
         for (Entry entry : entries) {
@@ -416,8 +401,6 @@ public final class CleanUpScreen extends ListWindow {
         });
     }
 
-    // The first press arms the button for the servers listed at that moment. The second
-    // removes exactly those and writes the list.
     private void pressRemove() {
         List<Entry> doomed = doomed();
         if (doomed.isEmpty() || !armed.press(doomed)) {

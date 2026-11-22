@@ -25,10 +25,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// What the client adds to the screen a disconnect leaves you on. Words about a kick the client asked
-// for or about a turned away name go under the reason. The kick goes to the packet log and the
-// webhook. The game log fills the space above. Two foot rows reconnect by hand and Join as rejoins
-// under the next name.
+// Words about a kick the client asked for or about a turned away name go under the reason. The game
+// log fills the space above.
 @Mixin(DisconnectedScreen.class)
 public abstract class DisconnectedScreenMixin extends Screen {
 
@@ -50,7 +48,6 @@ public abstract class DisconnectedScreenMixin extends Screen {
     @Final
     private LinearLayout layout;
 
-    // What goes under the reason. Null when the client has nothing to add.
     @Unique
     private Component offlineclient$note;
 
@@ -128,7 +125,6 @@ public abstract class DisconnectedScreenMixin extends Screen {
         return Component.literal("Auto reconnect " + (module.isEnabled() ? "on" : "off"));
     }
 
-    // The countdown reads live. The button says how long is left.
     @Override
     public void tick() {
         super.tick();

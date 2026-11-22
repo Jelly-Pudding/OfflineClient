@@ -32,7 +32,6 @@ public final class BedAura extends RespawnBlockAura {
     // Every bed has the same shape. This one stands in when a spot is tested for room.
     private static final BlockState BED = Blocks.BED.red().defaultBlockState();
 
-    // Where a bed fits with the direction its head would point.
     private record Spot(BlockPos foot, Direction facing) {
     }
 
@@ -71,7 +70,6 @@ public final class BedAura extends RespawnBlockAura {
         return stack.is(ItemTags.BEDS) && stack.getItem() instanceof BlockItem;
     }
 
-    // Right clicks the bed in reach that would hurt the target most.
     @Override
     protected boolean detonateBest(LivingEntity target) {
         BlockPos best = null;
@@ -134,9 +132,8 @@ public final class BedAura extends RespawnBlockAura {
         return bestSpot(target, gone) != null;
     }
 
-    // Where a bed would hurt the target most. The block named as gone counts as mined out.
-    // The game tests the foot half for room and only asks that the head half lands on
-    // something it can replace. The head half may lie inside the target.
+    // The game tests the foot half for room and only asks that the head half lands on something it
+    // can replace. The head half may lie inside the target.
     private Spot bestSpot(LivingEntity target, BlockPos gone) {
         Spot best = null;
         float bestDamage = 0;
@@ -163,7 +160,6 @@ public final class BedAura extends RespawnBlockAura {
         return best;
     }
 
-    // Caps the target. True whilst the roof takes the tick.
     private boolean roofOver(LivingEntity target) {
         BlockPos over = Holes.headBlock(target).above();
         if (!BlockUtil.blockFits(over) || !inReach(over, true)) {

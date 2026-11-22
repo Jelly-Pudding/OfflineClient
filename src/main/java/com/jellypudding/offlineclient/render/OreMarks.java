@@ -24,15 +24,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// The ore picks and colours the ore finders share and the boxes they draw. Touching boxes of
-// one ore are joined into one shape.
+// The ore picks and colours the ore finders share.
 public final class OreMarks {
 
-    // One ore block to draw.
     public record Spot(int x, int y, int z, OreKind kind) {
     }
 
-    // A kept spot whose block could still be ore with the sides it shares with the same ore.
     private record Mark(AABB box, int hidden, OreKind kind) {
     }
 
@@ -117,8 +114,8 @@ public final class OreMarks {
         }
     }
 
-    // The ore a block counts as. Raw iron and raw copper blocks only grow in the large veins
-    // and count as their ore. Null for any other block.
+    // Raw iron and raw copper blocks only grow in the large veins and count as their ore. Null for
+    // any other block.
     public static OreKind kindOf(Block block) {
         if (block == Blocks.RAW_IRON_BLOCK) {
             return OreKind.IRON;

@@ -38,7 +38,6 @@ public final class HeldKey {
         }
     }
 
-    // True from a hold made here until it is let go.
     public boolean isHeld() {
         return held;
     }

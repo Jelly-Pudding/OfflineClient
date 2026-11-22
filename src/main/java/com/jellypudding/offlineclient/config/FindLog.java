@@ -28,18 +28,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-// The finds one module has made on the server you play on. Every dimension keeps its own
-// and a new server brings a new set. Finds outlive a toggle for the whole session. With
-// Save finds on they sit in a file per module in the server's folder and come back on the
-// next visit. Two games on one computer share that file and neither loses what the other
-// found or removed. Modules call it on the game thread and the file is read and written
-// on a thread of its own.
+// Two games on one computer share the file and neither loses what the other found or removed.
+// Modules call it on the game thread and the file is read and written on a thread of its own.
 public final class FindLog {
 
-    // One thing a module found. A module that marks whole chunks gives the block that stands
-    // for the chunk. The content is text the find carries exactly such as the lines of a sign
-    // or the pages of a book. It is kept and saved but never shown. The time is when this game
-    // or another one first saw it. Every text is made whole or the file could not be written.
+    // The content is kept and saved but never shown. The time is when this game or another one
+    // first saw it.
     public record Find(String dimension, BlockPos pos, String kind, String detail, List<String> content,
                        long found) {
 
@@ -59,15 +53,11 @@ public final class FindLog {
     // Far more finds than any hunt turns up. It only stops a runaway module filling memory.
     private static final int MAX_FINDS = 50_000;
 
-    // A change waits this long for others before the file is written.
     private static final long WRITE_GAP_MS = 3000;
-    // How often a log with nothing to write looks for what another game saved.
     private static final long POLL_MS = 5000;
 
-    // Every log whatever module keeps it. The game saves them all as it closes.
     private static final List<FindLog> LOGS = new CopyOnWriteArrayList<>();
 
-    // How many brand new finds every module together has made this session.
     private static int newFinds;
 
     static {
@@ -84,21 +74,15 @@ public final class FindLog {
         .confirm();
     private final ActionSetting clearAll;
 
-    // The finds of the current server by dimension and then by key. Oldest first.
     private Map<String, Map<Long, Find>> finds = new HashMap<>();
-    // The kind of each find you took away by hand this session by dimension and then by key.
     private Map<String, Map<Long, String>> dismissed = new HashMap<>();
-    // The finds here that passed a module's test and what they were worked out from.
     private List<Find> shown = List.of();
     private int shownRevision = -1;
     private String shownDimension;
     private Object shownKey;
-    // What the file held when this game last took it in.
     private Map<String, Map<Long, Find>> base = Map.of();
-    // The file of the current server as the file thread knows it.
     private FindFile disk;
 
-    // The server the finds belong to. Null before the first world.
     private String server;
     // Moves on with every new server. A reply that comes back for an older one is dropped.
     private int generation;
@@ -106,14 +90,12 @@ public final class FindLog {
     private boolean loaded;
     private boolean dirty;
     private int inFlight;
-    // How many writes were asked for on this server and the last one whose answer came back.
     private int writes;
     private int heard;
     private long lastWrite;
     private long lastPoll;
     private int revision;
 
-    // One find for each block.
     public FindLog(Module owner) {
         this(owner, false);
     }
@@ -128,12 +110,10 @@ public final class FindLog {
         LOGS.add(this);
     }
 
-    // One find for each chunk. For a module that marks whole chunks.
     public static FindLog byChunk(Module owner) {
         return new FindLog(owner, true);
     }
 
-    // The module keeping the log.
     public String name() {
         return owner;
     }
@@ -146,18 +126,14 @@ public final class FindLog {
         return save;
     }
 
-    // Clears the dimension you are in after a second press.
     public ActionSetting clearDimensionSetting() {
         return clearHere;
     }
 
-    // Clears every dimension of this server after a second press.
     public ActionSetting clearServerSetting() {
         return clearAll;
     }
 
-    // Goes up whenever a find is added changed or removed. A module rebuilds what it shows
-    // only when this moves.
     public int revision() {
         return revision;
     }
@@ -169,13 +145,12 @@ public final class FindLog {
         return server != null && (!save.isOn() || loaded);
     }
 
-    // Goes up with each brand new find any module makes. Finds read from a file never move it.
+    // Finds read from a file never move it.
     public static int newFinds() {
         return newFinds;
     }
 
-    // The finds of the dimension you are in as a live view for drawing. Copy it before adding
-    // or removing finds whilst walking through it.
+    // A live view. Copy it before adding or removing finds whilst walking through it.
     public Collection<Find> here() {
         Map<Long, Find> byKey = current();
         return byKey == null ? List.of() : Collections.unmodifiableCollection(byKey.values());
@@ -186,8 +161,8 @@ public final class FindLog {
         return byKey == null ? 0 : byKey.size();
     }
 
-    // The finds here that pass a test. The list is worked out again only when a find or the
-    // dimension or the key changes. The key holds whatever the test reads.
+    // The key holds whatever the test reads. The list is worked out again only when a find or the
+    // dimension or the key changes.
     public List<Find> filtered(Object key, Predicate<Find> test) {
         Collection<Find> here = here();
         String dimension = ServerInfo.dimension();
@@ -206,7 +181,6 @@ public final class FindLog {
         return shown;
     }
 
-    // Every find on this server. Each dimension runs oldest first.
     public List<Find> all() {
         follow();
         List<Find> all = new ArrayList<>();
@@ -214,26 +188,21 @@ public final class FindLog {
         return all;
     }
 
-    // The find at this spot in the dimension you are in. For a log of chunks any spot in
-    // the chunk will do. Null when there is none.
     public Find at(BlockPos pos) {
         Map<Long, Find> byKey = current();
         return byKey == null ? null : byKey.get(FindFile.key(pos, byChunk));
     }
 
-    // A find in the dimension you are in. True when nothing was there before. A find already
-    // there takes the new kind and words and keeps its time.
+    // True when nothing was there before. A find already there takes the new kind and words and
+    // keeps its time.
     public boolean add(BlockPos pos, String kind, String detail) {
         return add(ServerInfo.dimension(), pos, kind, detail, List.of());
     }
 
-    // The same for a find that carries exact text of its own.
     public boolean add(BlockPos pos, String kind, String detail, List<String> content) {
         return add(ServerInfo.dimension(), pos, kind, detail, content);
     }
 
-    // The same for a find in any dimension of this server. For a module that learns of
-    // places in a dimension you are not in.
     public boolean add(String dimension, BlockPos pos, String kind, String detail) {
         return add(dimension, pos, kind, detail, List.of());
     }
@@ -270,7 +239,6 @@ public final class FindLog {
         return old == null;
     }
 
-    // Forgets whatever find stands at that find's spot. False when nothing was there.
     public boolean remove(Find find) {
         follow();
         Map<Long, Find> byKey = finds.get(find.dimension());
@@ -281,8 +249,7 @@ public final class FindLog {
         return true;
     }
 
-    // Forgets a find you took away by hand. The module that made it cannot put the same
-    // find back there this session. False when nothing was there.
+    // The module that made it cannot put the same find back there this session.
     public boolean dismiss(Find find) {
         if (!remove(find)) {
             return false;
@@ -292,7 +259,6 @@ public final class FindLog {
         return true;
     }
 
-    // Null when this dimension holds no find.
     public Find nearest(Vec3 from) {
         Find best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -306,7 +272,7 @@ public final class FindLog {
         return best;
     }
 
-    // How far a find lies from a point squared. A chunk mark is measured across the ground.
+    // A chunk mark is measured across the ground.
     public double distanceSqr(Find find, Vec3 from) {
         double dx = find.pos().getX() + 0.5 - from.x;
         double dy = byChunk ? 0 : find.pos().getY() + 0.5 - from.y;
@@ -314,7 +280,6 @@ public final class FindLog {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    // How many finds the dimension you are in lost.
     public int clearDimension() {
         Map<Long, Find> byKey = current();
         if (byKey == null || byKey.isEmpty()) {
@@ -326,7 +291,6 @@ public final class FindLog {
         return count;
     }
 
-    // How many finds this server lost across every dimension.
     public int clearServer() {
         follow();
         int count = total();
@@ -337,8 +301,7 @@ public final class FindLog {
         return count;
     }
 
-    // Writes every find on this server to a spreadsheet file beside the saved one. The path
-    // comes back on the game thread or null when it could not be written.
+    // The path comes back on the game thread or null when it could not be written.
     public void export(Consumer<Path> done) {
         follow();
         if (server == null) {
@@ -363,13 +326,11 @@ public final class FindLog {
         return total;
     }
 
-    // Makes room by forgetting the oldest find of the fullest dimension.
     private void dropOldest() {
         Map<Long, Find> fullest = Collections.max(finds.values(), Comparator.comparingInt(Map::size));
         fullest.remove(fullest.keySet().iterator().next());
     }
 
-    // The finds of the dimension you are in. Null outside a world or before a find there.
     private Map<Long, Find> current() {
         String dimension = ServerInfo.dimension();
         if (dimension.isEmpty()) {
@@ -379,7 +340,6 @@ public final class FindLog {
         return finds.get(dimension);
     }
 
-    // The folder that keeps the saved finds of every module for one server.
     public static Path serverFolder(String server) {
         return DataFiles.path(FOLDER, DataFiles.keyName(server));
     }
@@ -388,8 +348,6 @@ public final class FindLog {
         return serverFolder(server).resolve(Setting.idFor(owner) + ".json");
     }
 
-    // The finds follow the server you play on. A new one writes what the last was waiting
-    // for and starts again from its own file.
     private void follow() {
         if (OfflineClient.MC.level == null) {
             return;
@@ -422,7 +380,6 @@ public final class FindLog {
         follow();
         if (save.isOn() != saving) {
             saving = save.isOn();
-            // Switched on it reads the file again and then writes what this session found.
             loaded = false;
         }
         if (!saving || inFlight > 0) {
@@ -438,8 +395,6 @@ public final class FindLog {
         }
     }
 
-    // Outside a world what is waiting is written once the last answer is in and the usual
-    // pause has passed. A new server writes it straight away.
     private void flush(boolean atOnce) {
         if (!saving || !dirty || server == null) {
             return;
@@ -474,7 +429,6 @@ public final class FindLog {
         });
     }
 
-    // Takes in what the other game saved. Whatever this game changed since stays.
     private void took(Reading reading) {
         inFlight--;
         if (reading == null || !reading.news()) {
@@ -505,7 +459,6 @@ public final class FindLog {
         });
     }
 
-    // A write that takes what it needs from the game thread now and runs on the file thread.
     private SharedFiles.FileWork<Reading> writeWork(Map<String, Map<Long, Find>> snapshot, int number) {
         FindFile file = disk;
         Map<String, Map<Long, Find>> from = base;
@@ -517,7 +470,6 @@ public final class FindLog {
         inFlight--;
         heard = number;
         if (reading == null) {
-            // Tried again after the usual pause.
             dirty = true;
             return;
         }
@@ -528,8 +480,8 @@ public final class FindLog {
         base = reading.finds();
     }
 
-    // Writes every log that still holds unsaved finds as the game closes. The writes queue
-    // behind whatever the file thread still has to do and the game waits for all of it.
+    // The writes queue behind whatever the file thread still has to do and the game waits for all
+    // of it.
     private static void saveAllOnExit() {
         List<Runnable> pending = new ArrayList<>();
         for (FindLog log : LOGS) {

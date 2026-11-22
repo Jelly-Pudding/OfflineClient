@@ -20,9 +20,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-// A schematic in the Sponge format. It is gzipped NBT. Version three keeps a Schematic compound
-// inside a root with no name and that is the version written here. Versions one and two keep
-// everything in the root. Blocks go in the order the format keeps them. X runs fastest then Z
+// Gzipped NBT. Version three keeps a Schematic compound inside a root with no name and that is the
+// version written here. Versions one and two keep everything in the root. X runs fastest then Z
 // then Y.
 public final class SpongeSchematic {
 
@@ -72,7 +71,6 @@ public final class SpongeSchematic {
         VarInt.write(data, palette.computeIfAbsent(state, added -> palette.size()));
     }
 
-    // The position counts from the lowest corner of the schematic.
     public void addBlockEntity(int x, int y, int z, BlockEntity blockEntity, HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         tag.putIntArray("Pos", new int[] {x, y, z});
@@ -92,8 +90,7 @@ public final class SpongeSchematic {
         return blockEntities.size();
     }
 
-    // The offset runs from the spot it was saved at to the lowest corner. A paste puts the
-    // blocks back the same way round from wherever you stand.
+    // The offset runs from the spot it was saved at to the lowest corner.
     public CompoundTag toTag(String name, String author, Vec3i offset) {
         CompoundTag paletteTag = new CompoundTag();
         palette.forEach((state, index) -> paletteTag.putInt(BlockStateParser.serialize(state), index));
@@ -123,12 +120,10 @@ public final class SpongeSchematic {
         return root;
     }
 
-    // False after logging why the file could not be written.
     public static boolean write(CompoundTag root, Path path) {
         return DataFiles.writeSafely(path, temp -> NbtIo.writeCompressed(root, temp));
     }
 
-    // True for a root that holds a schematic of any version of the format.
     static boolean holds(CompoundTag root) {
         return root.contains(SCHEMATIC_KEY) || root.contains(PALETTE_KEY);
     }
@@ -137,8 +132,7 @@ public final class SpongeSchematic {
         return root.getCompound(SCHEMATIC_KEY).orElse(root).getIntOr(DATA_VERSION_KEY, 0);
     }
 
-    // The build a schematic of version one two or three holds. The offset of the file becomes
-    // the lowest corner. Put down where it was copied the build lands on the blocks it came from.
+    // The offset of the file becomes the lowest corner.
     static Blueprint read(String name, CompoundTag root, SavedStates states) throws BuildFiles.Unreadable {
         CompoundTag schematic = root.getCompound(SCHEMATIC_KEY).orElse(root);
         int version = schematic.getIntOr(VERSION_KEY, 0);
@@ -174,7 +168,6 @@ public final class SpongeSchematic {
             try {
                 id = VarInt.read(buffer);
             } catch (RuntimeException e) {
-                // A number that never ends or stops half way through.
                 throw new BuildFiles.Unreadable("holds block data that cannot be read");
             }
             if (id < 0 || id >= kinds.length) {
@@ -185,8 +178,7 @@ public final class SpongeSchematic {
         return builder.build();
     }
 
-    // The palette index of the build for every id the file uses. An id the file never names
-    // leaves its cells alone.
+    // An id the file never names leaves its cells alone.
     private static int[] kinds(CompoundTag paletteTag, Blueprint.Builder builder, SavedStates states)
         throws BuildFiles.Unreadable {
         int highest = -1;

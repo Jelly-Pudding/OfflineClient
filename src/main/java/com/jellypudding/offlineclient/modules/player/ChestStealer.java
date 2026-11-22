@@ -42,7 +42,6 @@ public final class ChestStealer extends Module {
     // A brewing stand holds its three bottles first. Its ingredient and fuel come after.
     private static final int BREWING_BOTTLES = 3;
 
-    // Smallest stack is a share out of a hundred.
     private static final double PERCENT = 100;
 
     private static final Predicate<ItemStack> ANYTHING = _ -> true;
@@ -90,31 +89,22 @@ public final class ChestStealer extends Module {
     private final BoolSetting close = new BoolSetting("Close when done",
         "Closes the container once everything is taken.", false);
 
-    // How one step over the open container went.
     public enum Step {
-        // A stack moved and the next one waits out the delay.
         MOVED,
-        // The delay has not run out yet.
         WAITING,
-        // Nothing is left that the rules want moved.
         DONE,
-        // The side the items go to has no room.
         FULL
     }
 
     private long nextClick;
     private boolean open;
-    // Set by the steal button whilst nothing is taken unasked. One pass over the container clears it.
     private boolean stealing;
-    // Set by the dump button until every stack the dump wants has gone in.
     private boolean dumping;
     // What a dump put in the container is left there for the rest of the visit.
     private boolean dumped;
     // Set whilst ChestAura runs a visit. The module's own tick stands back meanwhile.
     private boolean driven;
-    // Set for a ChestAura visit that stores as well. Taking then leaves the dump filter's picks.
     private boolean storing;
-    // What a ChestAura visit may put into the container it opened.
     private Predicate<ItemStack> storesHere = ANYTHING;
     private final MenuClicks.Clicked clicked = new MenuClicks.Clicked();
 
@@ -141,7 +131,6 @@ public final class ChestStealer extends Module {
         return isEnabled() && (buttons.isOn() || !automatic.isOn());
     }
 
-    // A button press makes the next grab due at once.
     public void stealNow() {
         stealing = true;
         nextClick = 0;
@@ -154,7 +143,7 @@ public final class ChestStealer extends Module {
         nextClick = 0;
     }
 
-    // The screens the module works in. A menu built without a type is skipped.
+    // A menu built without a type is skipped.
     public boolean handles(Screen screen) {
         if (!(screen instanceof AbstractContainerScreen<?> container)) {
             return false;
@@ -167,13 +156,10 @@ public final class ChestStealer extends Module {
         return screens.contains(type);
     }
 
-    // True whilst the stealer is working a container of its own or one ChestAura opened.
     public boolean busy() {
         return driven || isEnabled() && (automatic.isOn() || stealing || dumping);
     }
 
-    // ChestAura opens a container and runs its visit through take or store. Only what the
-    // container takes goes in.
     public void startVisit(boolean alsoStores, Predicate<ItemStack> takes) {
         forget();
         driven = true;
@@ -196,22 +182,18 @@ public final class ChestStealer extends Module {
         return step(true);
     }
 
-    // A visit can take something. There is a free slot or the items are thrown out.
     public boolean roomToTake() {
         return throwOut.isOn() || mc.player.getInventory().getFreeSlot() != -1;
     }
 
-    // Something in the inventory is waiting to be stored.
     public boolean somethingToStore() {
         return somethingToStore(ANYTHING);
     }
 
-    // Something waiting to be stored that a container takes.
     public boolean somethingToStore(Predicate<ItemStack> takes) {
         return InventoryUtil.findSlot(stack -> dumps(stack) && takes.test(stack), InventoryUtil.WHOLE_INVENTORY) != -1;
     }
 
-    // Something held goes past its limit and a visit would put it back.
     public boolean extrasToStore() {
         if (!limited() || !limits.storesExtras()) {
             return false;
@@ -225,12 +207,10 @@ public final class ChestStealer extends Module {
         return false;
     }
 
-    // A full inventory can still trade up for better gear or fuller stacks.
     public boolean mayUpgrade() {
         return limited() && limits.upgrades();
     }
 
-    // True for a stack the list or the limits turn away. InventoryTweaks can dump every such stack.
     public boolean turnsAway(ItemStack stack) {
         return !listMode.getValue().admits(items.contains(stack.getItem()))
             || limited() && limits.ruleFor(stack) == null;
@@ -270,8 +250,6 @@ public final class ChestStealer extends Module {
         return step == Step.MOVED || step == Step.WAITING;
     }
 
-    // The initial delay runs from the first tick a container is open. A button pressed after it
-    // acts at once.
     private void arrive(long now) {
         if (!open) {
             open = true;
@@ -279,8 +257,7 @@ public final class ChestStealer extends Module {
         }
     }
 
-    // Up to the per tick count of moves once the delay allows. Every one is predicted on the
-    // menu at once and the next move sees it.
+    // Every move is predicted on the menu at once and the next move sees it.
     private Step step(boolean store) {
         long now = System.currentTimeMillis();
         arrive(now);
@@ -318,7 +295,6 @@ public final class ChestStealer extends Module {
         return upgrade(menu, held) ? Step.MOVED : taken;
     }
 
-    // The best stack still wanted goes first and only as many as its limit allows.
     private Step takeWanted(AbstractContainerMenu menu, Map<LootLimits.Rule, Integer> held) {
         List<Integer> mine = MenuClicks.inventorySlots(menu);
         boolean blocked = false;
@@ -340,7 +316,6 @@ public final class ChestStealer extends Module {
         return blocked ? Step.FULL : Step.DONE;
     }
 
-    // How many of a container stack the rules still want. Nought leaves it where it is.
     private int wantedCount(AbstractContainerMenu menu, int slot, ItemStack stack,
                             Map<LootLimits.Rule, Integer> held) {
         if (!takeable(menu, slot, stack)) {
@@ -353,13 +328,11 @@ public final class ChestStealer extends Module {
         return rule == null ? 0 : Math.clamp(rule.limit() - held.getOrDefault(rule, 0), 0, stack.getCount());
     }
 
-    // The list lets it through and nothing keeps it in the container.
     private boolean takeable(AbstractContainerMenu menu, int slot, ItemStack stack) {
         return !stack.isEmpty() && !turnsAway(stack) && !((dumped || storing) && dumps(stack))
             && !keptInput(menu, slot) && stack.getCount() * PERCENT >= smallest.getValue() * stack.getMaxStackSize();
     }
 
-    // A furnace keeps its fuel and what is cooking and a brewing stand its ingredient and fuel.
     private boolean keptInput(AbstractContainerMenu menu, int slot) {
         if (furnaceInputs.isOn()) {
             return false;
@@ -371,9 +344,8 @@ public final class ChestStealer extends Module {
         return menu instanceof BrewingStandMenu && target.getContainerSlot() >= BREWING_BOTTLES;
     }
 
-    // Puts back a stack held past its limit. The worst goes first and never more than the extra.
-    // Worn armour and the offhand count but cannot be put back. A piece better than the one
-    // worn under the same limit stays.
+    // Worn armour and the offhand count but cannot be put back. A piece better than the one worn
+    // under the same limit stays.
     private boolean storeExtra(AbstractContainerMenu menu, Map<LootLimits.Rule, Integer> held) {
         if (!InventoryUtil.keeps(menu)) {
             return false;
@@ -397,9 +369,8 @@ public final class ChestStealer extends Module {
         return false;
     }
 
-    // Trades your worst stack under a limit for a better one in the container. Gear goes by its
-    // score. A fuller stack only trades whilst every slot is taken and the limit still holds.
-    // Only storage that keeps what it is given takes the trade.
+    // A fuller stack only trades whilst every slot is taken and the limit still holds. Only storage
+    // that keeps what it is given takes the trade.
     private boolean upgrade(AbstractContainerMenu menu, Map<LootLimits.Rule, Integer> held) {
         if (!InventoryUtil.keeps(menu)) {
             return false;
@@ -438,8 +409,6 @@ public final class ChestStealer extends Module {
         return full && more > 0 && held.getOrDefault(rule, 0) + more <= rule.limit();
     }
 
-    // The first of your slots in worst first order that holds a stack under the rule. Minus one
-    // when you hold none of it.
     private int worstUnder(AbstractContainerMenu menu, List<Integer> worstFirst, LootLimits.Rule rule) {
         for (int slot : worstFirst) {
             ItemStack stack = menu.slots.get(slot).getItem();
@@ -450,9 +419,8 @@ public final class ChestStealer extends Module {
         return -1;
     }
 
-    // Moves one stack the InventoryTweaks dump filter wants into the container. Only plain
-    // storage takes a shift clicked stack. ChestAura only fills storage that keeps it whilst
-    // the dump button fills any hopper or dropper you open.
+    // Only plain storage takes a shift clicked stack. ChestAura only fills storage that keeps it
+    // whilst the dump button fills any hopper or dropper you open.
     private Step storeOnce(AbstractContainerMenu menu) {
         if (!(driven ? InventoryUtil.keeps(menu) : InventoryUtil.isStorage(menu))) {
             return Step.DONE;

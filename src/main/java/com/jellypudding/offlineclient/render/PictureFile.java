@@ -10,9 +10,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
 
-// A PNG of the player's own in the pictures folder of the client. Whilst it is wanted it is looked at
-// once a second off the game thread and read again whenever the file changes. A file past the bounds
-// is turned down before it is decoded.
+// Whilst the file is wanted it is looked at once a second off the game thread and read again
+// whenever it changes. A file past the bounds is turned down before it is decoded.
 public final class PictureFile {
 
     public static final String FOLDER_WORDS = "offlineclient/pictures";
@@ -25,7 +24,6 @@ public final class PictureFile {
     private static final int MOST_MEGABYTES = 8;
     private static final int MOST_BYTES = MOST_MEGABYTES * 1024 * 1024;
 
-    // The time of a file that has never been read.
     private static final long NEVER = Long.MIN_VALUE;
 
     // Hears on the game thread what a look found whenever that changed. The pixels belong to the
@@ -36,7 +34,6 @@ public final class PictureFile {
         void take(NativeImage pixels, String problem);
     }
 
-    // What one look at the file found. Same is true when the file is as it was at the last look.
     private record Look(String typed, long stamp, boolean same, NativeImage pixels, String problem) {
 
         private static Look unchanged(String typed, long stamp) {
@@ -58,7 +55,6 @@ public final class PictureFile {
     private final Taker taker;
     private final FileLook<Look> looks = new FileLook<>(this::take, Look::drop);
 
-    // The name and file time of what was last handed over and whether it was a picture.
     private String shownTyped = "";
     private long shownStamp = NEVER;
     private String shownProblem;
@@ -68,8 +64,6 @@ public final class PictureFile {
         this.taker = taker;
     }
 
-    // Looks at the named file once the last look is back and a second has passed. The reading and
-    // the decoding happen on a worker and the game thread takes what it found.
     public void look(String name) {
         if (!looks.due()) {
             return;
@@ -79,7 +73,6 @@ public final class PictureFile {
         looks.start(() -> read(typed, known), () -> Look.failed(typed, NEVER, typed + " cannot be read as a PNG."));
     }
 
-    // Forgets what was handed over. The next look reads the file afresh.
     public void release() {
         shownTyped = "";
         shownStamp = NEVER;

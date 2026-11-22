@@ -24,7 +24,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 // from the first game and answers each with one line. Between orders its game ticks on.
 public final class PartnerLoop {
 
-    // How finely the way through a swing of the arm is told apart.
     private static final int SWING_STEPS = 1000;
     private static final String TEXT_SPLIT = " / ";
 
@@ -140,7 +139,6 @@ public final class PartnerLoop {
         throw new IllegalStateException("The second player sees nobody called " + name);
     }
 
-    // One player as this game shows it this tick.
     private static String seen(Minecraft mc, String name) {
         Player who = named(mc, name);
         Map<String, Object> facts = new LinkedHashMap<>();
@@ -164,7 +162,6 @@ public final class PartnerLoop {
         return pairs(facts);
     }
 
-    // Watches one player tick by tick and counts what it does.
     private String watch(String name, int ticks) {
         int swings = 0;
         int crouches = 0;

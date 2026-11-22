@@ -34,7 +34,6 @@ public final class AutoMount extends Module {
 
     public enum Targets { ANY, LIST }
 
-    // Ticks before the same ride is clicked again. One that turns you down is not asked every tick.
     private static final int RETRY_TICKS = 20;
 
     private final EnumSetting<Targets> targets = new EnumSetting<>("Targets",

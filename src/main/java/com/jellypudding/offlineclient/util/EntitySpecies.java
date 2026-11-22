@@ -10,8 +10,7 @@ import net.minecraft.world.entity.monster.cubemob.Slime;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
 
-// The narrow families the per species switches work with. A shulker is a golem
-// to the game and is picked out first.
+// A shulker is a golem to the game and is picked out first.
 public enum EntitySpecies {
     WATER, BAT, SLIME, SHULKER, VILLAGER, ZOMBIE_VILLAGER, GOLEM, ALLAY, OTHER;
 

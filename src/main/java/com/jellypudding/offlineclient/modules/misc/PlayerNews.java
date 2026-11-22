@@ -49,9 +49,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
-// What Notifier tells about the players and things round you. What comes into view and leaves it
-// and totem pops and pearls and long jumps and who looks at you or burrows or carries a bed close
-// by and who seems to cheat.
+// What Notifier tells about the players and things round you.
 final class PlayerNews {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -62,26 +60,21 @@ final class PlayerNews {
         BOTH
     }
 
-    // The last known name and kind and spot of one watched entity.
     private record Watched(String name, EntityType<?> type, Vec3 pos) {
     }
 
-    // Where a pearl started and where it was last seen.
     private record Pearl(String owner, boolean own, Vec3 start, Vec3 pos) {
     }
 
-    // A player in view whose arrival is told once their gear has come in.
     private record Arrival(int id, String name, int due) {
     }
 
-    // How far back a totem line is looked for when it is replaced.
     private static final int REPLACE_DEPTH = 64;
 
     // Someone walking into view is closer than a player who joins and needs fewer rings.
     private static final int SIGHT_RINGS = 2;
     private static final int SPOTTED_RINGS = 1;
 
-    // Minutes before the same player sets an alarm off again.
     private static final int SIGHT_QUIET_MINUTES = 10;
     private static final int SPOTTED_QUIET_MINUTES = 2;
 
@@ -94,7 +87,6 @@ final class PlayerNews {
     // No jump keeps a player up for this long without dropping.
     private static final int HOVER_TICKS = 40;
 
-    // The same player is reported for the same breach at most this often.
     private static final int CHEAT_QUIET_TICKS = 30 * SharedConstants.TICKS_PER_SECOND;
 
     private final BoolSetting visualRange = new BoolSetting("Visual range",
@@ -186,14 +178,10 @@ final class PlayerNews {
     // trusted to empty itself.
     private final Map<Integer, Watched> watched = new BoundedMap<>(Notifier.MAX_TRACKED);
     private final Map<Integer, Pearl> flying = new BoundedMap<>(Notifier.MAX_TRACKED);
-    // The last totem line printed for a player. The next one replaces it.
     private final Map<UUID, String> popLines = new BoundedMap<>(Notifier.MAX_TRACKED);
-    // The players in the world with you last tick whilst the sight alarm is on.
     private final Set<UUID> inSight = new HashSet<>();
-    // The players facing you whose look has been told.
     private final Set<UUID> facing = new HashSet<>();
     private final List<Arrival> arrivals = new ArrayList<>();
-    // The players whose burrow has been told and those whose bed has.
     private final Set<UUID> burrowed = new HashSet<>();
     private final Set<UUID> bedders = new HashSet<>();
     private final PlayerMoves moves = new PlayerMoves();
@@ -203,13 +191,11 @@ final class PlayerNews {
         this.notifier = notifier;
     }
 
-    // Visual range and totem pops and pearls and teleports.
     Setting<?>[] inViewRows() {
         return new Setting<?>[] {visualRange, report, entities, details, totemPops, ownTotems, ignoreOthers,
             distanceCheck, playerRadius, pearls, ownPearls, teleports, teleportDistance};
     }
 
-    // The sight alarm and players who turn to face you.
     Setting<?>[] lookRows() {
         List<Setting<?>> rows = new ArrayList<>(List.of(sightAlarm.settings()));
         rows.addAll(List.of(spotted, spottedAngle, spottedRange));
@@ -217,7 +203,6 @@ final class PlayerNews {
         return rows.toArray(Setting<?>[]::new);
     }
 
-    // Players close by who burrow or carry a bed.
     Setting<?>[] nearRows() {
         return new Setting<?>[] {burrows, burrowRange, bedCarriers, bedRange};
     }
@@ -226,17 +211,14 @@ final class PlayerNews {
         return new Setting<?>[] {cheaters, speedLimit, swingLimit};
     }
 
-    // True whilst the sight alarm or the spotted alarm is on.
     boolean alarmsOn() {
         return sightAlarm.isOn() || spottedAlarm.isOn();
     }
 
-    // True whilst burrows or bed carriers close by are told.
     boolean watchesStrangers() {
         return burrows.isOn() || bedCarriers.isOn();
     }
 
-    // True whilst the swings of other players are counted.
     boolean countsSwings() {
         return cheaters.isOn();
     }
@@ -262,7 +244,7 @@ final class PlayerNews {
         cheatQuiet.clear();
     }
 
-    // What belongs to one world. A new dimension resends every entity and the pop counts start again.
+    // A new dimension resends every entity and the pop counts start again.
     void forgetWorld() {
         watched.clear();
         flying.clear();
@@ -325,8 +307,6 @@ final class PlayerNews {
         }
     }
 
-    // A player arrives on the first tick they share the world with you. Anyone already there
-    // when you join or switch the sight alarm on arrives at once.
     private void watchSight() {
         if (!sightAlarm.isOn()) {
             inSight.clear();
@@ -347,8 +327,6 @@ final class PlayerNews {
         inSight.addAll(present);
     }
 
-    // A player counts on the tick they turn to face you with nothing in the way. They are
-    // told once until they look well away or lose sight of you.
     private void watchFacing() {
         if (!spotted.isOn()) {
             facing.clear();
@@ -381,8 +359,6 @@ final class PlayerNews {
         facing.addAll(still);
     }
 
-    // Tells each player once as they start to do something within the range. They are told
-    // again only after they stopped or went out of range.
     private void watchDoing(BoolSetting on, NumberSetting range, Set<UUID> told, Predicate<Player> doing,
                             String did) {
         if (!on.isOn()) {
@@ -420,7 +396,6 @@ final class PlayerNews {
         }
     }
 
-    // Each player is reported for the same breach once in a while.
     private void judgeCheaters() {
         if (!cheaters.isOn()) {
             return;
@@ -456,7 +431,6 @@ final class PlayerNews {
         notifier.say(line);
     }
 
-    // The client drops entities without a packet. The level is the only truth.
     private void sweepWatched() {
         if (watched.isEmpty()) {
             return;
@@ -478,7 +452,6 @@ final class PlayerNews {
         }
     }
 
-    // A player whose arrival waited for their gear. One who left again at once goes untold.
     private void tellArrivals() {
         Iterator<Arrival> it = arrivals.iterator();
         while (it.hasNext()) {
@@ -493,7 +466,6 @@ final class PlayerNews {
         }
     }
 
-    // Details add where a player is and for one still in view what they carry.
     private void announce(String name, EntityType<?> type, Vec3 pos, boolean arrived, Player seen) {
         if (type != EntityTypes.PLAYER) {
             notifier.say("§f" + type.getDescription().getString() + " §7has "
@@ -511,7 +483,6 @@ final class PlayerNews {
         notifier.say("§b" + name + " §7" + (arrived ? "entered" : "left") + " your render distance" + more + "§7.");
     }
 
-    // What a player carries in a few words such as holding a mace in full netherite.
     private static String gear(Player player) {
         StringBuilder words = new StringBuilder();
         ItemStack held = player.getMainHandItem();
@@ -547,7 +518,6 @@ final class PlayerNews {
         return elytra ? words.append(" with §fan elytra§7").toString() : words.toString();
     }
 
-    // The material of a piece of armour such as netherite and the whole name of anything else worn.
     private static String armourKind(ItemStack worn) {
         String words = ChatUtil.words(worn.getItem());
         int last = words.lastIndexOf(' ');
@@ -618,7 +588,6 @@ final class PlayerNews {
         return count == 1 ? "§b1 §7totem" : "§b" + count + " §7totems";
     }
 
-    // One player running count updates in place rather than stacking lines.
     private void replace(UUID player, String message) {
         String previous = popLines.put(player, message);
         if (previous != null) {

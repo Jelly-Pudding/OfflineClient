@@ -21,15 +21,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-// The places Locator and Eavesdrop and ItemCoords learnt from the server whilst they are
-// on. The newest come first and the nearest break a tie.
 public final class LeaksElement extends RowsElement {
 
-    // The one row whilst nothing can fill the list.
     private static final String NO_SOURCE = "Switch on Locator or Eavesdrop or ItemCoords";
 
-    // A player Locator found stands in whilst the editor is open and nothing is found yet. The
-    // green is the one Locator gives an exact place.
     private static final BlockPos SAMPLE_POS = new BlockPos(1250, 64, -3400);
     private static final long SAMPLE_AGE = TimeUnit.SECONDS.toMillis(90);
     private static final int SAMPLE_COLOUR = 0xFF40FF40;
@@ -38,18 +33,12 @@ public final class LeaksElement extends RowsElement {
         "Most rows to draw.", 8, 1, 30, 1);
     private final BoolSetting ages = new BoolSetting("Leak ages",
         "Writes how long ago each place was last known to be right.", true);
-    // Each gathering asks every source and sorts what they hold.
     private final RowCache<TextRow> rows = new RowCache<>(this::build);
 
     public LeaksElement() {
         super("Coordinate leaks", "Lists the players and places that Locator and Eavesdrop and ItemCoords find.",
             false, 100, 70);
         add(limit, ages);
-    }
-
-    @Override
-    public boolean visible() {
-        return isActive() && !rows(ClientFonts.hud()).isEmpty();
     }
 
     @Override
@@ -83,8 +72,6 @@ public final class LeaksElement extends RowsElement {
         return built;
     }
 
-    // The name in the colour of what found it and the rest in plain or muted text. A place in
-    // another dimension names it.
     private TextRow rowOf(Font font, Leak leak, long now) {
         List<String> parts = new ArrayList<>(List.of(leak.name(), " " + leak.detail(), " " + leak.coordinates()));
         List<Integer> colors = new ArrayList<>(List.of(leak.color(), RenderUtil.MUTED_TEXT, GuiTheme.HUD_TEXT));

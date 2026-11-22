@@ -11,9 +11,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-// A command over a list of player names. Adding and removing and listing and emptying work the
-// same for every list. Each command says where its names live and may add verbs of its own.
-// The config holds the lists and is written after every edit.
 public abstract class NameListCommand extends Command {
 
     private static final String ADD = "add";
@@ -21,7 +18,6 @@ public abstract class NameListCommand extends Command {
     private static final String LIST = "list";
     private static final String CLEAR = "clear";
 
-    // One player on the list as chat calls them such as friend and the list itself such as friends.
     private final String one;
     private final String many;
     private final List<String> verbs;
@@ -47,30 +43,23 @@ public abstract class NameListCommand extends Command {
 
     protected abstract Set<String> names();
 
-    // False when the name was on the list already.
     protected abstract boolean add(String name);
 
-    // False when the name was not on the list.
     protected abstract boolean remove(String name);
 
     protected abstract void clear();
 
-    // The other list as chat calls it when the name sits on it. Adding the name here takes it
-    // off there. Null when it sits on no other list.
     protected abstract String otherListOf(String name);
 
-    // Runs one of the command's own verbs. False for a verb it does not know.
     protected boolean runOwn(String verb, String[] args) {
         return false;
     }
 
-    // The names one of the command's own verbs takes.
     protected List<String> namesFor(String verb) {
         return List.of();
     }
 
-    // Clear empties the list and takes no name. A player who is called all or clear is still
-    // taken off by name.
+    // A player who is called all or clear is still taken off by name.
     @Override
     public void execute(String[] args) {
         String verb = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
@@ -95,7 +84,6 @@ public abstract class NameListCommand extends Command {
         }
     }
 
-    // A list with names on it waits for the command a second time before it is emptied.
     private void empty() {
         if (names().isEmpty()) {
             ChatUtil.message("§7Your " + many + " list is empty.");
@@ -111,7 +99,6 @@ public abstract class NameListCommand extends Command {
         ChatUtil.message("§7Took all §f" + count + "§7 off your " + many + " list.");
     }
 
-    // A name that moves over from the other list is said to have left it.
     private void addNamed(String name) {
         if (name.equalsIgnoreCase(NameStore.ownName())) {
             ChatUtil.error("You cannot add yourself as " + ChatUtil.withArticle(one) + ".");
@@ -156,7 +143,6 @@ public abstract class NameListCommand extends Command {
         });
     }
 
-    // The players in view who could still go on the list.
     private List<String> inView() {
         List<String> found = new ArrayList<>();
         if (OfflineClient.MC.level == null) {

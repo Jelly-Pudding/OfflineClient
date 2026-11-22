@@ -11,10 +11,8 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.Direction;
 
-// Holds the view at a fixed angle. Snap rounds it to the nearest clean heading instead.
-// The server can be held looking one of the six ways apart from the view. A block that
-// turns by the look of whoever places it goes down by the look the server holds. Stairs
-// and observers follow that look and pistons and dispensers face against it.
+// A block that turns by the look of whoever places it goes down by the look the server holds.
+// Stairs and observers follow that look and pistons and dispensers face against it.
 public final class Rotation extends Module {
 
     public enum Lock { OFF, FIXED, SNAP }

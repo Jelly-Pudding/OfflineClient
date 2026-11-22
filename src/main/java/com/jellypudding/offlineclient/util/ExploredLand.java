@@ -11,8 +11,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import java.util.HashSet;
 import java.util.Set;
 
-// The record of the land you explore on the server you play on. The world map and the minimap
-// both draw from it. It runs whilst either module is on and neither needs the other.
+// The world map and the minimap both draw from it. It runs whilst either module is on and neither
+// needs the other.
 public final class ExploredLand {
 
     private static final ExploredLand INSTANCE = new ExploredLand();
@@ -20,7 +20,6 @@ public final class ExploredLand {
     private final BoolSetting save = new BoolSetting("Save map",
         "Keeps the land you explored for your next visit. The Minimap draws from the same record.", true);
     private final TerrainCache terrain = new TerrainCache(save);
-    // The modules that are on and draw the land.
     private final Set<Module> keepers = new HashSet<>();
     private int caveChunks;
 
@@ -41,7 +40,6 @@ public final class ExploredLand {
         }
     }
 
-    // The same module calls this as it stops. The record stops with the last one.
     public static void release(Module module) {
         if (INSTANCE.keepers.remove(module) && INSTANCE.keepers.isEmpty()) {
             OfflineClient.INSTANCE.getEventBus().unregister(INSTANCE);
@@ -49,23 +47,20 @@ public final class ExploredLand {
         }
     }
 
-    // The land of the dimension you are in. Null before the first tick in a world.
+    // Null before the first tick in a world.
     public static TerrainLayer here() {
         return INSTANCE.terrain.here();
     }
 
-    // The land at your own height round you. Empty whilst no map asks for it.
     public static TerrainLayer cave() {
         return INSTANCE.terrain.cave();
     }
 
-    // Keeps that many chunks of the land at your own height round you up to date. Nought lets
-    // it go.
+    // Nought lets the cave layer go.
     public static void wantCave(int chunks) {
         INSTANCE.caveChunks = chunks;
     }
 
-    // The height to stand at in a column of the land.
     public static int standY(int x, int z) {
         return INSTANCE.terrain.standY(x, z);
     }

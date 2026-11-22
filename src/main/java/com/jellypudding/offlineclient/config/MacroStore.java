@@ -17,26 +17,18 @@ import net.minecraft.util.StringUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-// Named lists of lines run by one key press or on joining a server. A line beginning
-// with the command prefix runs as a client command and anything else goes to chat. A line
-// can also wait or repeat another. MacroLine reads those.
 public final class MacroStore extends KeyedStore<MacroStore.Macro> {
 
-    // The join server of a macro that runs on joining any server.
     public static final String ANY_SERVER = "*";
 
-    // What parts the lines of a macro typed in one go.
     public static final String SPLIT = ";";
 
-    // The first word of a typed macro that takes its lines in turn.
     public static final String CYCLE = "cycle";
 
-    // How much of its lines a macro shows in a list or a tip. A file may hold any amount.
     private static final int LONGEST_SHOWN = 240;
 
-    // A cycling macro runs one line a press and the next line on the press after. The join
-    // server is null for a macro that never runs on joining. The delay gives a login plugin
-    // time to let commands through.
+    // The join server is null for a macro that never runs on joining. The delay gives a login
+    // plugin time to let commands through.
     public record Macro(String name, Bind key, List<String> lines, boolean cycles, String joinServer, int joinDelay)
         implements KeyedStore.Keyed<Macro> {
 
@@ -61,13 +53,11 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
             return joinServer != null && (joinServer.equals(ANY_SERVER) || joinServer.equals(server));
         }
 
-        // The lines the way they are typed to make the macro. A long list is cut short.
         public String typedText() {
             String text = (cycles ? CYCLE + " " : "") + String.join(" " + SPLIT + " ", lines);
             return StringUtil.truncateStringIfNecessary(text, LONGEST_SHOWN, true);
         }
 
-        // What the macro does in a sentence for a tip.
         public String tip() {
             String join = joinText() == null ? "" : " " + joinText();
             String text = cycles ? "Each press runs the next of " + String.join(" or ", lines)
@@ -75,7 +65,6 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
             return StringUtil.truncateStringIfNecessary(text, LONGEST_SHOWN, true) + join + ".";
         }
 
-        // When the macro runs by itself. Null for one that only runs on its key.
         public String joinText() {
             if (joinServer == null) {
                 return null;
@@ -85,7 +74,6 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
         }
     }
 
-    // The lines of a macro as the player typed them. The problem is null when they can be saved.
     public record Typed(List<String> lines, boolean cycles, String problem) {
     }
 
@@ -106,9 +94,7 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
         return instance;
     }
 
-    // Reads lines typed with a semicolon between them. The word cycle in front makes a macro
-    // that takes them in turn. Such a macro runs one line a press and a wait would be a press
-    // that does nothing.
+    // A cycling macro runs one line a press and a wait would be a press that does nothing.
     public static Typed typed(String text) {
         String rest = text.trim();
         boolean cycles = rest.regionMatches(true, 0, CYCLE + " ", 0, CYCLE.length() + 1);
@@ -132,7 +118,6 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
         return new Typed(List.copyOf(lines), cycles, lines.isEmpty() ? "Give it something to run." : null);
     }
 
-    // The next line of a cycling macro or every line of any other.
     public void run(Macro macro) {
         runs.start(macro, 0);
     }
@@ -141,7 +126,6 @@ public final class MacroStore extends KeyedStore<MacroStore.Macro> {
         return runs.running(name);
     }
 
-    // Ends the run of that macro or every run for a null name. Hands back how many ended.
     public int stop(String name) {
         return runs.stop(name);
     }

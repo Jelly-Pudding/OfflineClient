@@ -10,7 +10,6 @@ import net.minecraft.world.phys.Vec3;
 // The player is put in its middle and taken back to the overworld afterwards.
 final class NetherRoom {
 
-    // The block the player's feet are in.
     static final BlockPos FEET = new BlockPos(0, 100, 0);
 
     private static final String IN_NETHER = "execute in minecraft:the_nether ";
@@ -42,7 +41,6 @@ final class NetherRoom {
         rig.ticks(SEEN_TICKS);
     }
 
-    // Back to the overworld spot the case began on.
     static void leave(Rig rig, BlockPos home) {
         World world = rig.world();
         world.attempt("execute in minecraft:overworld run tp " + world.player() + " " + (home.getX() + 0.5) + " "

@@ -106,7 +106,6 @@ public final class Chams extends Module {
         letGoOfPicture();
     }
 
-    // The named picture is looked at for changes only whilst a fill shows it.
     @Subscribe
     private void onTick(TickEvent event) {
         if (paintsPicture()) {
@@ -146,12 +145,10 @@ public final class Chams extends Module {
         return throughWalls.isOn();
     }
 
-    // True when an entity loses its texture for a flat colour.
     public boolean flat(Entity entity) {
         return fillOf(entity) == Fill.FLAT;
     }
 
-    // True when an entity shows the picture in place of its texture.
     public boolean picture(Entity entity) {
         return fillOf(entity) == Fill.PICTURE;
     }
@@ -164,7 +161,6 @@ public final class Chams extends Module {
         return ColorUtil.fade(colors.colorOf(entity), opacity.getFloat());
     }
 
-    // One for anything that is not a marked player.
     public float scaleFor(Entity entity) {
         return entity instanceof Player && applies(entity) ? playerScale.getFloat() : 1;
     }

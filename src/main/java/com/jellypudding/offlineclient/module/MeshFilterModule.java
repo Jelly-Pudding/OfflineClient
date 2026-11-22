@@ -8,9 +8,8 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.Set;
 
-// A module that changes which blocks the chunk mesher keeps. Worker threads read the
-// block set and the opacity. Both are replaced whole and the chunks rebuilt whenever
-// a setting changes.
+// Worker threads read the block set and the opacity. Both are replaced whole and the chunks rebuilt
+// whenever a setting changes.
 public abstract class MeshFilterModule extends Module {
 
     protected final NumberSetting opacity;
@@ -24,7 +23,6 @@ public abstract class MeshFilterModule extends Module {
         opacity = new NumberSetting("Opacity", opacityText, 0, 0, 100, 5, "%").max(100);
     }
 
-    // The blocks the settings name right now.
     protected abstract Set<Block> chosenBlocks();
 
     @Override
@@ -32,7 +30,6 @@ public abstract class MeshFilterModule extends Module {
         return ExclusivityGroup.MESH_FILTER;
     }
 
-    // Anything else the mesher reads from the subclass. True when it changed.
     protected boolean snapshotExtra() {
         return false;
     }
@@ -73,8 +70,8 @@ public abstract class MeshFilterModule extends Module {
         return alpha > 0;
     }
 
-    // What the mesher does with a block this module hides. Zero skips it and anything
-    // short of full is the alpha of a see through copy. Minus one leaves it alone.
+    // Zero skips the block and anything short of full is the alpha of a see through copy. Minus one
+    // leaves it alone.
     protected final int hiddenAlpha() {
         int a = alpha;
         return a >= 255 ? -1 : a;

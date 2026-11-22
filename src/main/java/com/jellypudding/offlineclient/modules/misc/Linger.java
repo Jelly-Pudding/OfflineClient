@@ -18,8 +18,7 @@ import net.minecraft.network.chat.Component;
 // disconnected screen opens with the reason the way it always does.
 public final class Linger extends Module {
 
-    // The dropped connection of the world you are kept in. Null whilst nothing is held. Read by
-    // whatever thread sends a packet.
+    // Read by whatever thread sends a packet.
     private volatile Connection held;
     // A connection you are leaving on purpose. It is never held.
     private Connection leaving;
@@ -37,7 +36,6 @@ public final class Linger extends Module {
         leaving = null;
     }
 
-    // True whilst you stand in the world of a connection that has dropped.
     public static boolean holding() {
         Linger linger = Modules.get(Linger.class);
         if (linger == null) {
@@ -47,14 +45,13 @@ public final class Linger extends Module {
         return linger.held != null;
     }
 
-    // Opens the way to the disconnected screen. True when a world was being held.
+    // True when a world was being held.
     public static boolean letGo() {
         Linger linger = Modules.get(Linger.class);
         return linger != null && linger.release();
     }
 
-    // The connection you are about to close or get kicked from on purpose never lingers. Called by
-    // every way the client leaves and by a server dialog the player leaves through.
+    // Called by every way the client leaves and by a server dialog the player leaves through.
     public static void expectLeave() {
         Linger linger = Modules.active(Linger.class);
         ClientPacketListener game = mc.getConnection();
@@ -81,8 +78,8 @@ public final class Linger extends Module {
         return true;
     }
 
-    // True for a packet sent on the connection held. The game would queue it and nothing would ever
-    // empty that queue. Every other connection sends as usual. Asked by ConnectionMixin.
+    // Asked by ConnectionMixin. The game would queue a packet sent on the held connection and
+    // nothing would ever empty that queue.
     public boolean drops(Connection connection) {
         return connection == held;
     }

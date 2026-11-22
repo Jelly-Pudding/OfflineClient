@@ -41,38 +41,32 @@ public final class LavaReach {
     // A staircase that drops a block for every block across costs a sideways step and a fall per step.
     private static final int STEPS_PER_STAIR = 2;
 
-    // How a walk ended when it did not run dry.
     private static final int STOPPED = -1;
     private static final int OVERFLOW = -2;
 
-    // A block the lava reaches with its level and the steps it took to get there.
     private record Flow(BlockPos pos, int level, int step) {
     }
 
     private LavaReach() {
     }
 
-    // True when lava poured at the spot could ever run into any block the box touches.
     public static boolean touches(BlockPos spot, AABB box) {
         return touches(spot, box, Integer.MAX_VALUE);
     }
 
-    // The same for lava taken back after the given number of flow steps. In one step lava
-    // falls a block or spreads one to the side. Lava never climbs and a block below the
-    // box cannot lead back up to it.
+    // In one step lava falls a block or spreads one to the side. Lava never climbs and a block
+    // below the box cannot lead back up to it.
     public static boolean touches(BlockPos spot, AABB box, int steps) {
         int end = walk(spot, steps, Mth.floor(box.minY), false, box::intersects);
         return end == STOPPED || end == OVERFLOW;
     }
 
-    // Flow steps until lava poured at the spot stops reaching new blocks. Minus one for a
-    // flow too big to follow.
+    // Minus one for a flow too big to follow.
     public static int flowSteps(BlockPos spot) {
         int end = walk(spot, Integer.MAX_VALUE, MC.level.getMinY(), true, pos -> false);
         return end == OVERFLOW ? -1 : end;
     }
 
-    // Flow steps down a staircase that drops a block a step.
     public static int stairSteps(int drop) {
         return STEPS_PER_STAIR * Math.max(0, drop);
     }
@@ -86,13 +80,11 @@ public final class LavaReach {
         return Math.max(downStairs, offTheTop);
     }
 
-    // Seconds a flow of this many steps takes at the server's current tick rate.
     public static double seconds(int steps) {
         return (double) steps * Fluids.LAVA.getTickDelay(MC.level) / TickRate.INSTANCE.tps();
     }
 
-    // The height of the first block under the spot that stops falling lava. One below the
-    // world when nothing does.
+    // One below the world when nothing stops falling lava.
     public static int groundBelow(BlockPos spot) {
         BlockPos.MutableBlockPos cursor = spot.mutable().move(Direction.DOWN);
         while (holdsLava(cursor)) {
@@ -208,7 +200,6 @@ public final class LavaReach {
         return best;
     }
 
-    // Lava in this block could fall into the one below. Lava already there counts.
     private static boolean dropsBelow(BlockPos pos) {
         BlockPos below = pos.below();
         return holdsLava(below) || MC.level.getFluidState(below).is(FluidTags.LAVA);

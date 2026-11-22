@@ -35,15 +35,13 @@ public final class ShownChat {
     private static final String PLUGIN_MARK = " -> me]";
     private static final List<String> WHISPER_MARKS = List.of(VANILLA_MARK.strip(), PLUGIN_MARK.strip());
 
-    // A whisper to you and the player who sent it.
     public record Whisper(String from, String text) {
     }
 
     private ShownChat() {
     }
 
-    // The player who wrote a line on its way into chat. Null for a line the server or the
-    // client wrote and for a whisper you sent. It reads the tab list and belongs on the game thread.
+    // Null for a line the server or the client wrote and for a whisper you sent. Game thread only.
     public static String writer(Component line, GuiMessageSource source) {
         if (source == GuiMessageSource.SYSTEM_CLIENT) {
             return null;
@@ -65,13 +63,11 @@ public final class ShownChat {
         return written == null ? null : written.name();
     }
 
-    // True for a line that whispers to you.
     public static boolean whisper(Component line) {
         TranslatableContents decoration = decoration(line);
         return (decoration != null && decoration.getKey().equals(INCOMING_WHISPER)) || marked(ChatSender.plain(line));
     }
 
-    // The same for a packet as it arrives.
     public static boolean whisper(Packet<?> packet) {
         return switch (packet) {
             case ClientboundPlayerChatPacket chat -> chat.chatType().chatType().is(ChatType.MSG_COMMAND_INCOMING);
@@ -104,8 +100,6 @@ public final class ShownChat {
         return whisper != null ? whisper : shaped(text, "[", PLUGIN_MARK);
     }
 
-    // The whisper of a line that opens with the sign and a name right before the mark. Null for
-    // a line of any other shape.
     private static Whisper shaped(String text, String opening, String mark) {
         if (!text.startsWith(opening)) {
             return null;
@@ -121,8 +115,8 @@ public final class ShownChat {
         return new Whisper(text.substring(from, to), afterMark(text.substring(to + mark.length())));
     }
 
-    // The text of a line no player wrote. Null for player chat and for server text that reads
-    // as the line of a player or as a whisper. It reads the tab list and belongs on the game thread.
+    // Null for player chat and for server text that reads as the line of a player or as a whisper.
+    // Game thread only.
     public static String serverText(Packet<?> packet) {
         if (!(packet instanceof ClientboundSystemChatPacket system) || system.overlay()
             || ChatSender.lineOf(packet) != null) {
@@ -132,13 +126,11 @@ public final class ShownChat {
         return marked(text) ? null : text;
     }
 
-    // True for a line that holds a whisper mark anywhere.
     private static boolean marked(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
         return WHISPER_MARKS.stream().anyMatch(lower::contains);
     }
 
-    // The message of a whisper with the colon and the spaces a plugin puts before it taken off.
     private static String afterMark(String text) {
         int from = 0;
         while (from < text.length() && (text.charAt(from) == ' ' || text.charAt(from) == ':')) {

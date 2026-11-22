@@ -8,10 +8,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.WindLaunch;
 
-// One launch each time it is switched on. Bind it to a key.
 public final class WindJump extends Module {
 
-    // How long a launch may wait for you to land and for the last charge to cool down.
     private static final int WAIT_TICKS = 60;
 
     private final BoolSetting fromInventory = new BoolSetting("Take from inventory",

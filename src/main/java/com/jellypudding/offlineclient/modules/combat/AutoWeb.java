@@ -30,7 +30,6 @@ import java.util.Set;
 // their predicted path from ahead back to their feet and then around them.
 public final class AutoWeb extends Module {
 
-    // How much of the colour a spot already webbed keeps.
     private static final float DONE_FADE = 0.4f;
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
@@ -61,7 +60,6 @@ public final class AutoWeb extends Module {
         "Outlines the spots being webbed. Done ones fade.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 270f).under(render);
 
-    // Spots still to web then spots already webbed. The outline lasts the whole tick.
     private final List<BlockPos> pending = new ArrayList<>();
     private final List<BlockPos> done = new ArrayList<>();
     private final SlotSwap slots = new SlotSwap();
@@ -120,7 +118,7 @@ public final class AutoWeb extends Module {
                 pending.add(spot);
             }
         }
-        if (timer > 0 || pending.isEmpty()) {
+        if (timer > 0 || pending.isEmpty() || Hands.slotsTaken()) {
             return;
         }
 

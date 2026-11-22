@@ -27,13 +27,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// The password goes out once per join and only to the server and name it was saved for.
-// Only a line the server wrote counts as a prompt. Another player's chat never does. A password
-// typed by hand in answer to a prompt is offered once the server stops asking and is only kept
-// once the player says to. It is written nowhere but the file of saved passwords.
+// The password goes out once per join and only to the server and name it was saved for. Only a line
+// the server wrote counts as a prompt. A password typed by hand is only kept once the player says
+// to and is written nowhere but the file of saved passwords.
 public final class AutoLogin extends Module {
 
-    // What a prompt asks for. The password follows the command once or twice.
+    // The password follows the command once or twice.
     private record Prompt(String command, int copies) {
 
         String answer(String password) {
@@ -47,7 +46,6 @@ public final class AutoLogin extends Module {
     private static final String LOGIN = "login";
     private static final String AT = "@";
 
-    // The words login and register plugins answer to.
     private static final Set<String> LOGIN_WORDS = Set.of("login", "l", "log", "register", "reg");
     private static final String REGISTER_START = "reg";
 
@@ -60,15 +58,11 @@ public final class AutoLogin extends Module {
 
     private boolean answered;
     private boolean hinted;
-    // Ticks left in which a login command answers the last prompt. The first one sent closes it.
     private int promptLeft;
-    // The last prompt whilst the saved password has yet to go out in answer to it.
     private Prompt unanswered;
-    // A password typed by hand on this join and the key it would be saved under. It waits here
-    // until the player saves it and is forgotten when the join or the module ends.
+    // Forgotten when the join or the module ends.
     private String typed;
     private String typedFor;
-    // Ticks before the typed password is offered. Zero once it has been.
     private int offerIn;
 
     public AutoLogin() {
@@ -82,8 +76,7 @@ public final class AutoLogin extends Module {
         newJoin();
     }
 
-    // Where the password for this server and the name you joined it with is saved. Your account
-    // name keeps the server alone as its key.
+    // Your account name keeps the server alone as its key.
     public static String loginKey() {
         String joined = NameStore.ownName();
         String server = ServerInfo.key();
@@ -177,7 +170,6 @@ public final class AutoLogin extends Module {
             + OfflineClient.INSTANCE.getCommandManager().getPrefix() + "autologin set <password>§7.");
     }
 
-    // A command sent after a prompt may be its answer.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         String command = switch (event.getPacket()) {
@@ -190,9 +182,7 @@ public final class AutoLogin extends Module {
         }
     }
 
-    // Only the first login command after a prompt answers it. The saved password sent by this
-    // module counts as that answer too. A password that differs from the saved one waits to be
-    // offered.
+    // Only the first login command after a prompt answers it.
     private void learn(String command) {
         String password = typedPassword(command);
         if (password == null || promptLeft == 0 || !isEnabled() || Modules.dormant()
@@ -222,7 +212,7 @@ public final class AutoLogin extends Module {
         }
     }
 
-    // The server has not asked again and still has you. The line never names the password.
+    // The line never names the password.
     private void offer() {
         ClientPacketListener game = mc.getConnection();
         if (game == null || !game.getConnection().isConnected() || Modules.dormant()) {
@@ -236,8 +226,7 @@ public final class AutoLogin extends Module {
             "Click to save it for AutoLogin.")));
     }
 
-    // The password of a login or register command. A register that names two different ones has
-    // none because the server refuses it.
+    // A register that names two different passwords has none because the server refuses it.
     private static String typedPassword(String command) {
         String[] words = command.trim().split("\\s+");
         String first = words[0].toLowerCase(Locale.ROOT);
@@ -248,8 +237,7 @@ public final class AutoLogin extends Module {
         return words[1];
     }
 
-    // Saves the password the server took on this join. Hands back what it was saved under. Null
-    // when no such password has been offered.
+    // Hands back what it was saved under. Null when no password has been offered.
     public String saveTyped() {
         if (typed == null || offerIn > 0) {
             return null;
@@ -260,7 +248,7 @@ public final class AutoLogin extends Module {
         return key;
     }
 
-    // A login wins when the line offers both. Null for a line that is no prompt.
+    // A login wins when the line offers both.
     private static Prompt promptIn(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
         Matcher matcher = PROMPT.matcher(lower);

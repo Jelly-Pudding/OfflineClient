@@ -15,8 +15,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Locale;
 
-// Typed coordinates belong to the dimension you are in unless a side is named.
-// In the end they are read as overworld ones. Every printed spot copies itself when clicked.
 public final class GetPosCommand extends Command {
 
     private static final String COPY = "copy";
@@ -71,7 +69,6 @@ public final class GetPosCommand extends Command {
         showAcross(spot.x, spot.z, fromNether);
     }
 
-    // A click copies the spot on the far side.
     private static void showAcross(double x, double z, boolean fromNether) {
         String other = Dimension.acrossPortal(x, !fromNether) + " " + Dimension.acrossPortal(z, !fromNether);
         ChatUtil.component(ChatUtil.copyOnClick(Component.literal("§7" + (fromNether ? "Nether" : "Overworld")

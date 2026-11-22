@@ -13,9 +13,7 @@ import net.minecraft.core.BlockPos;
 
 import java.util.List;
 
-// The walk the goto command and the finds list start. There is one at a time and it says
-// in chat how it went. It can call at several stops in turn and wait at each and start
-// over after the last.
+// The walk the goto command and the finds list start. There is one at a time.
 public final class Travel {
 
     // A block nobody can stand in is walked up to. This close to it counts as there.
@@ -23,8 +21,8 @@ public final class Travel {
 
     private static final Travel INSTANCE = new Travel();
 
-    // One place to walk to. A column is a place on the map whose height the walk finds
-    // out and its spot only says roughly where it is.
+    // A column is a place on the map whose height the walk finds out and its spot only says roughly
+    // where it is.
     public record Stop(BlockPos spot, boolean column) {
 
         public Stop {
@@ -55,11 +53,9 @@ public final class Travel {
     private final Trip trip = new Trip();
     private final WorldWatch world = new WorldWatch();
     private List<Stop> stops = List.of();
-    // The stop being walked to and the goal that stands for it.
     private int next;
     private PathGoal goal;
     private int waitTicks;
-    // Ticks left of the wait at the stop just reached.
     private int waiting;
     private boolean loop;
     // True for a walk a command started. Its end goes in the chat beside the command.
@@ -68,14 +64,11 @@ public final class Travel {
     private Travel() {
     }
 
-    // Walks to the spot and stands beside a solid block. A walk already going gives way.
-    // False when no search could start.
+    // A walk already going gives way. False when no search could start.
     public static boolean to(BlockPos target) {
         return along(List.of(Stop.at(target)), 0, false);
     }
 
-    // Walks to each stop in turn and stands still for the wait at every one. A loop goes
-    // back to the first after the last until it is stopped.
     public static boolean along(List<Stop> stops, int waitTicks, boolean loop) {
         return INSTANCE.start(List.copyOf(stops), waitTicks, loop);
     }
@@ -88,13 +81,12 @@ public final class Travel {
         INSTANCE.end();
     }
 
-    // The block the walk is going to. Null whilst no walk is going.
     public static BlockPos goal() {
         Travel travel = INSTANCE;
         return travel.stops.isEmpty() ? null : travel.stops.get(travel.next).spot();
     }
 
-    // Blocks in a straight line from you to the goal. Minus one whilst no walk is going.
+    // Minus one whilst no walk is going.
     public static double distanceLeft() {
         PathGoal goal = INSTANCE.goal;
         LocalPlayer player = OfflineClient.MC.player;

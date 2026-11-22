@@ -26,7 +26,6 @@ import net.minecraft.world.phys.Vec3;
 // at and you sit on it from where you are. A wall or a gap of a few blocks is crossed that way.
 public final class CushionHop extends Module {
 
-    // A cushion this near the block you look at is the one meant.
     private static final double NEAR = 1;
 
     private final KeybindSetting hopKey = new KeybindSetting("Hop key",
@@ -69,7 +68,6 @@ public final class CushionHop extends Module {
         }
     }
 
-    // The cushion under the crosshair or the one on the block under it. Never the one you sit on.
     private Cushion aimedCushion() {
         if (mc.hitResult instanceof EntityHitResult hit && hit.getEntity() instanceof Cushion cushion) {
             return free(cushion) ? cushion : null;
@@ -105,7 +103,6 @@ public final class CushionHop extends Module {
         }
     }
 
-    // On the face you look at first and on top of the block when that face takes none.
     private void setDown() {
         BlockHitResult aimed = BlockUtil.aimedBlock();
         if (aimed == null) {

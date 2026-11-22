@@ -46,7 +46,6 @@ public final class FreeLook extends Module {
     private float savedYawO;
     private float savedPitchO;
     private CameraType savedCamera;
-    // Null whilst nothing is swapped.
     private Entity swapped;
 
     public FreeLook() {

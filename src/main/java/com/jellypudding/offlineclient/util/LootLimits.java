@@ -33,17 +33,14 @@ public final class LootLimits {
     public record Rule(Object key, int limit) {
     }
 
-    // Kinds counted together whatever the item.
     private enum Group { WOOD, FOOD, BLOCKS }
 
     private static final int STACK = 64;
-    // The slider for a shared count reaches a whole inventory of stacks.
     private static final int MOST_STACKS = InventoryUtil.WHOLE_INVENTORY * STACK;
 
     private final BoolSetting limits = new BoolSetting("Limits",
         "Takes only what a limit below covers and only until you hold that many. Nought takes none.", false)
         .startFolded();
-    // A new pick starts at one full stack.
     private final RegistryCountSetting<Item> items = new RegistryCountSetting<>("Item limits",
         "How many of each item you take. Click to pick them and click a number to change it.",
         BuiltInRegistries.ITEM, defaultItems(), Item::getDefaultMaxStackSize, 0)
@@ -135,7 +132,6 @@ public final class LootLimits {
         return limits.isOn();
     }
 
-    // Hides the whole group whilst the answer is false.
     public void visibleWhen(Supplier<Boolean> shown) {
         limits.visibleWhen(shown);
     }
@@ -148,7 +144,6 @@ public final class LootLimits {
         return extras.isOn();
     }
 
-    // Null when no limit covers the stack.
     public Rule ruleFor(ItemStack stack) {
         int own = items.countOf(stack.getItem());
         if (own >= 0) {
@@ -167,7 +162,7 @@ public final class LootLimits {
         return ItemUtil.isFullBlock(stack.getItem()) ? new Rule(Group.BLOCKS, blocks.getInt()) : null;
     }
 
-    // How many the player holds under each rule. Worn armour and the offhand count.
+    // Worn armour and the offhand count.
     public Map<Rule, Integer> holdings() {
         Map<Rule, Integer> held = new HashMap<>();
         Inventory inventory = OfflineClient.MC.player.getInventory();
@@ -181,7 +176,6 @@ public final class LootLimits {
         return held;
     }
 
-    // The best score worn or held in the offhand under each rule.
     public Map<Rule, Double> bestWorn() {
         Map<Rule, Double> best = new HashMap<>();
         List<ItemStack> worn = new ArrayList<>();

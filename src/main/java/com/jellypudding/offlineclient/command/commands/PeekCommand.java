@@ -15,7 +15,6 @@ import net.minecraft.world.phys.EntityHitResult;
 
 import java.util.List;
 
-// The main hand comes first and then the offhand and then the item frame under the crosshair.
 public final class PeekCommand extends Command {
 
     public PeekCommand() {
@@ -48,7 +47,6 @@ public final class PeekCommand extends Command {
         OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.setScreen(screen));
     }
 
-    // Null when neither hand holds a container.
     private static ItemStack held(LocalPlayer player) {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);
@@ -59,7 +57,6 @@ public final class PeekCommand extends Command {
         return null;
     }
 
-    // Null when the crosshair rests on anything but a frame with a container in it.
     private static ItemStack framed() {
         if (OfflineClient.MC.hitResult instanceof EntityHitResult hit && hit.getEntity() instanceof ItemFrame frame
             && frame.getItem().has(DataComponents.CONTAINER)) {

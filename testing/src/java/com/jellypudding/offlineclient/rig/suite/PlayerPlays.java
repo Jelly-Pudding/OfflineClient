@@ -50,7 +50,6 @@ final class PlayerPlays {
 
     // The eyes of a player who really crouches drop by this much and more.
     private static final double STEADY_EYES = 0.05;
-    // The chest of the second player where it stands in reach of the first.
     private static final Vec3 IN_REACH = new Vec3(2.5, -59.0, 0.5);
     private static final double PUSHED = 0.3;
     private static final double HELD = 0.05;
@@ -87,18 +86,13 @@ final class PlayerPlays {
     private static final int LOOKUP_TICKS = 1200;
     private static final String OBSIDIAN = "obsidian";
     private static final String HARDY = "effect give %s resistance 600 4 true";
-    // The block the second player stands in whilst in reach and the one over its head.
     private static final BlockPos STOOD_IN = new BlockPos(2, -60, 0);
     private static final BlockPos OVERHEAD = new BlockPos(2, -58, 0);
-    // The blocks round the feet of the second player where it stands in reach.
     private static final List<BlockPos> WALLS = List.of(STOOD_IN.north(), STOOD_IN.east(), STOOD_IN.south(),
         STOOD_IN.west());
-    // Right in front of the second player's eyes as it looks south.
     private static final BlockPos FACED = STOOD_IN.offset(0, 1, 1);
-    // Ground a block north of that spot. A crystal set on it stands right beside the player.
     private static final BlockPos CRYSTAL_BASE = new BlockPos(2, -61, -1);
     private static final List<String> CRIT_MODES = List.of("packet", "subtle", "mini_jump", "full_jump");
-    // Stone behind the first player for Nuker to chew on with the sword.
     private static final BlockPos QUARRY_FROM = new BlockPos(-1, -60, 2);
     private static final BlockPos QUARRY_TO = new BlockPos(1, -59, 3);
     private static final String STURDY_HUSK = "{NoAI:1b,PersistenceRequired:1b,IsBaby:0b,Health:200f,"
@@ -367,7 +361,6 @@ final class PlayerPlays {
         rig.expect(each >= SMASHED, "The hits were no smashes");
     }
 
-    // A jump by hand and a swing on the way down. True when the server called that hit critical.
     private static boolean jumpingHit(Rig rig, Duo duo) {
         rig.controls().aimAt(IN_REACH);
         rig.ticks(SETTLE_TICKS);
@@ -395,7 +388,6 @@ final class PlayerPlays {
         rig.expect(held <= HELD, "A hit still pushed the player " + told(held) + " blocks");
     }
 
-    // The second player hits the first with its fist. Blocks the hit moved the first player.
     private static double punched(Rig rig, Duo duo) {
         Vec3 from = rig.world().where();
         duo.partner().ask("aim", rig.world().player());
@@ -408,7 +400,7 @@ final class PlayerPlays {
     private static void fightBot(Rig rig, Duo duo) {
         arm(rig);
         duo.partnerAt(0.5, -60, -9.5, 0);
-        duo.server().console("effect give " + Partner.NAME + " resistance 600 4 true");
+        duo.world().quietly("effect give " + Partner.NAME + " resistance 600 4 true");
         Vec3 from = rig.world().where();
         rig.client().enable("FightBot");
         rig.ticks(FIGHT_TICKS);
@@ -564,7 +556,6 @@ final class PlayerPlays {
         rig.expect(shown.contains(SECRET), "The second player has the key and could not read the line");
     }
 
-    // A sword in the first slot and that slot in the hand.
     private static void arm(Rig rig) {
         rig.world().hotbar(0, SWORD);
         rig.act(mc -> mc.player.getInventory().setSelectedSlot(0));
@@ -608,10 +599,9 @@ final class PlayerPlays {
         rig.expect(far >= plain + PUSHED, "Knockback knocked the second player no further");
     }
 
-    // One full swing at the second player with open ground at its back. Blocks it went.
     private static double knocked(Rig rig, Duo duo) {
         duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
-        duo.server().console(String.format(Locale.ROOT, HARDY, Partner.NAME));
+        duo.world().quietly(String.format(Locale.ROOT, HARDY, Partner.NAME));
         Vec3 from = spot(duo.server().player(Partner.NAME));
         rig.controls().aimAt(IN_REACH);
         rig.ticks(SETTLE_TICKS);
@@ -624,7 +614,7 @@ final class PlayerPlays {
     private static void crystalAura(Rig rig, Duo duo) {
         duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
         rig.world().setBlock(CRYSTAL_BASE, OBSIDIAN);
-        duo.server().console(String.format(Locale.ROOT, HARDY, rig.world().player()));
+        duo.world().quietly(String.format(Locale.ROOT, HARDY, rig.world().player()));
         rig.world().hotbar(0, "end_crystal 16");
         rig.act(mc -> mc.player.getInventory().setSelectedSlot(0));
         rig.ticks(SEEN_TICKS);
@@ -650,9 +640,8 @@ final class PlayerPlays {
         Props.await(rig, "a web in the second player's block", ANSWER_TICKS, () -> Props.is(rig, STOOD_IN, "cobweb"));
     }
 
-    // The first player cannot be hurt. Its own blast holds no module back and does not end the case.
     private static void hardy(Rig rig, Duo duo) {
-        duo.server().console(String.format(Locale.ROOT, HARDY, rig.world().player()));
+        duo.world().quietly(String.format(Locale.ROOT, HARDY, rig.world().player()));
     }
 
     private static void inHand(Rig rig, String item) {
@@ -704,7 +693,6 @@ final class PlayerPlays {
         rig.client().disable("AutoAnvil");
     }
 
-    // The crosshair sits half a block to the side of the second player and past its body.
     private static void hitboxes(Rig rig, Duo duo) {
         arm(rig);
         duo.partnerInReach(true);
@@ -800,13 +788,19 @@ final class PlayerPlays {
     private static void linger(Rig rig, Duo duo) {
         String me = rig.world().player();
         rig.client().enable("Linger");
-        duo.server().console("kick " + me + " rig");
-        rig.ticks(SETTLE_TICKS * 2);
-        boolean gone = "false".equals(duo.server().player(me).get("online"));
-        boolean held = rig.ask(mc -> mc.level != null && mc.player != null
-            && !(mc.gui.screen() instanceof DisconnectedScreen));
-        rig.client().disable("Linger");
-        rig.ticks(SETTLE_TICKS);
+        boolean gone;
+        boolean held;
+        try {
+            duo.world().quietly("kick " + me + " rig");
+            rig.ticks(SETTLE_TICKS * 2);
+            gone = "false".equals(duo.server().player(me).get("online"));
+            held = rig.ask(mc -> mc.level != null && mc.player != null
+                && !(mc.gui.screen() instanceof DisconnectedScreen));
+        } finally {
+            // The world it keeps would pass for a live one in the case that follows.
+            rig.client().disable("Linger");
+            rig.ticks(SETTLE_TICKS);
+        }
         rig.expect(gone, "The kick did not land. That proves nothing");
         rig.expect(held, "The world was not kept once the connection dropped");
     }
@@ -814,7 +808,7 @@ final class PlayerPlays {
     private static void autoReconnect(Rig rig, Duo duo) {
         String me = rig.world().player();
         rig.client().enable("AutoReconnect");
-        duo.server().console("kick " + me + " rig");
+        duo.world().quietly("kick " + me + " rig");
         rig.ticks(SETTLE_TICKS);
         rig.expect("false".equals(duo.server().player(me).get("online")), "The kick did not land. That proves nothing");
         int took = Props.await(rig, "the player to be back on the server", BACK_TICKS,
@@ -828,7 +822,7 @@ final class PlayerPlays {
     private static void autoLog(Rig rig, Duo duo) {
         String me = rig.world().player();
         rig.client().enable("AutoLog");
-        duo.server().console("damage " + me + " 15");
+        duo.world().quietly("damage " + me + " 15");
         try {
             Props.await(rig, "the player to leave the server", ANSWER_TICKS,
                 () -> "false".equals(duo.server().player(me).get("online")));
@@ -845,8 +839,6 @@ final class PlayerPlays {
         rig.expect(rang, "No toast came up when another player wrote your name");
     }
 
-    // Has the second player say the words and wipes the chat. A toast is then all that still
-    // holds them.
     private static boolean toasted(Rig rig, Duo duo, String words) {
         duo.partner().ask("chat", words);
         rig.ticks(SETTLE_TICKS);
@@ -886,7 +878,7 @@ final class PlayerPlays {
         rig.client().enable("AutoLogin");
         try {
             int mark = duo.server().logMark();
-            duo.server().console("tellraw " + me + " \"Please log in with /login <password>\"");
+            duo.world().quietly("tellraw " + me + " \"Please log in with /login <password>\"");
             String heard = duo.server().heard("command " + me, mark, ANSWER_TICKS);
             rig.expect(heard.contains("/login " + PASSWORD), "The server heard " + heard);
         } finally {
@@ -909,7 +901,6 @@ final class PlayerPlays {
             "The check does not say that no site answered");
     }
 
-    // Waits until the module counts something beside its name.
     private static void awaitMark(Rig rig, String name, String what) {
         Module module = rig.client().module(name);
         rig.client().enable(name);
@@ -934,7 +925,7 @@ final class PlayerPlays {
         rig.client().enable("KillAura");
         rig.ticks(WATCH_TICKS);
         double listed = count(duo, HITS);
-        duo.server().console("probe unlist " + me + " " + Partner.NAME);
+        duo.world().quietly("probe unlist " + me + " " + Partner.NAME);
         try {
             rig.ticks(SETTLE_TICKS);
             duo.server().resetTallies();
@@ -946,7 +937,7 @@ final class PlayerPlays {
             rig.expect(unlisted == 0, "KillAura hit a player the server keeps off the tab list " + unlisted
                 + " times");
         } finally {
-            duo.server().console("probe list " + me + " " + Partner.NAME);
+            duo.world().quietly("probe list " + me + " " + Partner.NAME);
         }
     }
 
@@ -955,7 +946,7 @@ final class PlayerPlays {
         BlockPos feet = NetherRoom.FEET;
         NetherRoom.enter(rig);
         try {
-            duo.server().console(String.format(Locale.ROOT, "execute in minecraft:the_nether run tp %s %.1f %d %.1f "
+            duo.world().quietly(String.format(Locale.ROOT, "execute in minecraft:the_nether run tp %s %.1f %d %.1f "
                 + "90 0", Partner.NAME, feet.getX() + 2.5, feet.getY(), feet.getZ() + 0.5));
             duo.partner().ask("ticks", Integer.toString(SETTLE_TICKS));
             hardy(rig, duo);
@@ -998,7 +989,7 @@ final class PlayerPlays {
         rig.ticks(SETTLE_TICKS);
         int mark = duo.server().logMark();
         boolean quiet = duo.server().allHeard("command " + me, mark).isEmpty();
-        duo.server().console("damage " + me + " 15");
+        duo.world().quietly("damage " + me + " 15");
         String heard = duo.server().heard("command " + me, mark, ANSWER_TICKS);
         rig.expect(quiet, "Stasis called for a pull at full health");
         rig.expect(heard != null && heard.contains(Partner.NAME) && heard.contains("home"), "The server heard "
@@ -1009,7 +1000,7 @@ final class PlayerPlays {
         String me = rig.world().player();
         BlockPos door = new BlockPos(0, -60, -4);
         String open = "execute if block " + Props.at(door) + " oak_trapdoor[open=true]";
-        duo.server().console(block(door, "oak_trapdoor"));
+        duo.world().quietly(block(door, "oak_trapdoor"));
         rig.client().set("Stasis", "Role", "at_base");
         Props.text(rig, "Stasis", "Trapdoor 1", Props.at(door));
         Props.text(rig, "Stasis", "Caller 1", Partner.NAME);
@@ -1040,7 +1031,6 @@ final class PlayerPlays {
         }
     }
 
-    // The second player stands a way off and the first has wings on.
     private static void autoWasp(Rig rig, Duo duo) {
         duo.partnerAt(IN_REACH.x + WASP_RUN, -60, IN_REACH.z, 90);
         Props.wear(rig, "armor.chest", "elytra");
@@ -1061,7 +1051,7 @@ final class PlayerPlays {
 
     private static void autoCity(Rig rig, Duo duo) {
         duo.partnerInReach(false);
-        duo.server().console(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
+        duo.world().quietly(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
         inHand(rig, "netherite_pickaxe[enchantments={\"minecraft:efficiency\":5}]");
         rig.ticks(SEEN_TICKS);
         rig.client().enable("AutoCity");
@@ -1069,7 +1059,7 @@ final class PlayerPlays {
             Props.await(rig, "a wall of the second player's hole to go", KILL_TICKS,
                 () -> WALLS.stream().anyMatch(wall -> rig.world().isAir(wall)));
         } finally {
-            duo.server().console(WALLS.stream().map(wall -> block(wall, "air")).toList());
+            duo.world().quietly(WALLS.stream().map(wall -> block(wall, "air")).toList());
         }
         rig.until("AutoCity to switch itself off", SETTLE_TICKS, mc -> !rig.client().module("AutoCity").isEnabled());
     }
@@ -1079,7 +1069,7 @@ final class PlayerPlays {
     private static void pistonAura(Rig rig, Duo duo) {
         BlockPos low = STOOD_IN.offset(-1, 0, -2);
         BlockPos high = STOOD_IN.offset(2, 0, 2);
-        duo.server().console(List.of(fill(low, high, OBSIDIAN), block(STOOD_IN, "air")));
+        duo.world().quietly(List.of(fill(low, high, OBSIDIAN), block(STOOD_IN, "air")));
         duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
         hardy(rig, duo);
         inHand(rig, "piston 16");
@@ -1092,13 +1082,13 @@ final class PlayerPlays {
                 () -> hurtBy(duo, "ENTITY_EXPLOSION") >= 1);
         } finally {
             rig.client().disable("PistonAura");
-            duo.server().console(List.of("kill @e[type=end_crystal]", fill(low, high.above(2), "air")));
+            duo.world().quietly(List.of("kill @e[type=end_crystal]", fill(low, high.above(2), "air")));
         }
     }
 
     private static void holeFiller(Rig rig, Duo duo) {
         BlockPos hole = STOOD_IN.north(3);
-        duo.server().console(List.of(block(hole.below(), OBSIDIAN), block(hole.north(), OBSIDIAN),
+        duo.world().quietly(List.of(block(hole.below(), OBSIDIAN), block(hole.north(), OBSIDIAN),
             block(hole.east(), OBSIDIAN), block(hole.south(), OBSIDIAN), block(hole.west(), OBSIDIAN)));
         duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
         inHand(rig, OBSIDIAN + " 16");
@@ -1108,7 +1098,7 @@ final class PlayerPlays {
                 () -> !rig.world().isAir(hole));
         } finally {
             rig.client().disable("HoleFiller");
-            duo.server().console(List.of(fill(hole.offset(-1, 0, -1), hole.offset(1, 0, 1), "air"),
+            duo.world().quietly(List.of(fill(hole.offset(-1, 0, -1), hole.offset(1, 0, 1), "air"),
                 block(hole.below(), "grass_block")));
         }
     }
@@ -1122,7 +1112,7 @@ final class PlayerPlays {
         rig.ticks(WATCH_TICKS);
         int kept = Props.carried(rig, "ender_pearl");
         Vec3 stood = spot(duo.lead());
-        duo.server().console("damage " + me + " 13");
+        duo.world().quietly("damage " + me + " 13");
         Props.await(rig, "the first player to land far from the second", KILL_TICKS,
             () -> spot(duo.lead()).distanceTo(stood) >= FLED);
         int left = Props.carried(rig, "ender_pearl");
@@ -1138,17 +1128,17 @@ final class PlayerPlays {
 
     private static void cityEsp(Rig rig, Duo duo) {
         duo.partnerInReach(false);
-        duo.server().console(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
+        duo.world().quietly(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
         try {
             awaitMark(rig, "CityESP", "a wall of the other player's hole to be marked");
         } finally {
-            duo.server().console(WALLS.stream().map(wall -> block(wall, "air")).toList());
+            duo.world().quietly(WALLS.stream().map(wall -> block(wall, "air")).toList());
         }
     }
 
     private static void pearlTracker(Rig rig, Duo duo) {
         duo.partnerInReach(true);
-        duo.server().console("item replace entity " + Partner.NAME + " hotbar.0 with ender_pearl 4");
+        duo.world().quietly("item replace entity " + Partner.NAME + " hotbar.0 with ender_pearl 4");
         duo.partner().ask("slot", "0");
         duo.partner().ask("look", "0", "-60");
         Module tracker = rig.client().module("PearlTracker");
@@ -1166,7 +1156,7 @@ final class PlayerPlays {
     // three seconds and crack a little more every few ticks.
     private static void breakIndicators(Rig rig, Duo duo) {
         duo.partnerInReach(false);
-        duo.server().console(block(FACED, "oak_planks"));
+        duo.world().quietly(block(FACED, "oak_planks"));
         duo.partner().ask("look", "0", "0");
         Module indicators = rig.client().module("BreakIndicators");
         rig.client().enable("BreakIndicators");
@@ -1175,17 +1165,17 @@ final class PlayerPlays {
             rig.until("the block the other player mines to be marked", ANSWER_TICKS, mc -> Props.tally(indicators) > 0);
         } finally {
             duo.partner().ask("releaseMouse", String.valueOf(LEFT_BUTTON));
-            duo.server().console(block(FACED, "air"));
+            duo.world().quietly(block(FACED, "air"));
         }
     }
 
     private static void popChams(Rig rig, Duo duo) {
         duo.partnerInReach(false);
-        duo.server().console("item replace entity " + Partner.NAME + " weapon.offhand with totem_of_undying");
+        duo.world().quietly("item replace entity " + Partner.NAME + " weapon.offhand with totem_of_undying");
         Module chams = rig.client().module("PopChams");
         rig.client().enable("PopChams");
         rig.ticks(SETTLE_TICKS);
-        duo.server().console("damage " + Partner.NAME + " 1000");
+        duo.world().quietly("damage " + Partner.NAME + " 1000");
         rig.until("a copy of the player whose totem popped", ANSWER_TICKS, mc -> Props.tally(chams) > 0);
     }
 }

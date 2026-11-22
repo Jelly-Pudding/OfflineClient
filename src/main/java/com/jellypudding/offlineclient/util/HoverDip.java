@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
@@ -20,13 +21,18 @@ public final class HoverDip {
     private enum Part { REST, SINK, CLIMB, SETTLE }
 
     private Part part = Part.REST;
-    // Ticks the dip sank for and the ticks of the climb back still to come.
     private int sunk;
     private int owed;
-    // Wall clock milliseconds at which the last dip began.
+    // Wall clock milliseconds at which the server's count last began again.
     private long dippedAt;
 
-    // The next tick dips whatever came before.
+    // True where a server may throw the player out for floating. It counts nobody it lets fly
+    // and a world of your own lets everybody.
+    public static boolean counted() {
+        Minecraft mc = OfflineClient.MC;
+        return !mc.player.isCreative() && !mc.player.isSpectator() && !mc.hasSingleplayerServer();
+    }
+
     public void reset() {
         part = Part.REST;
         sunk = 0;
@@ -41,12 +47,10 @@ public final class HoverDip {
             || MoveGate.floatingTicks(false) >= interval;
     }
 
-    // Marks the start of a dip.
     public void begin() {
         dippedAt = System.currentTimeMillis();
     }
 
-    // True once the server has had the given number of its ticks to take the dip in.
     public boolean seen(int serverTicks) {
         return sinceDip() >= (long) serverTicks * SharedConstants.MILLIS_PER_TICK + SLACK_MILLIS;
     }
@@ -62,14 +66,23 @@ public final class HoverDip {
 
     // A whole dip for a player who hangs still. Runs every tick of the hover.
     public void tick(int interval) {
-        plan(interval, 1, true);
-        apply();
+        if (counted()) {
+            plan(interval, 1, true);
+            apply();
+        }
     }
 
     // Picks this tick's part of a dip. It sinks until the server has seen it and climbs back
     // over as many ticks as it sank and the height is then what it was. Only a player who
     // hangs still is owed the climb. One who rises or sinks by a key keeps what the key gave.
     public void plan(int interval, int dipTicks, boolean hangsStill) {
+        // The count is nought for as long as the player stands on something. A dip there sinks
+        // nowhere and its climb alone would lift the player off the ground.
+        if (OfflineClient.MC.player.onGround()) {
+            begin();
+            part = Part.REST;
+            return;
+        }
         switch (part) {
             case REST -> {
                 if (due(interval)) {

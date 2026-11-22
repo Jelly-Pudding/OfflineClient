@@ -45,7 +45,6 @@ public final class FrameTap {
         }
     }
 
-    // Texts and plain rectangles of the kept frame in the order they were drawn.
     public static List<Object> taken() {
         armed = false;
         return new ArrayList<>(DRAWN);

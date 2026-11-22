@@ -86,29 +86,26 @@ public final class BoundedRegex {
         }
     }
 
-    // The text a search sees. Anything past the longest length is never read.
     public static String cut(String text) {
         return text.length() > LONGEST_TEXT ? text.substring(0, LONGEST_TEXT) : text;
     }
 
-    // How many groups in brackets the pattern has.
     public int groups() {
         return pattern.matcher("").groupCount();
     }
 
-    // The first match in the text that takes in at least one letter. Null when there is none.
+    // A match of no letters is left out.
     public MatchResult find(String text) {
         List<MatchResult> found = search(text, false, true);
         return found.isEmpty() ? null : found.getFirst();
     }
 
-    // The match that begins at the first letter of the text. Null when there is none.
     public MatchResult atStart(String text) {
         List<MatchResult> found = search(text, true, true);
         return found.isEmpty() ? null : found.getFirst();
     }
 
-    // Every match in the text from the first to the last. A match of no letters is left out.
+    // A match of no letters is left out.
     public List<MatchResult> all(String text) {
         return search(text, false, false);
     }

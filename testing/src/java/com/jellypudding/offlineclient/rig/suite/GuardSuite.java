@@ -47,7 +47,6 @@ public final class GuardSuite implements Suite {
     private static final int REST_LIMIT = 300;
     private static final double IN_STEP = 0.1;
 
-    // The server of the anti cheat the cases run under and what they found there.
     private Duo duo;
     private final List<String> rows = new ArrayList<>();
 
@@ -78,7 +77,7 @@ public final class GuardSuite implements Suite {
         String where = guard == null ? "" : UNDER + guard;
         List<Case> cases = new ArrayList<>();
         cases.add(Case.of(PLAIN + where, each -> plainMoves(each, PLAIN + where)));
-        moves.plays().forEach(
+        moves.servedPlays().forEach(
             (name, play) -> cases.add(Case.of(name + where, each -> trial(each, name + where, play))));
         List<Case> wanted = rig.wanted(NAME, cases);
         if (wanted.isEmpty()) {
@@ -114,7 +113,6 @@ public final class GuardSuite implements Suite {
         }
     }
 
-    // Why the cases cannot run. Null when they can.
     private static String missing(String guard) {
         if (!Duo.available()) {
             return Duo.NO_SERVER;
@@ -181,7 +179,6 @@ public final class GuardSuite implements Suite {
             "The game and the server have the player %.2f blocks apart once all is still", apart));
     }
 
-    // The checks the anti cheat says the player failed since a place in the server's log.
     private Set<String> checks(Rig rig, int mark) {
         Set<String> checks = new LinkedHashSet<>();
         String player = rig.world().player();

@@ -35,15 +35,13 @@ import java.util.Set;
 // Draws the bow straight up just far enough for the arrow to fall back on your head.
 public final class PotionArrows extends Module {
 
-    // The weakest draw that still fires. The arrow barely leaves the bow.
+    // The weakest draw that still fires.
     private static final float RELEASE_POWER = 0.12f;
     private static final float STRAIGHT_UP = -RotationManager.STRAIGHT_DOWN;
-    // Ticks an arrow has to come back down and how many go up for one effect before it is
-    // given up. A weak draw can fall short of the height at which an arrow may hit its archer.
+    // A weak draw can fall short of the height at which an arrow may hit its archer.
     private static final int LAND_TICKS = 40;
     private static final int MOST_SHOTS = 3;
 
-    // An arrow stack still to shoot and the effect it carries.
     private record Shot(int index, Holder<MobEffect> effect) {
     }
 
@@ -57,7 +55,7 @@ public final class PotionArrows extends Module {
     private final BoolSetting silentBow = new BoolSetting("Silent bow",
         "Borrows a bow from the main inventory when none is on the hotbar.", true);
     private final BoolSetting chatInfo = new BoolSetting("Chat info",
-        "Says in chat why it stopped.", false);
+        "Says in chat why it stopped.", true);
     private final BoolSetting onlyInHoles = new BoolSetting("Only in holes",
         "Only shoots whilst you stand in a hole.", true);
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
@@ -69,13 +67,11 @@ public final class PotionArrows extends Module {
     private final InventoryUtil.HotbarLoan bow = new InventoryUtil.HotbarLoan();
 
     private final Deque<Shot> arrows = new ArrayDeque<>();
-    // True whilst the arrow at the front is in the air and its effect has yet to show. Then
-    // the tick by which it has to and the arrows shot for that effect.
     private boolean awaited;
     private int landBy;
     private int shots;
 
-    // Network slots swapped. The next arrow is the one the bow reads first.
+    // Network slot numbers.
     private int movedFrom = -1;
     private int movedTo = -1;
     private boolean drawing;
@@ -122,7 +118,7 @@ public final class PotionArrows extends Module {
             return;
         }
         // A held bow keeps its draw and would fire the wrong arrow.
-        InputUtil.release(mc.options.keyUse);
+        InputUtil.releaseUse();
         mc.gameMode.releaseUsingItem(mc.player);
         if (!bow.select(slot)) {
             stop("Could not pick up the bow.");
@@ -140,7 +136,7 @@ public final class PotionArrows extends Module {
             return;
         }
         if (drawing) {
-            InputUtil.release(mc.options.keyUse);
+            InputUtil.releaseUse();
             mc.gameMode.releaseUsingItem(mc.player);
             drawing = false;
         }
@@ -172,7 +168,6 @@ public final class PotionArrows extends Module {
     }
 
     private void startDraw() {
-        // The draw waits whilst a meal or ShulkerPacker has the hotbar.
         if (Hands.slotsTaken()) {
             return;
         }
@@ -183,7 +178,7 @@ public final class PotionArrows extends Module {
         if (!bringForward(arrows.peekFirst().index())) {
             return;
         }
-        InputUtil.hold(mc.options.keyUse);
+        InputUtil.holdUse();
         drawing = true;
     }
 
@@ -191,7 +186,7 @@ public final class PotionArrows extends Module {
     // back once the arrow is away.
     private void fire() {
         RotationManager.glance(RotationManager.serverYaw(), STRAIGHT_UP);
-        InputUtil.release(mc.options.keyUse);
+        InputUtil.releaseUse();
         mc.gameMode.releaseUsingItem(mc.player);
         drawing = false;
         restoreArrow();
@@ -208,8 +203,6 @@ public final class PotionArrows extends Module {
         timer = cooldown.getInt();
     }
 
-    // False whilst the arrow is still on its way. An arrow that missed goes up again unless
-    // enough have been spent on its effect.
     private boolean landed() {
         // A respawn starts the tick count again at nought.
         landBy = Math.min(landBy, mc.player.tickCount + LAND_TICKS);
@@ -228,7 +221,6 @@ public final class PotionArrows extends Module {
         shots = 0;
     }
 
-    // Every check that ends the module. The reason goes to chat when asked for.
     private boolean allowed() {
         if (!headroom()) {
             return stop("No room above your head for the arrow.");
@@ -253,14 +245,12 @@ public final class PotionArrows extends Module {
         return false;
     }
 
-    // The arrow needs the two blocks above the feet clear to rise and fall back.
     private boolean headroom() {
         BlockPos feet = mc.player.blockPosition();
         return BlockUtil.state(feet.above()).getCollisionShape(mc.level, feet.above()).isEmpty()
             && BlockUtil.state(feet.above(2)).getCollisionShape(mc.level, feet.above(2)).isEmpty();
     }
 
-    // Inventory index of a bow the settings allow. Minus one when there is none.
     private int findBow() {
         int hotbar = InventoryUtil.findSlot(Items.BOW, InventoryUtil.HOTBAR_SIZE);
         if (hotbar != -1 || !silentBow.isOn()) {
@@ -269,7 +259,6 @@ public final class PotionArrows extends Module {
         return InventoryUtil.findSlot(Items.BOW, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // One arrow stack per wanted effect in the order the list gives them.
     private void collectArrows() {
         Set<Integer> taken = new HashSet<>();
         for (MobEffect effect : effects.resolved()) {
@@ -288,7 +277,6 @@ public final class PotionArrows extends Module {
         }
     }
 
-    // Swaps the arrow into the slot the bow reads first. False whilst the click cannot land.
     private boolean bringForward(int index) {
         if (!mc.player.getInventory().getItem(index).is(Items.TIPPED_ARROW)) {
             // The stack was moved or used up since the list was built.
@@ -311,8 +299,8 @@ public final class PotionArrows extends Module {
         return true;
     }
 
-    // Puts the two swapped stacks back where they were. A shot that used up the
-    // whole stack leaves the front slot empty and the other stack goes home on its own.
+    // A shot that used up the whole stack leaves the front slot empty and the other stack goes home
+    // on its own.
     private void restoreArrow() {
         if (movedFrom == -1) {
             return;

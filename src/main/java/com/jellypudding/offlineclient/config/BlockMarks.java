@@ -10,8 +10,7 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 
-// Blocks marked for one purpose. Each mark is filed under the server and the dimension it was
-// made in and every purpose keeps a file of its own under offlineclient.
+// Each mark is filed under the server and the dimension it was made in.
 public final class BlockMarks {
 
     private static BlockMarks containers;
@@ -26,7 +25,6 @@ public final class BlockMarks {
             .ifPresent(marks::addAll);
     }
 
-    // The containers ChestAura leaves alone.
     public static synchronized BlockMarks containers() {
         if (containers == null) {
             containers = new BlockMarks("container_marks.json");
@@ -34,7 +32,6 @@ public final class BlockMarks {
         return containers;
     }
 
-    // The vaults TrialESP saw reward you.
     public static synchronized BlockMarks lootedVaults() {
         if (lootedVaults == null) {
             lootedVaults = new BlockMarks("looted_vaults.json");
@@ -47,7 +44,6 @@ public final class BlockMarks {
         return pos != null && marks.contains(key(pos));
     }
 
-    // The file is written only when the mark changes.
     public void set(BlockPos pos, boolean marked) {
         String key = key(pos);
         if (marked ? marks.add(key) : marks.remove(key)) {
@@ -55,8 +51,7 @@ public final class BlockMarks {
         }
     }
 
-    // Marks every block given or clears them all when any of them is marked already.
-    // True when they end up marked. The nulls are skipped.
+    // Clears them all when any of them is marked already. True when they end up marked.
     public boolean toggle(BlockPos... blocks) {
         boolean marking = true;
         for (BlockPos pos : blocks) {

@@ -10,7 +10,6 @@ public final class ChunkRebuild {
 
     private int cooldown;
 
-    // Once a tick with whether the settings just changed.
     public void tick(boolean changed) {
         if (changed) {
             cooldown = SETTLE_TICKS;

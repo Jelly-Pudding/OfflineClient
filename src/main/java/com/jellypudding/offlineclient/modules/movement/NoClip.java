@@ -22,7 +22,6 @@ public final class NoClip extends Module {
 
     public enum Mode { FREE, PHASE }
 
-    // Ticks the module holds off after the server pulls the player back.
     private static final int SETTLE_TICKS = 10;
 
     // A box this far inside a block is stuck in it. Less is a rounding slip.
@@ -52,12 +51,10 @@ public final class NoClip extends Module {
     private final Lagback.Watcher lagback = new Lagback.Watcher();
     private int settle;
 
-    // Where a push would take the player this tick. Null when it would take them nowhere.
     private Vec3 landing;
     private int pushed;
     // A push that went wrong is not tried again until the keys are let go.
     private boolean refused;
-    // The last trouble said in chat. The same one is not said twice running.
     private Hop.Result told;
 
     public NoClip() {
@@ -179,7 +176,6 @@ public final class NoClip extends Module {
         pushed = 0;
     }
 
-    // The way the keys push the player into a block. Null whilst they push into none.
     private Vec3 pushedWay() {
         Vec3 heading = MovementUtil.inputDirection();
         if (heading != Vec3.ZERO && mc.player.horizontalCollision) {

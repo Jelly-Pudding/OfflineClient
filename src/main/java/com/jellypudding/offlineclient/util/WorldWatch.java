@@ -21,12 +21,10 @@ public final class WorldWatch {
         return true;
     }
 
-    // Takes the world the client is in as already seen.
     public void accept() {
         seen = new WeakReference<>(OfflineClient.MC.level);
     }
 
-    // The next check counts as a change whatever world the client is in.
     public void forget() {
         seen = new WeakReference<>(null);
     }

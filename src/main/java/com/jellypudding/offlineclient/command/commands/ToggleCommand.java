@@ -33,7 +33,6 @@ public final class ToggleCommand extends Command {
         }
     }
 
-    // True for on and false for off. Null for any other word.
     public static Boolean stateNamed(String word) {
         if (word.equalsIgnoreCase(ON)) {
             return Boolean.TRUE;
@@ -53,7 +52,6 @@ public final class ToggleCommand extends Command {
         ChatUtil.toggled(module);
     }
 
-    // The one answer for a module without an on and off whether its name comes alone or after toggle.
     public static void cannotSwitch(Module module) {
         ChatUtil.error(module.getName() + " cannot be switched on or off.");
     }

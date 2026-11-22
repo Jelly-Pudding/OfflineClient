@@ -23,22 +23,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Two column picker for a list setting. Clicking an entry moves it across.
-// The left column holds what is on offer and the right what is picked. A list
-// with a count per entry shows it at the end of each picked row. A list whose
-// offer splits into families gets a button for each under the search box.
 public final class ListPickerScreen<T> extends Screen implements ClientScreen {
 
     private record Entry<T>(T value, String name, String label, String id, ItemStack icon) {
     }
 
-    // The buttons under the columns from left to right.
     private enum Button { DONE, ADD, CLEAR, DEFAULTS }
 
     private static final int COL_WIDTH = 156;
     private static final int COL_GAP = 12;
     private static final int ROW_HEIGHT = 18;
-    // Left inset of the name. The icon sits in front of it.
     private static final int LABEL_X = 24;
     private static final int SEARCH_WIDTH = 200;
     private static final int TITLE_Y = 8;
@@ -48,15 +42,11 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private static final int BUTTON_HEIGHT = 16;
     private static final int BUTTON_GAP = 8;
     private static final int FOOTER = 34;
-    // The family buttons sit between the search box and the column headers.
     private static final int GROUP_TOP = 38;
     private static final int GROUP_HEIGHT = 14;
     private static final int GROUP_GAP = 4;
-    // Room either side of a family label.
     private static final int GROUP_PAD = 6;
-    // How far the families push the columns down.
     private static final int GROUP_ROW = 20;
-    // Space between a count and the name or the row edge.
     private static final int COUNT_GAP = 4;
     // An empty count box still needs something to aim at.
     private static final int MIN_COUNT_WIDTH = 6;
@@ -71,7 +61,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private final CountedPickList<T> counted;
     private final List<RegistryListSetting.Group<T>> groups;
 
-    // Every entry on offer sorted by name. Built once.
     private final List<Entry<T>> all = new ArrayList<>();
     private final Map<T, Entry<T>> byValue = new HashMap<>();
 
@@ -83,7 +72,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private final SearchField search = SearchField.sticky("type to search", this::searchChanged);
     private final TextInput textInput = new TextInput(this);
     private final TextField countField = new TextField();
-    // The picked entry whose count is being typed. Null whilst none is.
     private T editing;
     private String tooltip;
 
@@ -99,8 +87,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         this.groups = setting instanceof RegistryListSetting<T> list ? list.groups() : List.of();
 
         Font font = ClientFonts.guiAtGameScale();
-        // Names are trimmed once for the narrowest a column gets. A list of
-        // any size overflows and gives up the gutter.
+        // A list of any size overflows and gives up the gutter.
         int room = COL_WIDTH - GuiTheme.SCROLL_GUTTER - LABEL_X - 2;
         for (T value : setting.options()) {
             remember(value, font, room);
@@ -123,7 +110,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         byValue.put(value, entry);
     }
 
-    // Add and clear act on what the search shows. Their undo goes once the search changes.
+    // Their undo goes once the search changes.
     private void searchChanged() {
         if (undoing == Button.ADD || undoing == Button.CLEAR) {
             stopUndo();
@@ -149,7 +136,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
                 chosen.add(entry);
             }
         }
-        // Both columns narrow to the search. The chosen column keeps its pick order.
         if (!query.isEmpty()) {
             narrow(available, query, true);
             narrow(chosen, query, false);
@@ -183,7 +169,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return ClientFonts.guiAtGameScale().width(group.label()) + 2 * GROUP_PAD;
     }
 
-    // The family buttons sit in a row centred over the columns.
     private int groupX(int index) {
         int row = -GROUP_GAP;
         int before = 0;
@@ -196,7 +181,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return width / 2 - row / 2 + before;
     }
 
-    // The family under the mouse or minus one.
     private int groupAt(double mx, double my) {
         for (int i = 0; i < groups.size(); i++) {
             if (SettingWidget.isOver(mx, my, groupX(i), GROUP_TOP, groupWidth(groups.get(i)), GROUP_HEIGHT)) {
@@ -232,7 +216,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return width / 2 + COL_GAP / 2;
     }
 
-    // The buttons sit in a row centred under the columns.
     private int buttonX(Button button) {
         int row = Button.values().length * (BUTTON_WIDTH + BUTTON_GAP) - BUTTON_GAP;
         return width / 2 - row / 2 + button.ordinal() * (BUTTON_WIDTH + BUTTON_GAP);
@@ -247,7 +230,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return false;
     }
 
-    // The search box always takes the keys.
     @Override
     public boolean isTyping() {
         return true;
@@ -300,7 +282,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return SettingWidget.isOver(mx, my, buttonX(button), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT);
     }
 
-    // Add and clear act on what the search left in view. A narrowed list is picked in one go.
     private String label(Button button) {
         if (button == undoing) {
             return "undo";
@@ -322,7 +303,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         };
     }
 
-    // Done and the bulk buttons say what they do on their face.
     private String tip(Button button) {
         if (button == undoing) {
             return "Brings back the list you had.";
@@ -330,8 +310,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return button == Button.DEFAULTS ? "Puts the list back to how it started." : null;
     }
 
-    // Defaults saves every bulk press and can take it back. Only a press that changed the list
-    // turns into undo.
+    // Only a press that changed the list turns into undo.
     private void press(Button button) {
         if (button == Button.DONE) {
             onClose();
@@ -428,12 +407,10 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         }
     }
 
-    // The count at the end of a picked row or the number being typed there.
     private String countText(T value) {
         return value.equals(editing) ? countField.get() : GuiTheme.CROSS + counted.count(value);
     }
 
-    // Where a picked row's count starts. It ends a gap in from the row's right edge.
     private int countLeft(Font font, T value, int rowRight) {
         return rowRight - COUNT_GAP - Math.max(MIN_COUNT_WIDTH, font.width(countText(value)));
     }
@@ -592,7 +569,6 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         return search.charTyped((char) event.codepoint()) || super.charTyped(event);
     }
 
-    // The search here is always live and takes every character typed.
     @Override
     public void added() {
         super.added();

@@ -17,8 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// Every reset goes through Defaults and its reply carries a link that takes it back. The
-// words below are read before module names.
+// The words below are read before module names.
 public final class ResetCommand extends Command {
 
     private static final String UNDO = "undo";
@@ -148,7 +147,6 @@ public final class ResetCommand extends Command {
         ChatUtil.undoable("§b" + module.getName() + " §7bind is back to §f" + bind.getValueString() + "§7.", change);
     }
 
-    // Binds and on or off states stay. Everything put back is one change.
     private static void resetModules() {
         List<Setting<?>> scope = new ArrayList<>();
         int modules = 0;

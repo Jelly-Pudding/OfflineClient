@@ -21,9 +21,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-// Asks everyone online for a teleport one after another. Whoever says yes first wins. A request
-// waits whilst the server would count it towards a kick for spam and a name that cannot stand as
-// one word of a command is passed over.
 public final class MassTpa extends Module {
 
     private final TextSetting command = new TextSetting("Command",
@@ -102,7 +99,6 @@ public final class MassTpa extends Module {
         }
     }
 
-    // The reply from the server says how it went.
     private void readReply(ClientboundSystemChatPacket packet) {
         String reply = ShownChat.serverText(packet);
         if (reply == null) {

@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
@@ -20,30 +19,21 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.TamableAnimal;
-import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
 
 import java.util.List;
 
-// Eats when hunger or health drops low. Food anywhere in the inventory
-// counts and is swapped into the hotbar and back.
 public final class AutoEat extends Module {
 
-    // Ticks to wait after a meal whilst the food and the healing land.
     private static final int SETTLE_TICKS = 10;
 
     // A golden apple takes a moment to land. Rechecking too early eats a second one.
     private static final int HEAL_SETTLE_TICKS = 30;
 
-    // Empty bowls are gathered in the first backpack slot.
     private static final int BOWL_SLOT = InventoryUtil.MAIN_START;
 
     public enum Priority { BEST_HUNGER, BEST_SATURATION, BEST_OVERALL }
@@ -94,8 +84,6 @@ public final class AutoEat extends Module {
         "Reaches for stew and soup before other food whilst healing.", false);
     private final BoolSetting tidyBowls = new BoolSetting("Tidy bowls",
         "Gathers empty bowls into your first backpack slot.", false);
-    private final BoolSetting avoidClicks = new BoolSetting("Avoid clicks",
-        "Never eats whilst your crosshair is on something a right click would open.", true);
     private final BoolSetting offhand = new BoolSetting("Use offhand",
         "Reaches for food in your offhand first.", true);
     private final BoolSetting whileMoving = new BoolSetting("Eat whilst moving",
@@ -107,23 +95,15 @@ public final class AutoEat extends Module {
     private final BoolSetting pauseOnFire = new BoolSetting("Pause on fire",
         "Stops eating whilst you are burning.", false);
 
-    private final Feeding feeding = new Feeding(swapBack::isOn);
+    private final Feeding feeding = new Feeding(this, swapBack::isOn, pauseCombat::isOn);
     private boolean healing;
 
     public AutoEat() {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
         addSettings(trigger, hunger, injuredHunger, injuryThreshold, targetHunger, health,
-            priority, avoid, takeFrom, swapBack, saveGapples, preferSoup, tidyBowls, avoidClicks,
+            priority, avoid, takeFrom, swapBack, saveGapples, preferSoup, tidyBowls,
             offhand, whileMoving, pauseCombat, whileBusy, pauseOnFire);
         searchTags("food", "golden apple", "gapple");
-    }
-
-    public boolean isEating() {
-        return isBusy() && pauseCombat.isOn();
-    }
-
-    public boolean isBusy() {
-        return isEnabled() && feeding.isActive();
     }
 
     @Override
@@ -156,7 +136,7 @@ public final class AutoEat extends Module {
             return;
         }
         // Another feeder has the use key and ShulkerPacker keeps count of every stack.
-        if (Modules.feeding(this) || Modules.packing()) {
+        if (Feeding.busy(this) || Modules.packing()) {
             return;
         }
         // A carried stack would be dropped by a slot swap.
@@ -164,9 +144,6 @@ public final class AutoEat extends Module {
             return;
         }
         if (busy() && !whileBusy.isOn()) {
-            return;
-        }
-        if (clickInTheWay()) {
             return;
         }
         if (!whileMoving.isOn() && mc.player.getDeltaMovement().horizontalDistanceSqr() > 1.0E-4) {
@@ -211,12 +188,10 @@ public final class AutoEat extends Module {
         return busy() ? Math.min(limit, InventoryUtil.HOTBAR_SIZE) : limit;
     }
 
-    // The held slot always counts. The rest only up to the limit.
     private boolean searchable(int slot, int limit) {
         return slot < limit || slot == InventoryUtil.selectedSlot();
     }
 
-    // A screen or a foreign container is open.
     private boolean busy() {
         return mc.gui.screen() != null || mc.player.containerMenu.containerId != 0;
     }
@@ -237,22 +212,8 @@ public final class AutoEat extends Module {
         return food <= (injured() ? injuredHunger.getInt() : hunger.getInt());
     }
 
-    // True whilst enough health is missing for the injured threshold to take over.
     private boolean injured() {
         return mc.player.getMaxHealth() - mc.player.getHealth() >= injuryThreshold.getValue() * EntityUtil.HEART;
-    }
-
-    // A right click through a meal would open a chest or start a trade.
-    private boolean clickInTheWay() {
-        if (!avoidClicks.isOn() || mc.hitResult == null) {
-            return false;
-        }
-        if (mc.hitResult instanceof EntityHitResult entityHit) {
-            Entity entity = entityHit.getEntity();
-            return entity instanceof AbstractVillager || entity instanceof TamableAnimal;
-        }
-        BlockHitResult aimed = BlockUtil.aimedBlock();
-        return aimed != null && BlockUtil.opensOnClick(BlockUtil.state(aimed.getBlockPos()));
     }
 
     // Soup servers want the empties in one place for a refill.
@@ -285,7 +246,6 @@ public final class AutoEat extends Module {
             return;
         }
         if (!feeding.tick()) {
-            // A golden apple needs longer before the health is worth reading again.
             feeding.finish(healing ? HEAL_SETTLE_TICKS : SETTLE_TICKS, false);
             return;
         }
@@ -376,7 +336,6 @@ public final class AutoEat extends Module {
         return best;
     }
 
-    // True when the food would not push the bar past the target.
     private boolean fits(ItemStack stack) {
         FoodProperties food = stack.get(DataComponents.FOOD);
         if (food == null || food.canAlwaysEat()) {

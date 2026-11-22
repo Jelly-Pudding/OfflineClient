@@ -79,30 +79,22 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// Judges chunks fresh or old as they arrive and marks the ones that show someone is near.
-// The palettes the server sent come first. A chunk they leave open falls to its liquid.
-// Liquid already flowing on arrival means it was loaded from disk and a flow that starts
-// right after means it was just generated. An old chunk whose palettes still list a block
-// that is gone or was used changed since the server loaded it. Only someone nearby keeps
-// a chunk loaded and changes it.
+// The palettes the server sent come first. A chunk they leave open falls to its liquid. Liquid
+// already flowing on arrival means it was loaded from disk and a flow that starts right after means
+// it was just generated. An old chunk whose palettes still list a block that is gone or was used
+// changed since the server loaded it. Only someone nearby keeps a chunk loaded and changes it.
 public final class NewChunks extends Module implements FindSource, ChunkPaint {
 
-    // The letters the chunk marks are saved with.
     private static final byte NEW = 'n';
     private static final byte OLD = 'o';
     private static final byte OLD_VERSION = 'v';
     private static final byte DORMANT = 'd';
 
-    // What every find of activity is called in messages and waypoints.
     private static final String ACTIVITY = "activity";
-    // What an old chunk found after fresh land is called.
     private static final String OLD_LAND = "old land";
 
-    // The arrival tick of this many chunks is kept for the liquid check and Show unjudged.
     private static final int MAX_ARRIVALS = 16384;
-    // What decided this many verdicts is kept for Show why.
     private static final int MAX_REASONS = 16384;
-    // This many chunks whose block updates or moving mobs counted are kept from counting again.
     private static final int MAX_UPDATED = 16384;
 
     // The server sees you where you stood about a round trip ago. A chunk you left within this
@@ -112,7 +104,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
     // seconds by default. A chunk your simulation reached that comes back sooner may carry
     // your own changes.
     private static final long OWN_CHANGES_MS = 60_000;
-    // How often the mobs past your own simulation are looked at.
     private static final int FAR_MOBS_TICKS = 20;
     // A mob that shifts less than this was only sent again where it stood.
     private static final double MOB_STEP = 0.1;
@@ -126,17 +117,14 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
     private static final int HEADING_TICKS = 40;
     private static final double HEADING_MOVE = 4;
 
-    // A filled square is a box this thin.
     private static final double SQUARE_THICKNESS = 0.02;
     // A look this close to level never meets the squares.
     private static final double FLAT_LOOK = 1e-4;
     private static final int SECTION = SectionPos.SECTION_SIZE;
     private static final float PERCENT = 100f;
 
-    // Which ages of chunk are drawn.
     private enum Show { NEW, OLD, BOTH }
 
-    // The colour one kind of chunk is drawn in and how strongly.
     private static final class Paint {
         private final ColorSetting colour;
         private final NumberSetting opacity;
@@ -163,17 +151,15 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
             return new Setting<?>[] {colour, opacity};
         }
 
-        // The colour at the chosen strength for the edges. Faces take a share of it.
         private int line() {
             return ColorUtil.fade(colour.getColor(), opacity.getFloat() / PERCENT);
         }
     }
 
-    // A block change the server sent. Queued on the network thread.
+    // Queued on the network thread.
     private record BlockChange(BlockPos pos, BlockState state) {
     }
 
-    // A chunk you stood in and the last tick you stood there.
     private record Stood(long chunk, int tick) {
     }
 
@@ -301,23 +287,16 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
     // The height of every section that changed in each active chunk found this session. A
     // chunk leaves once its find is gone.
     private final Map<Long, int[]> changedSections = new HashMap<>();
-    // The chunks whose block updates or moving mobs already counted this session. Oldest first.
     private final Set<Long> updated = Collections.newSetFromMap(new BoundedMap<>(MAX_UPDATED));
-    // The chunks announced in chat. Newest last.
     private final Deque<Long> alerted = new ArrayDeque<>();
-    // The chunks you stood in during the last two seconds. Newest last.
     private final Deque<Stood> stood = new ArrayDeque<>();
     // Filled from the network thread and drained on the next tick.
     private final Queue<BlockChange> changes = new ConcurrentLinkedQueue<>();
-    // Where you stood lately. It gives the way you are heading.
     private final PositionHistory history = new PositionHistory();
-    // Fresh chunks judged in a row since the last old one.
     private int freshRun;
-    // Where each mob past your own simulation stood at the last look.
     private Map<Integer, Vec3> farMobs = new HashMap<>();
 
-    // The chunks in range of the last rebuild kept apart by how they are drawn. Colours are
-    // resolved at draw time because a rainbow setting moves every frame.
+    // Colours are resolved at draw time because a rainbow setting moves every frame.
     private final LongList visibleNew = new LongArrayList();
     private final LongList visibleOld = new LongArrayList();
     private final LongList visibleOldVersion = new LongArrayList();
@@ -386,7 +365,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         return finds;
     }
 
-    // The map paints each judged chunk the way it is drawn here and the active ones over them.
     @Override
     public void paintChunks(Long2IntMap colours) {
         Long2ByteMaps.fastForEach(marks.here(), mark -> {
@@ -405,7 +383,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // How a chunk was judged. Every verdict but NEW means the chunk was there before.
+    // Every verdict but NEW means the chunk was there before.
     public enum Verdict {
         NEW, OLD, OLD_VERSION, DORMANT;
 
@@ -414,7 +392,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // The verdict of a chunk in the dimension you are in. Null for a chunk with none.
     public Verdict verdict(long chunk) {
         return switch (marks.get(chunk)) {
             case NEW -> Verdict.NEW;
@@ -425,7 +402,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         };
     }
 
-    // Rebuilt only when a mark or a find changes.
     @Override
     public String getSuffix() {
         int stamp = stamp();
@@ -601,7 +577,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // How many chunks the middle of a chunk lies to the side of the line you are heading along.
     private double offHeading(long key) {
         Vec3 here = mc.player.position();
         Vec3 then = history.ticksAgo(HEADING_TICKS);
@@ -615,7 +590,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         return Math.abs(heading.x * toZ - heading.z * toX) / SECTION;
     }
 
-    // Counts fresh chunks in a row. The first old one after enough of them is old land and a find.
     private void followStretch(long key, byte letter) {
         if (letter == NEW) {
             freshRun++;
@@ -643,8 +617,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         };
     }
 
-    // Reads what changed in an old chunk since the server loaded it. A chunk your own
-    // simulation reached lately may hold your own changes and is left alone.
+    // A chunk your own simulation reached lately may hold your own changes and is left alone.
     private void readActivity(LevelChunk chunk, long key) {
         if (!activityCheck.isOn()) {
             return;
@@ -683,8 +656,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         announce(key, spot, detail);
     }
 
-    // Every change is logged. Only the first of a group is announced and rings. A find you took
-    // away by hand stays quiet and never holds back the chunks round it.
+    // A find you took away by hand stays quiet and never holds back the chunks round it.
     private void announce(long key, BlockPos spot, String detail) {
         if (logChunks.isOn()) {
             OfflineClient.LOG.info("NewChunks found {} at {} {} {}", detail, spot.getX(), spot.getY(), spot.getZ());
@@ -695,7 +667,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // How many rings of the chunks the server sends lie past the ones it ticks around you.
     private int readableRings() {
         return mc.player.connection.serverChunkRadius - OwnSimulation.tickingRings();
     }
@@ -706,7 +677,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
             > OwnSimulation.tickingRings();
     }
 
-    // Remembers the chunks you stood in during the last two seconds.
     private void noteStanding() {
         long here = mc.player.chunkPosition().pack();
         Stood last = stood.peekLast();
@@ -719,7 +689,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // True when no chunk you stood in lately ticks the chunk or lets a flow spill into it.
     private boolean pastOwnReach(long key) {
         int reach = OwnSimulation.reachRings();
         for (Stood spot : stood) {
@@ -731,7 +700,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         return true;
     }
 
-    // Remembers the chunk when it is far enough from every earlier announcement to earn one.
     private boolean startsGroup(long key) {
         for (long earlier : alerted) {
             if (Mth.chessboardDistance(ChunkPos.getX(earlier), ChunkPos.getZ(earlier),
@@ -757,8 +725,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         return new AABB(x, y, z, x + SECTION, y + SECTION, z + SECTION);
     }
 
-    // Fired on the netty thread. Flows feed the liquid check and every change feeds the
-    // update check.
+    // Fired on the netty thread.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacket() instanceof ClientboundBlockUpdatePacket update) {
@@ -798,7 +765,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // A flow that turns up soon after the chunk landed means the chunk is fresh.
     private void flowAfterArrival(long key, BlockPos pos) {
         Integer seen = arrivals.get(key);
         if (seen != null && ticks - seen <= settle.getInt() * SharedConstants.TICKS_PER_SECOND) {
@@ -806,8 +772,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // A block changed or a mob moved in a chunk that only ticks for someone else. A chunk that
-    // already has a find of activity keeps its words. Old land there turns into activity.
     private void foundUpdate(BlockPos pos, String detail) {
         long key = ChunkPos.pack(pos);
         FindLog.Find known = finds.at(pos);
@@ -844,8 +808,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         farMobs = now;
     }
 
-    // The first flowing liquid in the chunk or null. The palette test is only a prefilter
-    // and every hit is confirmed against the real blocks.
+    // The palette test is only a prefilter and every hit is confirmed against the real blocks.
     private static BlockPos findFlowingLiquid(LevelChunk chunk, int spread) {
         boolean fastLava = chunk.getLevel().environmentAttributes().getDimensionValue(EnvironmentAttributes.FAST_LAVA);
         LevelChunkSection[] sections = chunk.getSections();
@@ -928,13 +891,10 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // Moves whenever what is drawn could change.
     private int stamp() {
         return (revision * 31 + marks.revision()) * 31 + finds.revision();
     }
 
-    // The chunk whose square the crosshair points at or else the one you stand in. The camera
-    // can look away from the body.
     private long lookedAt(double squareY) {
         Camera camera = mc.gameRenderer.mainCamera();
         Vec3 eye = camera.position();
@@ -949,8 +909,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         return mc.player.chunkPosition().pack();
     }
 
-    // Outlines what proved the verdict of one chunk in its own colour. A line from the middle of
-    // its square ties the outline to it however deep it lies. Lets you check the call yourself.
     private void showWhy(DrawBatch batch, long key, double squareY) {
         AABB reason = reasons.get(key);
         ChunkPos me = mc.player.chunkPosition();
@@ -982,7 +940,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // The settings that decide which chunks land in the visible lists.
     private int layoutKey() {
         return show.getValue().ordinal() | (showUnjudged.isOn() ? 4 : 0) | (oldVersions.isOn() ? 8 : 0)
             | (dormant.isOn() ? 16 : 0) | (activityCheck.isOn() ? 32 : 0) | (sectionBoxes.isOn() ? 64 : 0)
@@ -990,8 +947,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
     }
 
     // Walks whichever is smaller of the square around the player and the marks. A long draw
-    // distance then costs no more than the chunks there are. An active chunk is drawn as
-    // active whatever its mark.
+    // distance then costs no more than the chunks there are.
     private void rebuildVisible(int centerX, int centerZ) {
         visibleNew.clear();
         visibleOld.clear();
@@ -1031,8 +987,6 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // The active chunks in range with the boxes of their changed sections. Drops the heights
-    // of every chunk whose find was removed or cleared.
     private LongSet collectActive(int centerX, int centerZ, int limit) {
         LongSet active = new LongOpenHashSet();
         if (!activityCheck.isOn()) {
@@ -1080,8 +1034,7 @@ public final class NewChunks extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // The paint a verdict is drawn in. An old version or dormant mark whose own colour is switched
-    // off draws as old. Null for no mark and for an age Show leaves out.
+    // An old version or dormant mark whose own colour is switched off draws as old.
     private Paint paintOf(byte letter) {
         Paint paint = switch (letter) {
             case 0 -> null;

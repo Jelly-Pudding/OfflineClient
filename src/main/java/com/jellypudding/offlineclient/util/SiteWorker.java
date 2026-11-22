@@ -24,7 +24,6 @@ public final class SiteWorker {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Which block in reach goes down first.
     public enum Order {
         NEAREST, FURTHEST, BOTTOM_UP, TOP_DOWN;
 
@@ -47,7 +46,6 @@ public final class SiteWorker {
                         int blocksPerTick, int delay) {
     }
 
-    // What kept a block from going down.
     public enum Trouble {
         // The player carries none of the block. A null block stands for any plain block.
         LACKING,
@@ -64,7 +62,6 @@ public final class SiteWorker {
     public record HoldUp(Trouble trouble, Block block) {
     }
 
-    // Why a mistake was left standing.
     public enum Kept {
         // It holds something such as a chest or a sign and the caller did not allow breaking those.
         CONTAINER,
@@ -78,28 +75,21 @@ public final class SiteWorker {
     private record Task(BuildSite site, BlockPos pos, BuildSite.State state, double distanceSq) {
     }
 
-    // A stack to place with and the state to ask of it. The state is null for a cell that
-    // takes any block.
+    // The state is null for a cell that takes any block.
     private record Pick(BlockSupply.Source source, BlockState state) {
     }
 
-    // Ticks with nothing placed before a borrowed stack goes home.
     private static final int RELEASE_TICKS = 20;
     // The longest a mistake may take to break. Obsidian with a diamond pickaxe is under it and
     // obsidian by hand far over.
     private static final int SLOW_BREAK_TICKS = 300;
-    // Ticks before a mistake that was too slow to break is thought about again.
     private static final int SLOW_RETRY_TICKS = 200;
 
     private final StatePlacer placer = new StatePlacer();
     private final BlockSupply supply = new BlockSupply();
-    // The mistake being broken and the block that stood there when the breaking began. Null
-    // whilst none is.
     private Task breaking;
     private Block breakingBlock;
-    // Mistakes too slow to break with the tick each is worth another look.
     private final Long2IntOpenHashMap slowUntil = new Long2IntOpenHashMap();
-    // Mistakes left standing that the caller has been told about.
     private final LongOpenHashSet told = new LongOpenHashSet();
     private Left left;
     private int ticks;
@@ -107,7 +97,7 @@ public final class SiteWorker {
     private int idle;
     private HoldUp holdUp;
 
-    // One tick of work on every site given. True when a block went down or one is coming out.
+    // True when a block went down or one is coming out.
     public boolean work(List<BuildSite> sites, Rules rules) {
         ticks++;
         placer.tick();
@@ -129,7 +119,7 @@ public final class SiteWorker {
         return breakNext(wrong, rules) || place(missing, rules);
     }
 
-    // Why the last tick of work put nothing down. Null when it did or had nothing to do.
+    // Null when the last tick put a block down or had nothing to do.
     public HoldUp holdUp() {
         return holdUp;
     }
@@ -141,7 +131,6 @@ public final class SiteWorker {
         return taken;
     }
 
-    // Lets go of everything the worker holds. For a caller that stops or switches off.
     public void stop() {
         stopBreaking();
         supply.release(true);
@@ -215,9 +204,8 @@ public final class SiteWorker {
         return true;
     }
 
-    // True for a mistake that may come out from here. One that holds something is left unless
-    // the caller allows it. A wrong block only goes when the right one is carried. A cell that
-    // only got wrong again would otherwise be dug for nothing.
+    // A mistake that holds something is left unless the caller allows it. A wrong block only goes
+    // when the right one is carried or the cell would be dug for nothing.
     private boolean breakable(Task task, Rules rules) {
         BlockPos pos = task.pos();
         BuildSite site = task.site();
@@ -238,8 +226,7 @@ public final class SiteWorker {
         return true;
     }
 
-    // False for a block that would take far too long with the tool that would break it. That is
-    // AutoTool's pick whilst it is on and what the hand holds otherwise. Placing goes on meanwhile.
+    // The tool is AutoTool's pick whilst it is on and what the hand holds otherwise.
     private boolean quickEnough(Task task) {
         BlockPos pos = task.pos();
         BlockState stands = BlockUtil.state(pos);
@@ -253,7 +240,7 @@ public final class SiteWorker {
         return false;
     }
 
-    // Notes one mistake left standing for the caller to tell about. Each is handed out once.
+    // Each mistake left standing is handed out once.
     private void leave(Kept why, BlockState stands, BlockPos pos) {
         if (left == null && told.add(pos.asLong())) {
             left = new Left(why, stands.getBlock(), pos);

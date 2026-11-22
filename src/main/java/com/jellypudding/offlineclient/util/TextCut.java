@@ -20,12 +20,10 @@ public final class TextCut {
         return whole(text.substring(0, end));
     }
 
-    // The text or else its first characters with dots after them.
     public static String quote(String text, int length) {
         return text.length() <= length ? whole(text) : cut(text, length) + DOTS;
     }
 
-    // The text with every half that has no partner replaced. Text without one comes back as it is.
     public static String whole(String text) {
         StringBuilder mended = null;
         int i = 0;

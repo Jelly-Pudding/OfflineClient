@@ -10,7 +10,6 @@ import java.util.Map;
 // names keep the order they were first counted in.
 public final class Tally {
 
-    // The most names a short list spells out.
     private static final int FEW = 3;
 
     private final Map<String, Integer> counts = new LinkedHashMap<>();
@@ -35,7 +34,6 @@ public final class Tally {
         return total;
     }
 
-    // Every name with its count such as 3 shulker boxes 2 droppers and 1 ender chest.
     public String words() {
         List<String> parts = new ArrayList<>();
         counts.forEach((name, count) -> parts.add(counted(count, name)));
@@ -69,7 +67,6 @@ public final class Tally {
         return names.size() > shown.size() ? joined + " and " + (names.size() - shown.size()) + " more" : joined;
     }
 
-    // What a clear button says such as Cleared 3 finds or Nothing to clear.
     public static String cleared(int count, String name) {
         return count == 0 ? "Nothing to clear" : "Cleared " + counted(count, name);
     }

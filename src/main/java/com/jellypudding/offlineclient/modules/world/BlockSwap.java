@@ -21,14 +21,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// One block comes out at a time and its hole is filled before the next is dug. Nothing is dug
-// whilst the hotbar has no block to put back.
 public final class BlockSwap extends AreaPlacer {
 
     private static final int TARGET_COLOR = 0xFF70D050;
-    // Alpha of the outline round the block being dug out.
     private static final int DIG_ALPHA = 0x80;
-    // A hole this far past the range is given up. You walked away from it.
     private static final double HOLE_SLACK = 2;
 
     private final RegistryListSetting<Block> takeOut = new RegistryListSetting<>("Take out",
@@ -94,8 +90,6 @@ public final class BlockSwap extends AreaPlacer {
         }
     }
 
-    // A hole you walked away from is given up. One that has held a block for as long as the
-    // server takes to answer is done.
     private void forgetHoles() {
         int now = mc.player.tickCount;
         double far = range.getValue() + HOLE_SLACK;

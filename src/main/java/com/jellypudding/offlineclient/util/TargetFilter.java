@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-// The state a target has to be in before a combat module acts on it. Goes
-// alongside an EntityFilter or a module's own switches which decide the kind of entity.
+// Goes alongside an EntityFilter or a module's own switches which decide the kind of entity.
 public final class TargetFilter {
 
     private final BoolSetting creative = new BoolSetting("Ignore creative",
@@ -102,7 +101,6 @@ public final class TargetFilter {
         return invisible;
     }
 
-    // A target that is no friend and passes the kind filter as well.
     public boolean attackable(Entity entity, EntityFilter filter) {
         return !EntityUtil.isFriend(entity) && filter.matches(entity) && allows(entity);
     }

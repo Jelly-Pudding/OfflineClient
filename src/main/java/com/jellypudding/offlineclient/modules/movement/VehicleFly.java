@@ -36,8 +36,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Flies and speeds whatever you ride since vehicles use a code path Flight cannot reach.
-// Only a steerable vehicle can be driven and speed is set right before its tick.
+// Vehicles use a code path Flight cannot reach. Speed is set right before the vehicle's tick.
 public final class VehicleFly extends Module {
 
     public enum Mode { FLY, GLIDE, SPEED }
@@ -92,7 +91,6 @@ public final class VehicleFly extends Module {
     // Read from the packet thread.
     private volatile boolean blockDismount;
     private volatile boolean protecting;
-    // Height of the last vehicle packet. Not a number until one has gone out.
     private volatile double lastSentY = Double.NaN;
     // Packets sent by the split come straight back through the send hook.
     private boolean splitting;
@@ -128,7 +126,7 @@ public final class VehicleFly extends Module {
         stop();
     }
 
-    // Read by LocalPlayerMixin. True whilst a horse jump should always be full power.
+    // Read by LocalPlayerMixin.
     public boolean maxesJump() {
         return isEnabled() && maxJump.isOn();
     }
@@ -199,8 +197,6 @@ public final class VehicleFly extends Module {
         vehicle.setDeltaMovement(vx, vy, vz);
     }
 
-    // Speed can leave a vehicle to its own pace off the ground or in water. Nothing stands
-    // on the ground in water and its own switch decides there.
     private boolean drives(Entity vehicle) {
         if (!mode.is(Mode.SPEED)) {
             return true;
@@ -228,7 +224,6 @@ public final class VehicleFly extends Module {
         return holdHeight(vehicle, limit);
     }
 
-    // Corrects back towards the height the vehicle was left at.
     private double holdHeight(Entity vehicle, double limit) {
         if (!holding || Math.abs(holdY - vehicle.getY()) > RESYNC_DISTANCE) {
             holdY = vehicle.getY();

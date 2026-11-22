@@ -15,11 +15,19 @@ import com.jellypudding.offlineclient.rig.core.LogFile;
 import com.jellypudding.offlineclient.rig.core.LogRules;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.RigFailure;
+import com.jellypudding.offlineclient.rig.core.World;
+import com.jellypudding.offlineclient.rig.duo.Duo;
+import com.jellypudding.offlineclient.rig.duo.PaperServer;
 import com.jellypudding.offlineclient.setting.Setting;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityTypes;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
@@ -38,9 +46,14 @@ public final class BootSuite implements Suite {
     private static final String MIXIN_CONFIG = "offlineclient.mixins.json";
     private static final String LOG_FILE = "logs/latest.log";
     private static final int TITLE_TICKS = 600;
-    // Ticks the title screen gets to finish fading in before its picture.
     private static final int FADE_TICKS = 40;
     private static final int MOST_TOLD = 6;
+    private static final String HEARD_ALONE = "the game has heard its own server before a case looks";
+    private static final String HEARD_SERVED = "the game has heard a Paper server before a case looks";
+    private static final int HEARD_ROUNDS = 20;
+    private static final List<String> HEARD_BLOCKS = List.of("stone", "glass");
+    // No game draws this one out when it is taken away.
+    private static final String HEARD_ENTITY = "block_display";
 
     @Override
     public String name() {
@@ -61,6 +74,60 @@ public final class BootSuite implements Suite {
         for (Case each : rig.wanted(NAME, cases)) {
             rig.run(NAME, each);
         }
+        if (rig.wants(NAME, HEARD_ALONE)) {
+            rig.openWorld(WorldCreationUiState.SelectedGameMode.CREATIVE);
+            try {
+                rig.run(NAME, Case.of(HEARD_ALONE, BootSuite::heard));
+            } finally {
+                rig.closeWorld();
+            }
+        }
+        if (!rig.wants(NAME, HEARD_SERVED)) {
+            return;
+        }
+        if (!Duo.available()) {
+            rig.skip(NAME, HEARD_SERVED, Duo.NO_SERVER);
+            return;
+        }
+        Duo duo = Duo.alone(rig, PaperServer.Setup.plain());
+        try {
+            rig.run(NAME, Case.of(HEARD_SERVED, BootSuite::heard));
+        } finally {
+            duo.close();
+        }
+    }
+
+    // Every case leans on this. A server sends what it changed a tick later and a look that came
+    // at once would see the world from before.
+    private static void heard(Rig rig) {
+        World world = rig.world();
+        BlockPos spot = rig.ask(mc -> mc.player.blockPosition()).offset(2, 1, 0);
+        for (int round = 0; round < HEARD_ROUNDS; round++) {
+            String block = HEARD_BLOCKS.get(round % HEARD_BLOCKS.size());
+            world.setBlock(spot, block);
+            String seen = rig.ask(mc -> BuiltInRegistries.BLOCK.getKey(mc.level.getBlockState(spot).getBlock())
+                .getPath());
+            rig.expect(seen.equals(block), "The game held " + seen + " where the server had put " + block
+                + " in round " + round);
+            world.command("summon " + HEARD_ENTITY + " " + World.at(spot.above()));
+            rig.expect(displays(rig) == 1, "The game did not hold what the server summoned in round " + round);
+            world.command("kill @e[type=" + HEARD_ENTITY + "]");
+            rig.expect(displays(rig) == 0, "The game still held what the server took away in round " + round);
+        }
+        world.setBlock(spot, "air");
+        rig.note("The game had heard of " + HEARD_ROUNDS + " blocks and as many entities made and taken away");
+    }
+
+    private static int displays(Rig rig) {
+        return rig.ask(mc -> {
+            int found = 0;
+            for (Entity entity : mc.level.entitiesForRendering()) {
+                if (entity.getType() == EntityTypes.BLOCK_DISPLAY) {
+                    found++;
+                }
+            }
+            return found;
+        });
     }
 
     private static void title(Rig rig) {
@@ -115,7 +182,6 @@ public final class BootSuite implements Suite {
         throw new RigFailure("These mixins did not apply " + missing + reasons(rig, missing));
     }
 
-    // What the loader wrote about the mixins that are missing.
     private static String reasons(Rig rig, List<String> missing) {
         StringBuilder reasons = new StringBuilder();
         for (LogFile.Entry entry : wholeLog(rig)) {

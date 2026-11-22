@@ -24,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(FluidRenderer.class)
 public abstract class FluidRendererMixin {
 
-    // Set whilst the fluid being built is lava the module recolours.
     @Unique
     private static final ThreadLocal<Boolean> OFFLINECLIENT_LAVA =
         ThreadLocal.withInitial(() -> false);

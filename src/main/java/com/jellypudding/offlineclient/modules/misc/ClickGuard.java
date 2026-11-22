@@ -20,11 +20,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
-// The commands a click runs for BetterChat. One that holds a blocked word is refused and the hover
-// text of a clickable line can say which command it runs.
+// The commands a click runs for BetterChat.
 final class ClickGuard {
 
-    // How much of a clicked command the hover text and the chat show.
     private static final int LONGEST_SHOWN_COMMAND = 120;
 
     private final BoolSetting showClicks = new BoolSetting("Show click commands",
@@ -51,9 +49,8 @@ final class ClickGuard {
         return rows.toArray(Setting<?>[]::new);
     }
 
-    // True for a command a click would run that holds a blocked word. The player is told it did
-    // not run. ScreenMixin asks for a click in chat or in a book before a command of the client
-    // runs and ClientPacketListenerMixin for a button in a window the server opens.
+    // ScreenMixin asks for a click in chat or in a book and ClientPacketListenerMixin for a button
+    // in a window the server opens.
     boolean blocksClick(String command) {
         if (!enabled.getAsBoolean() || !blockClicks.isOn()) {
             return false;
@@ -68,8 +65,7 @@ final class ClickGuard {
         return false;
     }
 
-    // The command as a player would type it. A server may leave the slash off and a command of
-    // the client keeps its own prefix.
+    // A server may leave the slash off and a command of the client keeps its own prefix.
     private static String shownCommand(String command) {
         String typed = command.strip();
         if (!typed.startsWith(OfflineClient.INSTANCE.getCommandManager().getPrefix())) {
@@ -78,8 +74,6 @@ final class ClickGuard {
         return StringUtil.truncateStringIfNecessary(StringUtil.filterText(typed), LONGEST_SHOWN_COMMAND, true);
     }
 
-    // The line with the command a click would run added to the hover text of each stretch
-    // that runs one whilst click commands are shown. Any other line comes back as it is.
     Component withClickCommands(Component message) {
         if (!showClicks.isOn()) {
             return message;

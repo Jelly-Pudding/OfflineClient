@@ -22,8 +22,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-// What the client knows about the server it is playing on. The server command
-// and the HUD read it from here and always agree.
 public final class ServerInfo {
 
     // Vanilla gives this label to a direct connect and to a list entry nobody named.
@@ -48,7 +46,7 @@ public final class ServerInfo {
     private ServerInfo() {
     }
 
-    // The address you joined with. Null in single player.
+    // Null in single player.
     public static String address() {
         ServerData data = OfflineClient.MC.getCurrentServer();
         return data == null ? null : data.ip;
@@ -65,7 +63,6 @@ public final class ServerInfo {
         return save == null ? SINGLE_PLAYER : SINGLE_PLAYER + "/" + save;
     }
 
-    // The save folder of the single player world you play. Null on a server.
     public static String saveName() {
         // The level id is the folder name. The world path would be read through a cache the
         // server thread fills at the same time.
@@ -79,7 +76,6 @@ public final class ServerInfo {
         return saved.equals(key) || saved.equals(SINGLE_PLAYER) && key.startsWith(SINGLE_PLAYER + "/");
     }
 
-    // The id of the dimension you are in. Empty outside a world.
     public static String dimension() {
         ClientLevel level = OfflineClient.MC.level;
         return level == null ? "" : level.dimension().identifier().toString();
@@ -92,7 +88,6 @@ public final class ServerInfo {
         return dimension.isEmpty() ? "" : key() + " " + dimension;
     }
 
-    // The name a player knows a dimension by such as Nether.
     public static String dimensionName(String dimension) {
         String known = DIMENSION_NAMES.get(dimension);
         if (known != null) {
@@ -102,8 +97,6 @@ public final class ServerInfo {
         return ChatUtil.capitalised(words);
     }
 
-    // The ids of the dimensions there are to choose from. The three of the game come first and
-    // then every other one the server you are on has.
     public static List<String> dimensions() {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         Stream<String> listed = connection == null ? Stream.empty()
@@ -111,7 +104,7 @@ public final class ServerInfo {
         return Stream.concat(Arrays.stream(Dimension.values()).map(Dimension::id), listed).distinct().toList();
     }
 
-    // The label the server has in your own server list. Null until you name it.
+    // Null until you name the server.
     public static String savedName() {
         ServerData data = OfflineClient.MC.getCurrentServer();
         if (data == null || data.name == null || data.name.isBlank()
@@ -121,7 +114,6 @@ public final class ServerInfo {
         return data.name;
     }
 
-    // The message of the day the server sends as you join. Null if it sent none.
     public static Component motd() {
         ServerData data = OfflineClient.MC.getCurrentServer();
         if (data == null || data.motd == null || data.motd.getString().isBlank()) {
@@ -130,7 +122,7 @@ public final class ServerInfo {
         return data.motd;
     }
 
-    // The server software such as Paper. Null until the server says.
+    // Null until the server says.
     public static String brand() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? null : player.connection.serverBrand();
@@ -143,15 +135,12 @@ public final class ServerInfo {
         return brand != null && PAPER_FAMILY.matcher(brand).find();
     }
 
-    // The players the tab list shows. A server can add hidden entries such as the figures it
-    // gives a skin and those are left out.
+    // A server can add hidden entries such as the figures it gives a skin and those are left out.
     public static int online() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? 0 : player.connection.getListedOnlinePlayers().size();
     }
 
-    // The names of everyone else the tab list shows in a new list. Hidden entries and blank
-    // names are left out.
     public static List<String> othersOnline() {
         List<String> names = new ArrayList<>();
         LocalPlayer player = OfflineClient.MC.player;
@@ -168,32 +157,27 @@ public final class ServerInfo {
         return names;
     }
 
-    // The commands the server lets you run in the words the game uses such as none or gamemaster.
     public static String permissionLevel() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? NO_PERMISSIONS : Player.printPlayerPermissions(player.permissions());
     }
 
-    // Your own round trip time in milliseconds. Nought until the tab list has you.
+    // Nought until the tab list has you.
     public static int ping() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? 0 : Math.max(0, latency(player.getUUID()));
     }
 
-    // A player's round trip time in milliseconds as the tab list gives it. Minus one when the
-    // tab list does not have them.
+    // Minus one when the tab list does not have the player.
     public static int latency(UUID player) {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         return latency(connection == null ? null : connection.getPlayerInfo(player));
     }
 
-    // The same for a tab list entry already in hand. Minus one when there is none or the
-    // server gives no figure.
     public static int latency(PlayerInfo info) {
         return info == null ? -1 : Math.max(-1, info.getLatency());
     }
 
-    // The round trip to the nearest whole tick.
     public static int pingTicks() {
         return Math.round(ping() / (float) SharedConstants.MILLIS_PER_TICK);
     }
@@ -204,12 +188,10 @@ public final class ServerInfo {
         return pingTicks() + ANSWER_SLACK_TICKS;
     }
 
-    // The server tick rate to one decimal place.
     public static String tps() {
         return oneDecimal(TickRate.INSTANCE.tps());
     }
 
-    // The same with a stall still under way counted in.
     public static String liveTps() {
         return oneDecimal(TickRate.INSTANCE.liveTps());
     }

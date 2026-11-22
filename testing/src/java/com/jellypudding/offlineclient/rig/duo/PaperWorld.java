@@ -1,8 +1,10 @@
 package com.jellypudding.offlineclient.rig.duo;
 
+import com.jellypudding.offlineclient.rig.core.Heard;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.RigFailure;
 import com.jellypudding.offlineclient.rig.core.World;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -11,6 +13,7 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -27,9 +30,11 @@ public final class PaperWorld extends World {
     private static final Pattern SCORE = Pattern.compile(HOLDER + " has (-?\\d+) \\[(\\w+)]");
 
     private static final int JOIN_TICKS = 600;
+    private static final int HEAR_TICKS = 100;
     private static final String LIST_NAME = "Rig";
 
     private final PaperServer server;
+    private int owed;
 
     private PaperWorld(Rig rig, PaperServer server, String player) {
         super(rig, player);
@@ -69,7 +74,8 @@ public final class PaperWorld extends World {
             "execute store success score " + HOLDER + " " + DONE + " store result score " + HOLDER + " " + VALUE
                 + " run " + command,
             "scoreboard players get " + HOLDER + " " + DONE,
-            "scoreboard players get " + HOLDER + " " + VALUE));
+            "scoreboard players get " + HOLDER + " " + VALUE,
+            mark()));
         int done = -1;
         int value = 0;
         for (String line : answer) {
@@ -85,9 +91,29 @@ public final class PaperWorld extends World {
         return done > 0 ? Math.max(value, 0) : -1;
     }
 
+    // The server takes them all in one go.
     @Override
-    public void quietly(List<String> commands) {
-        server.console(commands);
+    protected void performAll(List<String> commands) {
+        List<String> lines = new ArrayList<>(commands);
+        lines.add(mark());
+        server.console(lines);
+    }
+
+    // The line that makes the server send a mark behind what the lines before it changed.
+    private String mark() {
+        owed = Heard.next();
+        return "probe heard " + player() + " " + Heard.group(owed);
+    }
+
+    // A game with no line to the server hears nothing more. Linger keeps the world of one.
+    @Override
+    protected void catchUp() {
+        int mark = owed;
+        rig.until("the game to hear from the server", HEAR_TICKS, mc -> !connected(mc) || Heard.took(mark));
+    }
+
+    private static boolean connected(Minecraft mc) {
+        return mc.player != null && mc.getConnection() != null && mc.getConnection().getConnection().isConnected();
     }
 
     // Leaves the server. The server itself runs on.
@@ -105,6 +131,11 @@ public final class PaperWorld extends World {
     @Override
     public Map<String, String> facts() {
         return server.player(player());
+    }
+
+    @Override
+    public void foodLevel(int points) {
+        quietly("probe food " + player() + " " + points);
     }
 
     @Override

@@ -54,8 +54,6 @@ public final class UnmoddedText {
         return new Reader(UnmoddedText::plain, UnmoddedText::isOwnBind).read(text);
     }
 
-    // True when the text names a word or a key bind that only a mod supplies. A server that
-    // shows such a text is looking for that mod.
     public static boolean asksForMods(Component text) {
         boolean asks = switch (text.getContents()) {
             case TranslatableContents translation -> onlyAModKnows(translation.getKey())

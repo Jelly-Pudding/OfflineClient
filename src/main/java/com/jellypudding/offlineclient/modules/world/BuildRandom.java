@@ -19,8 +19,6 @@ import net.minecraft.world.item.BlockItem;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Scatters whatever you hold over the ground around you. Fire and spawn eggs work as
-// well as blocks once the held item check is off.
 public final class BuildRandom extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",

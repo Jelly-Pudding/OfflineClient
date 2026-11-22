@@ -38,14 +38,11 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
-// Keeps a HighwayBuilder run supplied. Blocks and a pickaxe come up into the hotbar. Shulker
-// boxes and the ender chest are set down and emptied of what the build needs. Ender chests are
-// ground for obsidian. Empty boxes and trash are thrown out.
+// Keeps a HighwayBuilder run supplied.
 final class HighwaySupplies {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks a grind may run before it is abandoned.
     private static final int GRIND_LIMIT = 2400;
 
     private static final float THROW_PITCH = -25;
@@ -92,20 +89,17 @@ final class HighwaySupplies {
         .under(throwTrash);
 
     private final SlotSwap slots;
-    // The blocks the build may use.
     private final Predicate<Block> allowed;
     private final BooleanSupplier rotatesToPlace;
     private final BooleanSupplier rotatesToMine;
-    // The shulker box or ender chest a restock sets down and empties. One that would not open
-    // stops restocking from containers until the module is switched on again.
+    // A container that would not open stops restocking from containers until the module is switched
+    // on again.
     private final Restock containers;
 
     private int sinceInventory;
     private Stage stage = Stage.NONE;
-    // Where the ender chests of a grind go down.
     private BlockPos grindPos;
     private final Rebreak grindRebreak = new Rebreak();
-    // How much obsidian the running grind is heading for.
     private int grindGoal;
     private int stageTicks;
 
@@ -123,17 +117,14 @@ final class HighwaySupplies {
             saveEnderChests, grindAmount, instantGrind, grindBlockade, ejectShulkers, emptySlots, throwTrash, trash};
     }
 
-    // True whilst ender chests are ground for obsidian.
     boolean grinding() {
         return stage == Stage.GRIND;
     }
 
-    // True whilst a shulker box or the ender chest set down is emptied.
     boolean restocking() {
         return containers.active();
     }
 
-    // Forgets the last run for a fresh one.
     void reset() {
         sinceInventory = 0;
         stage = Stage.NONE;
@@ -141,15 +132,13 @@ final class HighwaySupplies {
         containers.reset();
     }
 
-    // Stops whatever is under way.
     void end() {
         stage = Stage.NONE;
         grindPos = null;
         containers.end();
     }
 
-    // Moves what the build needs up into the hotbar and drops what it does not. True when this
-    // took the tick.
+    // True when this took the tick.
     boolean tick() {
         if (stage == Stage.GRIND) {
             return enderChestGrind();
@@ -179,7 +168,6 @@ final class HighwaySupplies {
         return throwTrash.isOn() && dropTrash();
     }
 
-    // Puts a shulker down behind you and empties it then mines it back.
     private boolean shulkerRestock() {
         if (!containers.active()) {
             return startRestock();
@@ -191,12 +179,10 @@ final class HighwaySupplies {
         return setDownContainer(this::usefulShulker);
     }
 
-    // Sets an ender chest down and empties it the way a shulker is emptied.
     private boolean enderChestRestock() {
         return setDownContainer(stack -> stack.is(Items.ENDER_CHEST));
     }
 
-    // Puts the first matching container down behind you ready to be emptied.
     private boolean setDownContainer(Predicate<ItemStack> which) {
         if (hasBlocksSomewhere() || MC.player.getInventory().getFreeSlot() == -1) {
             return false;
@@ -204,7 +190,6 @@ final class HighwaySupplies {
         return containers.setDown(which, this::moveToHotbar, rotatesToPlace.getAsBoolean());
     }
 
-    // Sets ender chests down behind you and mines them back for obsidian until enough is held.
     private boolean enderChestGrind() {
         if (stage == Stage.NONE) {
             if (hasBlocksSomewhere() || !allowed.test(Blocks.OBSIDIAN)
@@ -264,8 +249,6 @@ final class HighwaySupplies {
         BlockMiner.release();
     }
 
-    // Fills the sides round you at foot and head height apart from the chest spot.
-    // True when a block went down this tick.
     private boolean buildBlockade() {
         BlockPos feet = MC.player.blockPosition();
         for (int up = 0; up < 2; up++) {
@@ -285,7 +268,7 @@ final class HighwaySupplies {
         return false;
     }
 
-    // True once a pickaxe without Silk Touch is in hand. Only that breaks a chest into obsidian.
+    // Only a pickaxe without Silk Touch breaks a chest into obsidian.
     private boolean holdPlainPickaxe(BlockState state) {
         int slot = ItemUtil.bestToolSlot(state, 1,
             stack -> ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) == 0, InventoryUtil.HOTBAR_SIZE);
@@ -304,8 +287,6 @@ final class HighwaySupplies {
         return InventoryUtil.count(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // Quick moves what the build needs out of the open container. False once nothing is left
-    // to take or the inventory has no more room to spare.
     private boolean emptyShulker(AbstractContainerMenu menu) {
         if (sinceInventory < inventoryDelay.getInt()) {
             sinceInventory++;

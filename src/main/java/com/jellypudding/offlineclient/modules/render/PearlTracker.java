@@ -28,26 +28,20 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// The box at the landing is the spot the thrower arrives at. PearlOwners keeps naming the
-// thrower once they are out of sight. A pearl resting in a stasis chamber is marked where it
-// waits.
+// PearlOwners keeps naming the thrower once they are out of sight.
 public final class PearlTracker extends Module {
 
-    // A pearl in the air and the rest of its flight. The landing is null until one is found.
+    // The landing is null until one is found.
     private record Flight(ThrownEnderpearl pearl, String thrower, List<Vec3> points, Vec3 landing) {
     }
 
-    // A pearl a bubble column holds still and its owner.
     private record Resting(ThrownEnderpearl pearl, String owner) {
     }
 
-    // Half a minute of flight. A pearl still up after that gets no landing.
     private static final int FLIGHT_TICKS = 600;
 
-    // The label floats this far over the top of the landing box.
     private static final double LABEL_LIFT = 0.3;
 
-    // A pearl is tiny. Its box is drawn this much wider all round.
     private static final double RESTING_MARGIN = 0.2;
 
     private static final int NAME_COLOUR = 0xFFFFFFFF;
@@ -132,7 +126,6 @@ public final class PearlTracker extends Module {
         }
     }
 
-    // A pearl that runs out of flight or falls out of the world never lands.
     private static Vec3 landingOf(Path rest) {
         if (rest.type() == HitResult.Type.MISS) {
             return null;
@@ -140,7 +133,6 @@ public final class PearlTracker extends Module {
         return rest.points().getLast();
     }
 
-    // The box the thrower stands in when the pearl brings them down.
     private static AABB arrival(Vec3 landing) {
         return EntityTypes.PLAYER.getDimensions().makeBoundingBox(landing);
     }

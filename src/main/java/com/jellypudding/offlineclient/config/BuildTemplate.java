@@ -21,10 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// A shape made of loose cells. Positions run sideways to the left then up then forward from the
-// block you build on as seen by someone facing south. A cell names the block state it wants or
-// takes whatever you hold. Shapes are saved as json in offlineclient/templates and a few come
-// with the client. A saved file wins over a shape of the same name that came with it.
+// Positions run sideways to the left then up then forward from the block you build on as seen by
+// someone facing south. A saved file wins over a shape of the same name that came with the client.
 public final class BuildTemplate {
 
     // A null state means any block will do.
@@ -44,7 +42,6 @@ public final class BuildTemplate {
     private static final int PORTAL_INSIDE_WIDTH = 2;
     private static final int PORTAL_INSIDE_HEIGHT = 3;
 
-    // The shapes that come with the client.
     private static final Map<String, List<Entry>> BUILT_IN = new LinkedHashMap<>();
 
     static {
@@ -61,8 +58,6 @@ public final class BuildTemplate {
     private BuildTemplate() {
     }
 
-    // Boxes loose cells into a build such as a painted pattern. Null when there are none. Cells
-    // too far apart for one build are refused with the size in words.
     public static Blueprint of(String name, List<Entry> entries) throws BuildFiles.Unreadable {
         if (entries.isEmpty()) {
             return null;
@@ -85,16 +80,12 @@ public final class BuildTemplate {
         return DataFiles.path("templates");
     }
 
-    // The shapes that came with the client and then the saved ones from A to Z.
     public static Collection<String> names() {
         Set<String> names = new LinkedHashSet<>(BUILT_IN.keySet());
         names.addAll(DataFiles.jsonNames(folder()));
         return names;
     }
 
-    // The saved file of that name or else the shape that came with the client. Null when there
-    // is neither or the file cannot be read. A file whose cells lie too far apart is refused
-    // with the size in words.
     public static Blueprint load(String name) throws BuildFiles.Unreadable {
         Path file = DataFiles.jsonFile(folder(), name);
         List<Entry> entries = Files.isRegularFile(file)
@@ -122,7 +113,6 @@ public final class BuildTemplate {
         return state == null || state.isAir() ? null : state;
     }
 
-    // False when the file could not be written.
     public static boolean save(String name, List<Entry> entries) {
         JsonArray blocks = new JsonArray();
         for (Entry entry : entries) {
@@ -142,7 +132,6 @@ public final class BuildTemplate {
         return DataFiles.writeJson(DataFiles.jsonFile(folder(), name), root);
     }
 
-    // Every cell between two corners with both counted.
     private static List<Entry> box(int fromX, int toX, int fromY, int toY, int fromZ, int toZ, BlockState state) {
         List<Entry> entries = new ArrayList<>();
         for (int y = fromY; y <= toY; y++) {
@@ -155,15 +144,12 @@ public final class BuildTemplate {
         return entries;
     }
 
-    // A hollow square tube.
     private static List<Entry> tower(int radius, int height) {
         List<Entry> entries = box(-radius, radius, 0, height - 1, 0, radius * 2, null);
         entries.removeIf(entry -> Math.abs(entry.x()) < radius && entry.z() > 0 && entry.z() < radius * 2);
         return entries;
     }
 
-    // A body two blocks tall with a carved pumpkin on top that looks back at you. An iron golem
-    // has an arm either side of the upper block.
     private static List<Entry> golem(BlockState body, boolean arms) {
         List<Entry> entries = box(0, 0, 0, 1, 0, 0, body);
         if (arms) {

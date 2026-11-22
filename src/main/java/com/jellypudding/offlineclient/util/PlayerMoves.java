@@ -20,11 +20,9 @@ import java.util.Map;
 // of speed as it happened. Your own player and the bodies only this client has are left out.
 public final class PlayerMoves {
 
-    // A player who covered this much ground in one tick.
     public record Jump(Player player, Vec3 from, Vec3 to) {
     }
 
-    // Speed and swings are judged over the last second.
     private static final int SECOND = SharedConstants.TICKS_PER_SECOND;
 
     // The server sends a whole new place once a player moves further than this in one go.
@@ -35,10 +33,8 @@ public final class PlayerMoves {
     // fling them far and fast.
     private static final int CLEAR_TICKS = 60;
 
-    // Ticks back the height is compared with to tell a hover from a fall.
     private static final int LOOKBACK = 10;
 
-    // Rising or sinking less than this since ten ticks ago is staying up.
     private static final double SINK = 0.1;
 
     // The server sends where a moving player is every second tick. One still for longer has stopped.
@@ -51,7 +47,6 @@ public final class PlayerMoves {
         Vec3 last;
         Vec3 velocity = Vec3.ZERO;
         int movedAt;
-        // The tick the player was last in view.
         int seenAt;
         final double[] steps = new double[SECOND];
         final int[] swings = new int[SECOND];
@@ -124,7 +119,6 @@ public final class PlayerMoves {
         track.hovering = staysUp(player) && now.y > before - SINK ? track.hovering + 1 : 0;
     }
 
-    // Off the ground with nothing that holds a player up.
     private static boolean staysUp(Player player) {
         BlockState inside = player.getInBlockState();
         return !player.onGround() && !player.isInLiquid() && !player.onClimbable()
@@ -138,7 +132,6 @@ public final class PlayerMoves {
             || player.isSpectator();
     }
 
-    // The players who covered at least this much ground on the last tick. Riders are left out.
     public List<Jump> jumps(double least) {
         List<Jump> jumps = new ArrayList<>();
         for (Map.Entry<Integer, Track> entry : tracks.entrySet()) {
@@ -151,8 +144,7 @@ public final class PlayerMoves {
         return jumps;
     }
 
-    // Blocks along the ground the player covered over the last second. Nought whilst they are
-    // not judged.
+    // Nought whilst the player is not judged.
     public double speed(Player player) {
         Track track = judged(player);
         if (track == null) {
@@ -172,13 +164,12 @@ public final class PlayerMoves {
         return track == null ? Vec3.ZERO : track.velocity;
     }
 
-    // Ticks the player has stayed up in the air without dropping. Nought whilst they are not judged.
+    // Nought whilst the player is not judged.
     public int hovering(Player player) {
         Track track = judged(player);
         return track == null ? 0 : track.hovering;
     }
 
-    // Arm swings over the last second.
     public int swings(Player player) {
         Track track = tracks.get(player.getId());
         if (track == null) {
@@ -191,7 +182,6 @@ public final class PlayerMoves {
         return swings;
     }
 
-    // The server showed the player swing an arm.
     public void swung(int entityId) {
         Track track = tracks.get(entityId);
         if (track != null) {

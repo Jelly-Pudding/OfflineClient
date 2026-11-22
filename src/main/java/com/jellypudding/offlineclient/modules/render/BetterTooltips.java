@@ -78,20 +78,16 @@ public final class BetterTooltips extends Module {
 
     public enum SizeUnit { BYTES, KILOBYTES, MEGABYTES, AUTO }
 
-    // What a stack shows whilst the preview key is held. One decision picks it for the hint and the
-    // preview alike.
     private enum Preview { CONTAINER, ENDER_CHEST, MAP, BOOK, BANNER, BUCKET, BUNDLE }
 
     private static final int COLUMNS = 9;
     private static final int COMPACT_ROWS = 5;
-    // A slot is this wide and the icon of what a box holds sits in its bottom right corner.
     private static final int SLOT = 16;
     private static final int ICON = 10;
     private static final int MIXED_COLOR = 0xFFFFFF55;
     // A screen never shows as many boxes. The ones drawn least of late go first.
     private static final int MOST_ICONS = 512;
 
-    // What goes over a box. An empty icon for a box that holds nothing.
     private record BoxIcon(ItemStack icon, boolean mixed) {
 
         private static final BoxIcon NONE = new BoxIcon(ItemStack.EMPTY, false);
@@ -99,12 +95,10 @@ public final class BetterTooltips extends Module {
     private static final int KILOBYTE = 1024;
     private static final int MEGABYTE = KILOBYTE * KILOBYTE;
 
-    // A stack and the bytes it took up when they were counted. The server sends a fresh stack whenever
-    // the item changes but a click fills a bundle in place.
+    // The server sends a fresh stack whenever the item changes but a click fills a bundle in place.
     private record Sized(ItemStack stack, BundleContents bundle, int bytes) {
 
         private static final Sized NONE = new Sized(ItemStack.EMPTY, null, 0);
-        // The bytes of a stack the codec cannot write.
         private static final int UNWRITABLE = -1;
 
         private boolean holds(ItemStack other) {
@@ -225,7 +219,6 @@ public final class BetterTooltips extends Module {
         return BoxIcon.NONE;
     }
 
-    // How many of each kind the stacks hold between them in the order the kinds first turn up.
     private static Map<Item, Integer> counts(Iterable<ItemStackTemplate> held) {
         Map<Item, Integer> counts = new LinkedHashMap<>();
         for (ItemStackTemplate template : held) {
@@ -241,7 +234,7 @@ public final class BetterTooltips extends Module {
         hovered = stack;
     }
 
-    // The tooltip rows with our lines and preview worked in. The hovered stack is used up.
+    // The hovered stack is used up.
     public List<ClientTooltipComponent> decorate(List<ClientTooltipComponent> rows) {
         ItemStack stack = hovered;
         hovered = ItemStack.EMPTY;
@@ -297,7 +290,6 @@ public final class BetterTooltips extends Module {
         return Conceal.hides(mc.gui.screen() == null ? Conceal.Part.OVERLAY : Conceal.Part.SCREENS);
     }
 
-    // True whilst a preview is up. The vanilla shulker item lines can then go.
     public boolean skipsContainerLines() {
         return isEnabled() && containers.isOn() && previewing() && !concealed();
     }
@@ -314,7 +306,6 @@ public final class BetterTooltips extends Module {
         return isEnabled() && hiddenLines.isOn();
     }
 
-    // The five biggest item types by count and how many more kinds there are.
     public void compactLines(List<Optional<ItemStackTemplate>> slots, Consumer<Component> out) {
         Map<Item, Integer> counts = counts(slots.stream().flatMap(Optional::stream).toList());
         counts.entrySet().stream()
@@ -328,7 +319,6 @@ public final class BetterTooltips extends Module {
         }
     }
 
-    // Lines that go right under the item name.
     private List<Component> startLines(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
         if (effects.isOn()) {
@@ -401,7 +391,6 @@ public final class BetterTooltips extends Module {
         };
     }
 
-    // The preview a stack gets whilst the key is held. Null when there is nothing to show.
     private Preview previewOf(ItemStack stack) {
         Item item = stack.getItem();
         if (containers.isOn() && hasContents(stack)) {
@@ -447,7 +436,6 @@ public final class BetterTooltips extends Module {
             && !stack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY).layers().isEmpty();
     }
 
-    // Null when a bucket mob cannot be built.
     private ClientTooltipComponent preview(ItemStack stack, Preview kind) {
         return switch (kind) {
             case CONTAINER -> new ContainerPreview(ContainerPreview.contentsOf(stack), COLUMNS,
@@ -469,7 +457,6 @@ public final class BetterTooltips extends Module {
             : new ContainerPreview(chest, COLUMNS, ContainerPreview.tintOf(stack));
     }
 
-    // How many pages a book holds. A book and quill nobody has written in holds none.
     private static int pageCount(ItemStack stack) {
         if (stack.getItem() == Items.WRITABLE_BOOK) {
             return stack.getOrDefault(DataComponents.WRITABLE_BOOK_CONTENT, WritableBookContent.EMPTY).pages().size();
@@ -520,7 +507,6 @@ public final class BetterTooltips extends Module {
         return new EntityPreview(living);
     }
 
-    // True for the click or key the player picked to open a window.
     public boolean wantsToOpen(MouseButtonEvent event) {
         return canOpen() && (openWith.is(OpenWith.MIDDLE_CLICK)
             ? event.button() == InputConstants.MOUSE_BUTTON_MIDDLE : openKey.answers(event));
@@ -537,7 +523,6 @@ public final class BetterTooltips extends Module {
         return !pauseInCreative.isOn() || !mc.player.hasInfiniteMaterials();
     }
 
-    // Opens a window for the item and says whether one opened.
     public boolean openContents(ItemStack stack) {
         Item item = stack.getItem();
         if (item == Items.WRITABLE_BOOK || item == Items.WRITTEN_BOOK) {

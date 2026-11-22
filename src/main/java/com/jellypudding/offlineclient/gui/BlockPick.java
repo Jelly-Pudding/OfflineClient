@@ -24,21 +24,18 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Consumer;
 
-// A block chosen by clicking it in the world. The screen that asked steps aside for the click
-// and comes back once the block is in. One pick runs at a time.
+// One pick runs at a time.
 public final class BlockPick {
 
-    // How far off a block can be clicked. Far further than the hand reaches.
     private static final double REACH = 256;
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Null whilst no pick is waiting for its click.
     private static BlockPick waiting;
 
     private final String what;
     private final Consumer<BlockPos> picked;
-    // The client screen the pick was asked from. Null when a command asked.
+    // Null when a command asked.
     private final Screen back;
 
     private BlockPick(String what, Consumer<BlockPos> picked, Screen back) {
@@ -47,8 +44,6 @@ public final class BlockPick {
         this.back = back;
     }
 
-    // Waits for a click on a block and hands it over. What names the thing the block is for
-    // such as the corner two of Wall. A chat line that asked closes its own screen first.
     public static void start(String what, Consumer<BlockPos> picked) {
         if (MC.player == null) {
             ChatUtil.error("You need to be in a world to pick a block.");
@@ -73,7 +68,7 @@ public final class BlockPick {
         }
     }
 
-    // The block the middle of the view rests on. A camera that has left your eyes aims for itself.
+    // A camera that has left your eyes aims for itself.
     private static BlockPos aimed() {
         LocalPlayer player = MC.player;
         AwayView view = AwayView.active();

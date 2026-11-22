@@ -42,7 +42,6 @@ final class ContactSheets {
     private ContactSheets() {
     }
 
-    // One run of sheets for each suite in the order the pictures were taken.
     static List<Path> write(Path out, List<Outcome> outcomes) throws IOException {
         Map<String, List<Picture>> suites = new LinkedHashMap<>();
         for (Outcome each : outcomes) {
@@ -100,7 +99,6 @@ final class ContactSheets {
         ImageIO.write(image, FORMAT, sheet.toFile());
     }
 
-    // A label too long for its cell loses its end.
     private static String fitted(Graphics2D pen, String label) {
         String fitted = label;
         while (fitted.length() > 1 && pen.getFontMetrics().stringWidth(fitted) > CELL_WIDTH - 2 * LABEL_INSET) {

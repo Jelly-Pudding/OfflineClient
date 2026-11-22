@@ -31,9 +31,7 @@ public final class ExportCommand extends Command {
     // The format keeps each side in an unsigned short.
     private static final int MAX_SIDE = 0xFFFF;
     private static final String TOO_WIDE = "A schematic can be at most " + MAX_SIDE + " blocks along each side.";
-    // Time the scan may take out of each tick.
     private static final long SLICE_NANOS = 8_000_000L;
-    // Blocks read between looks at the clock.
     private static final int BATCH = 4096;
 
     private static Export running;

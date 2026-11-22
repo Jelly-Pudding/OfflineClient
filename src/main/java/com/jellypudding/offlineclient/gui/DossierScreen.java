@@ -28,11 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-// Every player Dossier recorded on this server in one window. The rows narrow to who is online
-// or away or to a search. A click on a player opens their record with their gear and their log.
 public final class DossierScreen extends ListWindow {
 
-    // The groups down the side.
     private enum Tab {
         ALL("All"),
         ONLINE("Online"),
@@ -45,7 +42,7 @@ public final class DossierScreen extends ListWindow {
         }
     }
 
-    // The buttons at the end of a row. Walking and marking only work in the dimension you are in.
+    // Walking and marking only work in the dimension you are in.
     private enum Action implements RowList.Button {
         GO("go", "Walks there with the pathfinder and closes this window."),
         WAYPOINT("waypoint", "Saves the spot as a waypoint named after the player."),
@@ -78,7 +75,6 @@ public final class DossierScreen extends ListWindow {
         }
     }
 
-    // A record on the list and the tab list entry that shows they are online.
     private record Listed(PlayerRecord record, PlayerInfo live) {
     }
 
@@ -95,7 +91,6 @@ public final class DossierScreen extends ListWindow {
 
     private static final Comparator<Listed> BY_NAME =
         Comparator.comparing((Listed listed) -> listed.record().name(), String.CASE_INSENSITIVE_ORDER);
-    // Online players by name and then everyone else from the most recently seen.
     private static final Comparator<Listed> RECENT = Comparator.comparing((Listed listed) -> listed.live() == null)
         .thenComparingLong(listed -> listed.live() == null ? -listed.record().lastSeen() : 0)
         .thenComparing(BY_NAME);
@@ -106,12 +101,9 @@ public final class DossierScreen extends ListWindow {
 
     private Tab tab = Tab.ALL;
     private boolean byName;
-    // The player whose record is open. Null whilst every player is listed.
     private UUID opened;
     private String openedName = "";
-    // The search of the list kept whilst a record is open.
     private String listSearch = "";
-    // The player whose forget was pressed once and their name.
     private final Armed<UUID> armed = new Armed<>();
     private String armedName = "";
     private boolean stale = true;
@@ -121,7 +113,6 @@ public final class DossierScreen extends ListWindow {
         super("Dossier", parent);
     }
 
-    // Opens the window over whatever screen is open.
     public static void open() {
         openOver(DossierScreen::new);
     }
@@ -131,7 +122,6 @@ public final class DossierScreen extends ListWindow {
         stale = true;
     }
 
-    // The sort button whilst every player is listed and the back button whilst a record is open.
     private int cornerX() {
         return windowX() + windowWidth() - MARGIN - (opened == null ? SORT_WIDTH : BACK_WIDTH);
     }
@@ -140,8 +130,6 @@ public final class DossierScreen extends ListWindow {
         return cornerX() - 4 - FORGET_WIDTH;
     }
 
-    // The rows are worked out again when something here changes and twice a second for the
-    // ages and distances.
     private void refresh() {
         long now = System.currentTimeMillis();
         if (!stale && now - refreshedAt < REFRESH_MS) {
@@ -179,7 +167,6 @@ public final class DossierScreen extends ListWindow {
         players.show(rows);
     }
 
-    // The name and how long since they were online over where they were last seen.
     private RowList.Row<PlayerRecord> playerRow(Listed listed, long now) {
         PlayerRecord each = listed.record();
         String status;
@@ -201,7 +188,7 @@ public final class DossierScreen extends ListWindow {
             "Click to open the record of " + each.name() + ".");
     }
 
-    // Every fact and then the log. A player forgotten meanwhile takes the window back to the list.
+    // A player forgotten meanwhile takes the window back to the list.
     private void listRecord(long now) {
         PlayerRecord shown = PlayerLedger.INSTANCE.get(opened);
         if (shown == null) {
@@ -237,7 +224,6 @@ public final class DossierScreen extends ListWindow {
         rows.add(new RowList.Row<>(fact, text, color, fact.detail(), buttons, fact.plain()));
     }
 
-    // True for a place in the dimension you are in.
     private static boolean here(Place place) {
         return place != null && place.dimension().equals(ServerInfo.dimension());
     }
@@ -305,7 +291,6 @@ public final class DossierScreen extends ListWindow {
         };
     }
 
-    // The server and how many players are listed or the player whose record is open.
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {
         if (opened == null) {
             WindowParts.title(context, font, wx, wy, ww, "Dossier", WindowParts.place(),
@@ -420,7 +405,6 @@ public final class DossierScreen extends ListWindow {
         }
     }
 
-    // The first press arms the forget and a second one within a few seconds forgets.
     private void forgetOrArm(UUID id, String name) {
         if (!armed.press(id)) {
             armedName = name;
@@ -435,7 +419,6 @@ public final class DossierScreen extends ListWindow {
         changed();
     }
 
-    // Named after the player with the first free number such as Steve2.
     private static String addWaypoint(String name, Place place) {
         return WaypointStore.get().markFresh(name, place.pos(), place.dimension(), Modules.nextWaypointColour());
     }
@@ -454,7 +437,6 @@ public final class DossierScreen extends ListWindow {
         return shown.scroll(mx, my, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
-    // Escape on a record goes back to every player.
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == InputConstants.KEY_ESCAPE && opened != null) {

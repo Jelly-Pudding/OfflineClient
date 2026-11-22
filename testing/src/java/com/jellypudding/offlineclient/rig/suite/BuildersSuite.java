@@ -126,7 +126,6 @@ public final class BuildersSuite implements Suite {
         rig.ticks(SEEN_TICKS);
     }
 
-    // Three blocks in a row are saved and put up again one block further off.
     private void templateTool(Rig rig) {
         World world = rig.world();
         BlockPos left = home.offset(-1, 0, -3);
@@ -180,7 +179,6 @@ public final class BuildersSuite implements Suite {
         }
     }
 
-    // A ditch lies across the way and the highway needs a floor over it.
     private void highwayBuilder(Rig rig) {
         rig.world().fill(home.offset(-2, -1, -4), home.offset(2, -1, -3), "air");
         Props.hold(rig, 0, "obsidian " + STACK);
@@ -219,7 +217,6 @@ public final class BuildersSuite implements Suite {
         rig.note("The block was there after about " + took + " ticks");
     }
 
-    // A blue axolotl in a block of water in the floor.
     private void axolotlHunter(Rig rig) {
         BlockPos pool = home.offset(1, -1, -2);
         rig.world().setBlock(pool, "water");
@@ -236,7 +233,6 @@ public final class BuildersSuite implements Suite {
             "Chat does not tell of the axolotl");
     }
 
-    // A librarian that never traded stands by its lectern and sells mending.
     private void autoLibrarian(Rig rig) {
         BlockPos stall = home.north(2);
         rig.world().setBlock(stall.east(), "lectern");

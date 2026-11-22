@@ -8,15 +8,12 @@ import com.jellypudding.offlineclient.util.KeyUse;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 
-// A key or a mouse button going down or coming up. The input carries the modifier keys held
-// with it and the action is one of the InputConstants actions.
 public final class KeyPressEvent extends Event {
 
     private final Bind input;
     private final int action;
 
-    // Whether a bind of the client asks for this input with exactly the modifiers held. Null
-    // until something needs to know.
+    // Null until something needs to know.
     private Boolean claimed;
     private boolean taken;
 
@@ -25,7 +22,7 @@ public final class KeyPressEvent extends Event {
         this.action = action;
     }
 
-    // The scancode of a keyboard key. A mouse button gives the code of no key.
+    // A mouse button gives the code of no key.
     public int getKey() {
         return input.isMouse() ? KeybindSetting.UNBOUND : input.code();
     }
@@ -34,12 +31,10 @@ public final class KeyPressEvent extends Event {
         return action;
     }
 
-    // True on a press of what the bind holds. No event carries an unbound input.
     public boolean presses(KeybindSetting bind) {
         return action == InputConstants.PRESS && isFor(bind);
     }
 
-    // True for a press or a repeat or a release of what the bind holds.
     public boolean isFor(KeybindSetting bind) {
         return isFor(bind.getValue());
     }
@@ -54,12 +49,10 @@ public final class KeyPressEvent extends Event {
         return true;
     }
 
-    // True for the key or button one of the game's own controls sits on whatever is held with it.
     public boolean isFor(KeyMapping mapping) {
         return InputUtil.isOn(mapping, input);
     }
 
-    // True once a bind of the client has answered.
     public boolean wasTaken() {
         return taken;
     }

@@ -3,14 +3,11 @@ package com.jellypudding.offlineclient.gui;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-// A scroll offset with a draggable thumb.
 public final class ScrollBar {
 
     private static final int MIN_THUMB = 12;
 
-    // Pixels one notch of the wheel moves.
     private static final int WHEEL_STEP = 16;
-    // Extra grab room to the left of the track.
     private static final int GRAB = 3;
 
     private int offset;
@@ -45,24 +42,20 @@ public final class ScrollBar {
         offset = clamp(offset - delta, total, view);
     }
 
-    // Rows beside an overflowing track lose the gutter width.
     public static int rowWidth(int width, int total, int view) {
         return total > view ? width - GuiTheme.SCROLL_GUTTER : width;
     }
 
-    // The track is pinned to the right edge of the content it scrolls.
     public static int trackX(int x, int width) {
         return x + width - GuiTheme.SCROLLBAR;
     }
 
-    // The thumb shrinks with the content until it reaches the minimum size.
     private static int thumbHeight(int view, int total) {
         return Math.min(view, Math.max(MIN_THUMB, view * view / total));
     }
 
     public void update(int mouseY, int total, int view) {
         if (dragging && total > view && view > 0) {
-            // Pointer travel maps onto the run the thumb has left in the track.
             int travel = Math.max(1, view - thumbHeight(view, total));
             offset = dragStartOffset + (mouseY - dragStartY) * (total - view) / travel;
         }
@@ -79,13 +72,11 @@ public final class ScrollBar {
         dragging = false;
     }
 
-    // The grab band is wider than the track.
     public static boolean isOverTrack(double mx, double my, int trackX, int top, int view) {
         return mx >= trackX - GRAB && mx < trackX + GuiTheme.SCROLLBAR
             && my >= top && my < top + view;
     }
 
-    // Draws nothing unless the content overflows.
     public void render(GuiGraphicsExtractor context, int trackX, int top, int view, int total,
                        boolean hovered) {
         if (view <= 0 || total <= view) {

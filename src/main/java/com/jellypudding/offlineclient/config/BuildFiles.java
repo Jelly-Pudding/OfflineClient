@@ -20,12 +20,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-// The build files in offlineclient/schematics. A file is told apart by what it holds and not by
-// its ending. Each one is read once off the game thread and kept until the files are forgotten.
-// Any other folder is listed by names(Path) and read by readOnce and nothing of it is kept.
+// A file is told apart by what it holds and not by its ending. Each one is read once off the game
+// thread and kept until the files are forgotten.
 public final class BuildFiles {
 
-    // Why a file could not be read as words that follow its name such as holds no blocks.
     public static final class Unreadable extends Exception {
 
         Unreadable(String reason) {
@@ -33,11 +31,11 @@ public final class BuildFiles {
         }
     }
 
-    // What a file gave. The names are the blocks this game does not have. Their cells are left alone.
+    // The names are the blocks this game does not have. Their cells are left alone.
     public record Loaded(Blueprint blueprint, Set<String> leftOut) {
     }
 
-    // How a read ended. One of the two is null.
+    // One of the two is null.
     public record Result(Loaded loaded, String problem) {
     }
 
@@ -48,16 +46,14 @@ public final class BuildFiles {
     private static final List<String> EXTENSIONS = List.of(SpongeSchematic.EXTENSION, Litematic.EXTENSION,
         StructureNbt.EXTENSION, NUMBERED_EXTENSION);
 
-    // The most a file may unpack to. The game counts every tag as it reads and counts an array
-    // before it makes room for it. A file of a few bytes that claims to hold thousands of millions
-    // is refused before it costs anything and a packed file of nothing stops here.
+    // The game counts every tag as it reads. A small file that claims to unpack to thousands of
+    // millions of bytes is refused before it costs anything.
     private static final long MAX_UNPACKED_BYTES = 256L << 20;
     private static final int BYTES_PER_MEGABYTE = 1 << 20;
     // How deep the game itself lets tags nest.
     private static final int MAX_TAG_DEPTH = 512;
 
-    // Counts what a file unpacks to the way the game does and knows when the room ran out. The
-    // game throws the same thing for tags nested too deep and that is no matter of size.
+    // The game throws the same thing for tags nested too deep and that is no matter of size.
     private static final class Room extends NbtAccounter {
 
         private boolean ranOut;
@@ -92,12 +88,10 @@ public final class BuildFiles {
         return DataFiles.path("schematics");
     }
 
-    // The file names on offer with their endings from A to Z. Empty when the folder is missing.
     public static List<String> names() {
         return names(folder());
     }
 
-    // The build files of any folder the same way.
     public static List<String> names(Path folder) {
         if (!Files.isDirectory(folder)) {
             return List.of();
@@ -116,14 +110,12 @@ public final class BuildFiles {
         return EXTENSIONS.stream().anyMatch(lower::endsWith);
     }
 
-    // The file name without its ending.
     public static String stem(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot <= 0 ? fileName : fileName.substring(0, dot);
     }
 
-    // What a file gave once it has been read. Null whilst it is being read and for a file that
-    // cannot be. The first ask starts the read.
+    // Null whilst it is being read and for a file that cannot be. The first ask starts the read.
     public static Loaded loaded(String fileName) {
         Result result = RESULTS.get(fileName);
         if (result == null) {
@@ -133,20 +125,16 @@ public final class BuildFiles {
         return result.loaded();
     }
 
-    // The build a file holds once it has been read. Null as above.
     public static Blueprint ready(String fileName) {
         Loaded loaded = loaded(fileName);
         return loaded == null ? null : loaded.blueprint();
     }
 
-    // Why the file could not be read as a whole sentence. Null whilst it is being read and for
-    // a file that was read.
     public static String problem(String fileName) {
         Result result = RESULTS.get(fileName);
         return result == null ? null : result.problem();
     }
 
-    // Hands over how the read ended on the game thread. At once for a file read before.
     public static void read(String fileName, Consumer<Result> then) {
         Result known = RESULTS.get(fileName);
         if (known != null) {
@@ -168,8 +156,7 @@ public final class BuildFiles {
         });
     }
 
-    // Reads a file of any folder off the game thread and hands over how the read ended on the
-    // game thread. Nothing is kept and each call reads the file afresh.
+    // Nothing is kept and each call reads the file afresh.
     public static void readOnce(Path folder, String fileName, Consumer<Result> then) {
         READER.execute(() -> {
             Result result = load(fileName, folder);
@@ -185,13 +172,11 @@ public final class BuildFiles {
         }
     }
 
-    // Drops every build read. A file changed on disk is read afresh the next time it is asked for.
     public static void forget() {
         RESULTS.clear();
     }
 
-    // Reads a file of the folder on the calling thread. Whatever goes wrong comes back as words and
-    // running out of memory does too. A read that began always ends with an answer.
+    // Whatever goes wrong comes back as words and running out of memory does too.
     static Result load(String fileName, Path folder) {
         try {
             return new Result(parse(stem(fileName), inFolder(fileName, folder)), null);
@@ -246,7 +231,6 @@ public final class BuildFiles {
         return new Loaded(blueprint, states.unknown());
     }
 
-    // A side below one block or a box past the limit cannot be held.
     static void checkSize(long sizeX, long sizeY, long sizeZ) throws Unreadable {
         if (sizeX < 1 || sizeY < 1 || sizeZ < 1) {
             throw new Unreadable("holds no blocks");

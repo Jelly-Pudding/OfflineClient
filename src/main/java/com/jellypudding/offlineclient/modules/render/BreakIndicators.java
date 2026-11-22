@@ -208,7 +208,6 @@ public final class BreakIndicators extends Module {
         }
     }
 
-    // The block's own outline. A slab or a fence gets a box its size.
     private AABB boxOf(Indicator indicator) {
         AABB full = BlockUtil.outlineBox(indicator.pos, mc.level.getBlockState(indicator.pos));
         if (!grow.isOn()) {

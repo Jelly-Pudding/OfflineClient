@@ -41,7 +41,6 @@ public final class StructureBeds {
     private StructureBeds() {
     }
 
-    // A colour a village sleeps in. Such a bed is only lone with no village around it.
     public static boolean villageColour(Block bed) {
         return VILLAGE_COLOURS.contains(bed);
     }
@@ -59,7 +58,6 @@ public final class StructureBeds {
         return state.is(Blocks.SNOW_BLOCK);
     }
 
-    // A bell or a job site block.
     public static boolean villageBlock(BlockState state) {
         return PoiTypes.forState(state).filter(type -> type.is(VILLAGE_POINTS::contains)).isPresent();
     }

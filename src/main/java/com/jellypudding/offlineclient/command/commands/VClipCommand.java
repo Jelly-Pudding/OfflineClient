@@ -12,7 +12,6 @@ import java.util.OptionalDouble;
 
 public final class VClipCommand extends Command {
 
-    // The floor commands answer to these words as their own names.
     private static final List<String> FLOORS = List.of("up", "down");
 
     public VClipCommand() {

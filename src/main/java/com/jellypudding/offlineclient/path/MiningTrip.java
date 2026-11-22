@@ -24,28 +24,23 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-// Walks to one block at a time and mines it once it is in reach. A block the walk cannot get
-// near or the server will not let go of is left alone for a minute and the caller hands over
-// another. A block holding back a liquid or sand is left alone the same way. It can pick up what
-// each block dropped before it moves on.
+// Walks to one block at a time and mines it once it is in reach. A block the walk cannot get near
+// or the server will not let go of is left alone for a minute. A block holding back a liquid or
+// sand is left alone the same way.
 public final class MiningTrip {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks a spot the walker could not reach is left alone.
     private static final int SHUN_TICKS = 1200;
 
-    // Ticks past its break time a block in reach gets before it is given up on. Covers a tool
-    // swap and the pause the game takes between two blocks.
+    // Covers a tool swap and the pause the game takes between two blocks.
     private static final int GIVE_UP_TICKS = 60;
 
-    // How near the walk brings the player to a block before mining starts.
     private static final double GOAL_RADIUS = 3;
 
     // Drops land within this many blocks of where their block stood.
     private static final double DROP_RADIUS = 2.5;
 
-    // How long after a block breaks its drops are worth going back for.
     private static final int DROP_TICKS = 200;
 
     // Ticks the server may take to drop the item of a block the game already shows as gone.
@@ -65,7 +60,6 @@ public final class MiningTrip {
     private record Mined(BlockPos pos, int tick) {
     }
 
-    // Whether a mining bot walks to its blocks or leaves the walking to you.
     public enum Movement { WALK, MANUAL }
 
     public static EnumSetting<Movement> movementSetting() {
@@ -105,7 +99,6 @@ public final class MiningTrip {
         return shunned.contains(pos);
     }
 
-    // Everything is forgotten for a fresh start.
     public void reset() {
         stop();
         shunned.clear();
@@ -114,16 +107,15 @@ public final class MiningTrip {
         warned = false;
     }
 
-    // Stops walking and mining. The spots it gave up on stay given up on.
+    // The spots it gave up on stay given up on.
     public void stop() {
         BlockMiner.release();
         letGo();
         drop = null;
     }
 
-    // One tick of work. The finder is asked for a block whenever there is none and a block the
-    // test turns down is let go. Without walking a block out of reach is let go as well.
-    // False whilst there is nothing to do.
+    // The finder is asked for a block whenever there is none and a block the test turns down is let
+    // go. False whilst there is nothing to do.
     public boolean tick(Predicate<BlockPos> wanted, Supplier<BlockPos> finder, boolean rotate, boolean walk) {
         shunned.tick();
         shunnedDrops.tick();
@@ -186,7 +178,6 @@ public final class MiningTrip {
         return true;
     }
 
-    // The nearest block in reach the test wants that is not left alone. For mining without walking.
     public BlockPos nearestInReach(Predicate<BlockPos> wanted) {
         return BlockUtil.nearestWithin(BlockUtil.serverBlockReach(), pos -> !shuns(pos) && wanted.test(pos));
     }
@@ -208,7 +199,6 @@ public final class MiningTrip {
             || BlockUtil.state(pos.above()).getBlock() instanceof FallingBlock && fallsOnPlayer(pos);
     }
 
-    // True when the gap and the open blocks below it reach down into the player.
     private static boolean fallsOnPlayer(BlockPos gap) {
         AABB body = MC.player.getBoundingBox();
         BlockPos.MutableBlockPos cursor = gap.mutable();
@@ -224,7 +214,6 @@ public final class MiningTrip {
         return false;
     }
 
-    // Walks to the nearest item lying by a block mined a moment ago. False when there is none.
     private boolean collectDrop() {
         forgetOldMined();
         if (drop == null || !drop.isAlive()) {
@@ -246,7 +235,6 @@ public final class MiningTrip {
         return true;
     }
 
-    // True whilst the block mined last may not have dropped its item yet.
     private boolean awaitingDrop() {
         return !mined.isEmpty() && clock() - mined.getLast().tick() <= DROP_WAIT + ServerInfo.pingTicks();
     }

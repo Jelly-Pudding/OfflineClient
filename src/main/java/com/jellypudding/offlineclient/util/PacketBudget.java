@@ -26,7 +26,6 @@ public final class PacketBudget {
     // Nine tenths of it. Bursts and plain play together stop here.
     private static final int TOTAL = PAPER * 9 / 10;
 
-    // Packets a second that fill the steady share however long they keep coming.
     public static final float SUSTAINED = STEADY / WINDOW_SECONDS;
 
     private final long[] stamps = new long[SLICES];

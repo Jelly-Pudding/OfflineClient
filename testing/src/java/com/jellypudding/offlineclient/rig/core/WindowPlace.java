@@ -13,7 +13,6 @@ import java.nio.IntBuffer;
 // bottom right corner of the main screen beneath every other window and never asks for the keyboard.
 public final class WindowPlace {
 
-    // Room left for the frame of the window and the edge of the screen.
     private static final int MARGIN = 40;
     private static final long NO_WINDOW = 0;
 

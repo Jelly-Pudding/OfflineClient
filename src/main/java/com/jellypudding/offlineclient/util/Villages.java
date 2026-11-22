@@ -21,12 +21,10 @@ public final class Villages {
     private Villages() {
     }
 
-    // True once every chunk the village test reads has arrived.
     public static boolean arrived(BlockPos pos) {
         return ChunkWindow.capture(pos, StructureBeds.VILLAGE_REACH_CHUNKS).complete();
     }
 
-    // A block the marker accepts or a villager within reach of the spot.
     public static boolean around(BlockPos pos, Predicate<BlockState> marker) {
         ClientLevel level = OfflineClient.MC.level;
         int reach = StructureBeds.VILLAGE_REACH_CHUNKS;

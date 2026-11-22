@@ -18,7 +18,6 @@ import java.util.Locale;
 
 public final class DamageCommand extends Command {
 
-    // How far away another player still counts for the report.
     private static final double TARGET_RANGE = 16;
 
     public DamageCommand() {

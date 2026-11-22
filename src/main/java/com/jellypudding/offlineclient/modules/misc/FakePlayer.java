@@ -25,11 +25,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-// Client side copies of the player. The server never knows they exist. Switching the module on
-// spawns the copies its settings ask for and the fakeplayer command adds named ones one at a time.
 public final class FakePlayer extends Module {
 
-    // How far apart several copies stand.
     private static final double RING = 1.5;
 
     private final TextSetting name = new TextSetting("Name",
@@ -81,8 +78,7 @@ public final class FakePlayer extends Module {
         bodies.clear();
     }
 
-    // Stands one more body where the player is. A blank name copies the player. Null when the
-    // module could not be switched on for it.
+    // A blank name copies the player. Null when the module could not be switched on for it.
     public Body add(String name) {
         if (!isEnabled()) {
             adding = true;
@@ -92,8 +88,7 @@ public final class FakePlayer extends Module {
         return isEnabled() ? spawn(name, mc.player.position()) : null;
     }
 
-    // Takes away every body of that name whatever its case and hands back how many went. The
-    // module switches off with the last one.
+    // The module switches off with the last body.
     public int remove(String name) {
         List<Body> named = bodies.stream()
             .filter(body -> body.getGameProfile().name().equalsIgnoreCase(name)).toList();
@@ -105,7 +100,6 @@ public final class FakePlayer extends Module {
         return named.size();
     }
 
-    // The bodies standing in the world in the order they were added.
     public List<Body> bodies() {
         return List.copyOf(bodies);
     }
@@ -149,7 +143,6 @@ public final class FakePlayer extends Module {
         // A ghost is only a picture. Nothing hits it and it pushes nobody.
         private final boolean ghost;
 
-        // A copy under the player's own name and skin.
         public Body(ClientLevel level, LocalPlayer source, float startHealth, boolean copyGear,
                     boolean ghost) {
             this(level, source, "", startHealth, copyGear, ghost);
@@ -204,7 +197,7 @@ public final class FakePlayer extends Module {
             return ghost;
         }
 
-        // Read by EntityRendererMixin. A ghost vanishes whilst the camera is inside or beside it.
+        // Read by EntityRendererMixin.
         public boolean hidesFrom(double cameraX, double cameraY, double cameraZ) {
             return ghost && getBoundingBox().inflate(CAMERA_CLEARANCE).contains(cameraX, cameraY, cameraZ);
         }

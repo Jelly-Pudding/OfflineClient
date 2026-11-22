@@ -37,7 +37,6 @@ public final class SpawnProofer extends AreaPlacer {
         searchTags("torch", "spawn proof", "light");
     }
 
-    // Dark spots in reach. Darkest first when a torch is going down.
     @Override
     protected void collect() {
         int maxLight = light.getInt();

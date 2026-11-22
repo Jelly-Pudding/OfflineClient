@@ -14,7 +14,6 @@ public final class ColorSetting extends Setting<Float> {
 
     private static final float DEFAULT_SATURATION = 0.75f;
 
-    // A shade written as red green and blue starts with this and has two hex digits for each.
     public static final String HEX_MARK = "#";
     private static final int HEX_DIGITS = 6;
     private static final int HEX = 16;
@@ -32,7 +31,6 @@ public final class ColorSetting extends Setting<Float> {
         this(name, description, defaultHue, DEFAULT_SATURATION, FULL, defaultRainbow);
     }
 
-    // A default of any shade. Zero saturation gives white and grey.
     public ColorSetting(String name, String description, float defaultHue, float defaultSaturation,
                         float defaultBrightness, boolean defaultRainbow) {
         super(name, description, defaultHue);
@@ -44,7 +42,6 @@ public final class ColorSetting extends Setting<Float> {
         this.brightness = defaultBrightness;
     }
 
-    // Current ARGB colour.
     public int getColor() {
         if (rainbow) {
             return ColorUtil.rainbow(0);
@@ -75,7 +72,6 @@ public final class ColorSetting extends Setting<Float> {
         }
     }
 
-    // Zero is grey. One is the pure hue.
     public float getSaturation() {
         return saturation;
     }
@@ -86,7 +82,6 @@ public final class ColorSetting extends Setting<Float> {
         }
     }
 
-    // Zero is black. One is as bright as the hue goes.
     public float getBrightness() {
         return brightness;
     }
@@ -97,13 +92,11 @@ public final class ColorSetting extends Setting<Float> {
         }
     }
 
-    // The shade it shows written as the mark and six hex digits such as #33CCFF.
     public String hex() {
         return String.format(Locale.ROOT, HEX_MARK + "%06X", getColor() & RGB);
     }
 
-    // Takes a shade written as six hex digits with or without the mark in front and ends the
-    // rainbow. False for any other text.
+    // Ends the rainbow. False for text that is no six hex digits.
     public boolean setHex(String text) {
         String digits = text.startsWith(HEX_MARK) ? text.substring(HEX_MARK.length()) : text;
         if (digits.length() != HEX_DIGITS || !digits.chars().allMatch(digit -> Character.digit(digit, HEX) >= 0)) {

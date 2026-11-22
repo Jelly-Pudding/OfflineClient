@@ -6,8 +6,7 @@ import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.LiveText;
 import com.jellypudding.offlineclient.util.SentLine;
 
-// Sends text the client would otherwise read as one of our own commands. Words in braces
-// turn into live values on the way out.
+// Sends text the client would otherwise read as one of its own commands.
 public final class SayCommand extends Command {
 
     public SayCommand() {

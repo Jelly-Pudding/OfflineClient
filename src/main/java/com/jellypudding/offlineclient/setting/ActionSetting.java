@@ -38,7 +38,7 @@ public final class ActionSetting extends Setting<Void> {
         return this;
     }
 
-    // A click on the row or a command naming it. False when the press only armed it.
+    // False when the press only armed the row.
     public boolean press() {
         if (confirm && !armed.press(this)) {
             result = null;
@@ -59,12 +59,10 @@ public final class ActionSetting extends Setting<Void> {
         return Character.toLowerCase(name.charAt(0)) + name.substring(1);
     }
 
-    // What the last press said whilst it is still worth showing. Null otherwise.
     public String result() {
         return System.currentTimeMillis() < resultUntil ? result : null;
     }
 
-    // One whilst the result is fresh and down to nought as it goes.
     public float resultStrength() {
         return Flash.strength(resultUntil);
     }

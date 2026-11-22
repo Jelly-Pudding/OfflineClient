@@ -2,21 +2,16 @@ package com.jellypudding.offlineclient.util;
 
 import java.io.Serial;
 
-// Works out a sum written as text such as 5 + 3 x 2 or one with an unknown such as
-// 2x + 3 = 11. Plus and minus and times and divided by and powers and brackets are read. The
-// unknown is an x or a question mark or an underscore and may only stand in a way that keeps
+// The unknown is an x or a question mark or an underscore and may only stand in a way that keeps
 // the sum a straight line.
 public final class ChatSum {
 
-    // Marks the unknown wherever it stands in the text.
     private static final String UNKNOWN = "xX?_";
     private static final String TIMES = "*×·∙";
     private static final String MINUS = "-−–";
 
-    // An answer further from nought than this is no chat game.
     private static final double LARGEST = 1e12;
 
-    // Decimals kept in an answer that is no whole number.
     private static final int DECIMALS = 2;
 
     // Thrown out of a sum that cannot be read. Nothing ever prints it.
@@ -76,8 +71,7 @@ public final class ChatSum {
         this.text = text;
     }
 
-    // True for a letter or sign a sum can hold at that place in a line. An x only counts where
-    // no other letter touches it.
+    // An x only counts where no other letter touches it.
     public static boolean isSumChar(String line, int at) {
         char c = line.charAt(at);
         if (c == 'x' || c == 'X') {
@@ -88,7 +82,7 @@ public final class ChatSum {
             || MINUS.indexOf(c) != -1;
     }
 
-    // The answer to the sum as it would be typed. Null for text that is no sum or has no one answer.
+    // Null for text that is no sum or has no one answer.
     public static String solve(String sum) {
         try {
             return new ChatSum(sum.strip()).answer();
@@ -162,8 +156,7 @@ public final class ChatSum {
         return take("^") ? base.power(signed()) : base;
     }
 
-    // A number or the unknown or a sum in brackets. A number right before the unknown or a
-    // bracket multiplies it.
+    // A number right before the unknown or a bracket multiplies it.
     private Line operand() {
         skipSpaces();
         if (take("(")) {
@@ -204,7 +197,6 @@ public final class ChatSum {
         return true;
     }
 
-    // True when the unknown stands next and is not an x that means times.
     private boolean isUnknownNext() {
         if (at >= text.length() || UNKNOWN.indexOf(text.charAt(at)) == -1) {
             return false;
@@ -236,7 +228,6 @@ public final class ChatSum {
         }
     }
 
-    // Steps past the next letter when it is one of the given ones.
     private boolean take(String anyOf) {
         if (at < text.length() && anyOf.indexOf(text.charAt(at)) != -1) {
             at++;

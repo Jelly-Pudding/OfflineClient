@@ -9,13 +9,12 @@ import java.util.regex.MatchResult;
 // broadcast they paid for stands behind their name or a tag and never at the start.
 public final class LinePattern {
 
-    // Where the name of a player stands in a wording.
     public static final String PLAYER = "{player}";
 
     // The longest name a server lets a player join with.
     private static final int LONGEST_NAME = 16;
 
-    // What a line gave a pattern. The name is null for a pattern that names nobody.
+    // The name is null for a pattern that names nobody.
     public record Hit(String name) {
 
         private static final Hit NAMELESS = new Hit(null);
@@ -52,12 +51,11 @@ public final class LinePattern {
         return new LinePattern(typed.trim(), regex, true, problems);
     }
 
-    // True for a pattern that takes the name of a player out of the line.
     public boolean namesPlayer() {
         return named;
     }
 
-    // Null when the line does not match. Only the start of a very long line is read.
+    // Only the start of a very long line is read.
     public Hit match(String line) {
         String text = BoundedRegex.cut(line);
         if (!fromStart) {

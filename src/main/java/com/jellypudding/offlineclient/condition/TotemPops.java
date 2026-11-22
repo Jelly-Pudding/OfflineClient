@@ -3,14 +3,11 @@ package com.jellypudding.offlineclient.condition;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Tally;
 
-// A totem of yours popping once enough of them have popped in one life. It is met on the pop
-// itself and not for the rest of that life. The owner hears of each pop as it happens and
-// passes it on through its list.
+// Met on the pop itself and not for the rest of that life.
 final class TotemPops extends Condition {
 
     private final NumberSetting line;
 
-    // How many had popped at a pop nobody has asked about yet. Nought with none waiting.
     private int waiting;
     private int popped;
 
@@ -20,7 +17,6 @@ final class TotemPops extends Condition {
             "A totem of yours pops and at least this many have popped in one life.", 1, 1, 10, 1));
     }
 
-    // A pop of yours and how many that makes since your last death.
     void pop(int count) {
         if (count >= line.getInt()) {
             waiting = count;

@@ -34,18 +34,15 @@ import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 
-// Every condition there is. Each is built here once for every list that offers it and the
-// order here is the order their rows are listed in.
+// The order here is the order their rows are listed in.
 final class Catalogue {
 
-    // A maker of one condition. A danger is a reason to get away. The rest are only of use to
-    // a rule such as a kill or standing in a hole.
+    // A danger is a reason to get away. The rest are only of use to a rule.
     private record Entry(Function<Frame, Condition> maker, boolean danger) {
     }
 
     private static final Minecraft mc = Condition.mc;
 
-    // How close a player has to be for a one hit kill to count.
     private static final double INSTANT_KILL_RANGE = 8;
 
     private static final double MILLIS_PER_SECOND = TimeUnit.SECONDS.toMillis(1);
@@ -268,8 +265,7 @@ final class Catalogue {
             () -> joins.joined() ? "You joined the server." : null, joins::accept);
     }
 
-    // A count that only goes up read for whether it rose since the last look. A count that fell
-    // has started again somewhere else and that is no news.
+    // A count that fell has started again somewhere else and that is no news.
     private static final class Rise {
 
         private final IntSupplier count;
@@ -290,8 +286,7 @@ final class Catalogue {
         }
     }
 
-    // Whether you lay dead on the last look and what has changed since. How a join finds you
-    // is no news. Joining whilst dead is no death and joining alive is no return to life.
+    // Joining whilst dead is no death and joining alive is no return to life.
     private static final class Life {
 
         static final int DIED = -1;

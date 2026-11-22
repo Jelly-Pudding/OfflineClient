@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.ServerInfo;
 import java.util.ArrayList;
 import java.util.List;
 
-// The muted players are a list in BetterChat. A name already on it comes off again.
 public final class MuteCommand extends Command {
 
     public MuteCommand() {

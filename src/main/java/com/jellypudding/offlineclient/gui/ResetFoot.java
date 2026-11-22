@@ -13,29 +13,23 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 
-// The row at the foot of a settings block. It puts every changed setting back after a second
-// press and afterwards offers to undo that in the same place. The two small buttons at its end
-// copy the block to the clipboard as text and read such text back.
 final class ResetFoot {
 
     enum State { ARMED, OFFER, SAID, READY, ABSENT }
 
     private enum Tool { COPY, PASTE }
 
-    // How long an offer to undo stays up. The foot of the HUD editor keeps to the same time.
+    // The foot of the HUD editor keeps to the same time.
     static final long OFFER_MS = 10_000;
     // The offer never runs out under the pointer and lasts this much longer once it leaves.
     private static final long HOLD_MS = 1000;
-    // Between the label and the count.
     private static final int COUNT_GAP = 6;
 
     private static final String RESET = "reset";
     private static final String PASTE = "paste";
 
-    // The copy and paste buttons are squares this big with this much between them.
     private static final int TOOL = 9;
     private static final int TOOL_GAP = 3;
-    // What the two buttons take off the end of the row with the gap before them.
     private static final int TOOLS_ROOM = 2 * TOOL + TOOL_GAP + 4;
     // Two sheets one over the other and a clipboard as left top right bottom spans.
     private static final int[][] COPY_ICON = {{2, 0, 9, 1}, {8, 1, 9, 7}, {2, 1, 3, 2}, {7, 6, 8, 7},
@@ -43,7 +37,7 @@ final class ResetFoot {
     private static final int[][] PASTE_ICON = {{3, 0, 6, 2}, {1, 1, 8, 2}, {1, 8, 8, 9}, {1, 2, 2, 8},
         {7, 2, 8, 8}, {3, 4, 6, 5}, {3, 6, 6, 7}};
 
-    // One block at a time. The slots are static and outlive a screen that is built again.
+    // The slots are static and outlive a screen that is built again.
     private static final class Slot {
 
         private Object owner;
@@ -66,20 +60,17 @@ final class ResetFoot {
     private static final Slot ARMED = new Slot();
     private static final Slot OFFER = new Slot();
     private static final Slot SAID = new Slot();
-    // The change the offer would take back and whether it was a reset or a paste.
     private static Defaults.Change offered;
     private static String offeredWord;
-    // How many settings of the block differed from their defaults once the change was made.
     private static int offeredChanged;
-    // What the row says for a moment and whether that is good news.
     private static String said;
     private static boolean saidDone;
 
     private ResetFoot() {
     }
 
-    // The first state that applies. An armed block with nothing left to reset stands down and
-    // an offer ends for good once the block changes again.
+    // An armed block with nothing left to reset stands down and an offer ends for good once the
+    // block changes again.
     static State state(Object owner, int changed) {
         if (ARMED.holds(owner)) {
             if (resettable(changed)) {
@@ -99,13 +90,10 @@ final class ResetFoot {
         return resettable(changed) ? State.READY : State.ABSENT;
     }
 
-    // True for a block with changes whilst the reset shows. The ClickGUI module can hide it.
     private static boolean resettable(int changed) {
         return ResetMarks.shown() && changed > 0;
     }
 
-    // True whilst a press on the words of the row does something. Whilst the row says what a press
-    // came to a block with changes still arms its reset.
     private static boolean pressable(State state, int changed) {
         return switch (state) {
             case ARMED, OFFER, READY -> true;
@@ -114,7 +102,6 @@ final class ResetFoot {
         };
     }
 
-    // True whilst the block ends with this row. A block with anything to copy always does.
     static boolean shows(SettingBlock block) {
         return shows(block, state(block.owner(), block.changed()));
     }
@@ -123,13 +110,10 @@ final class ResetFoot {
         return state != State.ABSENT || SettingsCopy.holds(block);
     }
 
-    // Leaves whatever waits for a second press. A screen closing does this.
     static void disarm() {
         ARMED.clear();
     }
 
-    // The undo keys take back the newest reset or paste and chat says what came back. True for
-    // those keys.
     static boolean undoKey(KeyEvent event) {
         if (!InputUtil.isUndo(event)) {
             return false;
@@ -222,7 +206,6 @@ final class ResetFoot {
         }
     }
 
-    // Where the words of the row end. The two buttons sit past it.
     private static int textEnd(int right, boolean tools) {
         return right - GuiTheme.PAD - (tools ? TOOLS_ROOM : 0);
     }
@@ -231,7 +214,6 @@ final class ResetFoot {
         return right - GuiTheme.PAD - (Tool.values().length - tool.ordinal()) * (TOOL + TOOL_GAP) + TOOL_GAP;
     }
 
-    // The button the pointer is on along the row. Null between and before them.
     private static Tool toolAt(double mx, int right) {
         for (Tool tool : Tool.values()) {
             int x = toolX(tool, right);
@@ -265,7 +247,6 @@ final class ResetFoot {
             + " takes it back.";
     }
 
-    // The count with its word whilst it fits beside the label and the bare number after that.
     private static String count(Font font, String label, int changed, int room) {
         int free = room - font.width(label) - COUNT_GAP;
         String full = changed + " changed";
@@ -286,7 +267,6 @@ final class ResetFoot {
         };
     }
 
-    // What a reset would do and what it leaves alone. A tip cut short loses the general part first.
     private static String readyTip(ResetMarks.Strip strip, int changed) {
         int hidden = strip.hidden();
         String tip = changed == 1 ? "Puts the changed setting back to its default."
@@ -298,8 +278,6 @@ final class ResetFoot {
         return tip + " " + strip.block().keeps();
     }
 
-    // A press on one of the two buttons copies or pastes. Anywhere else the first press arms the
-    // row and the second resets and a press on the offer takes the change back.
     static void press(SettingBlock block, int button, double mx, int right) {
         Object owner = block.owner();
         if (ResetMarks.tooSoon(owner)) {
@@ -341,8 +319,6 @@ final class ResetFoot {
         }
     }
 
-    // What the paste changed is one change. The row offers to take it back and chat says what
-    // came of it either way.
     private static void use(Tool tool, SettingBlock block) {
         Object owner = block.owner();
         String name = block.name();

@@ -37,17 +37,14 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-// A Fabric client made for minecraftoffline.net
 public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.17.0";
+    public static final String VERSION = "0.18.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
 
-    // Read again in init. Anything that loads this class before the game has finished
-    // building itself captures a null here and would keep it for the whole run.
+    // Read again in init. A class that loads before the game is built would keep a null.
     public static Minecraft MC = Minecraft.getInstance();
 
     public static final Logger LOG = LoggerFactory.getLogger(NAME);

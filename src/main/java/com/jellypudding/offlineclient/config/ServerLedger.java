@@ -22,48 +22,36 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-// What the client learnt on the server you play on kept by key in a file beside the finds.
-// The file of a server is read the first time anything asks after you arrive. Two games on
-// one computer add to the same file and neither loses what the other learnt or forgot.
-// Game thread only.
+// The file of a server is read the first time anything asks after you arrive. Two games on one
+// computer add to the same file and neither loses what the other learnt or forgot. Game thread
+// only.
 public abstract class ServerLedger<K, V> {
 
-    // A change waits this long for others before the file is written. A failed write waits
-    // as long before it is tried again.
     private static final long WRITE_GAP_MS = 5000;
-    // Changes that never pause are still written this often.
     private static final long LONGEST_WAIT_MS = 60_000;
 
     private final String fileName;
     private final int capacity;
-    // What the entries are in words for the log.
     private final String what;
-    // Only a new world can bring a new server.
     private final WorldWatch world = new WorldWatch();
-    // False until anything asks. Nothing can change before then and nothing waits to be written.
     private boolean awake;
 
     // The least recently used come first.
     private Map<K, V> entries;
-    // What this game changed since it last wrote. A key with no entry was forgotten.
+    // A key with no entry was forgotten.
     private Set<K> touched = new HashSet<>();
-    // The server the entries belong to. Null before the first world.
     private String server;
     // The registries of the connection the entries were read under. Every read and write of the
     // file is handed ops made from them before it leaves for the file thread.
     private RegistryAccess registries;
-    // Moves on with every new server or connection and when everything is forgotten. A reply
-    // that comes back for an older one is dropped.
+    // A reply that comes back for an older server or connection is dropped.
     private int generation;
     private boolean busy;
-    // False until the file of the current server has been read.
     private boolean loaded;
     private long changedAt;
-    // When the oldest change still waiting was made.
     private long waitingSince;
     private long lastWrite;
 
-    // The capacity only bounds the memory and the file.
     protected ServerLedger(String fileName, int capacity, String what) {
         this.fileName = fileName;
         this.capacity = capacity;
@@ -71,13 +59,13 @@ public abstract class ServerLedger<K, V> {
         entries = bounded();
     }
 
-    // Reads the entries a file holds into the map. Runs on the file thread.
+    // Runs on the file thread.
     protected abstract void parse(JsonElement root, Map<K, V> into, RegistryOps<JsonElement> ops);
 
     // Runs on the file thread. The game thread leaves these entries alone.
     protected abstract JsonElement encode(Map<K, V> entries, RegistryOps<JsonElement> ops);
 
-    // What the file thread is handed for an entry. One that changes in place hands a copy.
+    // One that changes in place hands a copy.
     protected V frozen(V value) {
         return value;
     }
@@ -88,14 +76,13 @@ public abstract class ServerLedger<K, V> {
         return server != null && loaded;
     }
 
-    // Null for a key never learnt and whilst the file is still being read.
+    // Null whilst the file is still being read.
     public final V get(K key) {
         follow();
         return entries.get(key);
     }
 
-    // Every entry of the server you play on. Reading one with get whilst going through
-    // these moves it and breaks the walk.
+    // Reading one with get whilst going through these moves it and breaks the walk.
     public final Collection<V> values() {
         follow();
         return Collections.unmodifiableCollection(entries.values());
@@ -111,7 +98,6 @@ public abstract class ServerLedger<K, V> {
         touch(key);
     }
 
-    // Writes an entry the caller changed in place.
     public final void changed(K key) {
         follow();
         if (loaded && entries.containsKey(key)) {
@@ -119,7 +105,6 @@ public abstract class ServerLedger<K, V> {
         }
     }
 
-    // Takes the entry out of the file as well. False when there was none.
     public final boolean forget(K key) {
         follow();
         if (!loaded || entries.remove(key) == null) {
@@ -129,8 +114,6 @@ public abstract class ServerLedger<K, V> {
         return true;
     }
 
-    // Forgets every entry of the server you play on and deletes its file. Whatever this game
-    // was still reading or writing for it comes to nothing.
     public final void forgetAll() {
         follow();
         if (server == null) {
@@ -146,7 +129,6 @@ public abstract class ServerLedger<K, V> {
         });
     }
 
-    // The server the entries belong to. Null before the first world.
     protected final String server() {
         follow();
         return server;
@@ -173,10 +155,8 @@ public abstract class ServerLedger<K, V> {
         return registries.createSerializationContext(JsonOps.INSTANCE);
     }
 
-    // The entries follow the server you play on. A new one writes what the last was waiting
-    // for and starts again from its own file. The answer to that write is dropped. Joining the
-    // same server again starts afresh too since what was read under the registries of one
-    // connection cannot be written under those of another.
+    // Joining the same server again starts afresh too since what was read under the registries of
+    // one connection cannot be written under those of another.
     private void follow() {
         if (!awake) {
             awake = true;
@@ -246,7 +226,6 @@ public abstract class ServerLedger<K, V> {
             }
             busy = false;
             if (merged == null) {
-                // Tried again after the usual pause.
                 sent.forEach(this::touch);
                 return;
             }
@@ -265,7 +244,6 @@ public abstract class ServerLedger<K, V> {
         }
     }
 
-    // The entries this game changed since it last wrote. A forgotten one maps to null.
     private Map<K, V> unsaved() {
         Map<K, V> mine = new HashMap<>();
         for (K key : touched) {
@@ -275,8 +253,7 @@ public abstract class ServerLedger<K, V> {
         return mine;
     }
 
-    // Takes in what the file holds. Whatever this game changed since it last wrote stays and
-    // what another game forgot goes.
+    // Whatever this game changed since it last wrote stays and what another game forgot goes.
     private void absorb(Map<K, V> theirs) {
         if (theirs == null) {
             return;
@@ -294,7 +271,7 @@ public abstract class ServerLedger<K, V> {
         entries = kept;
     }
 
-    // The file with this game's changes laid over it. Only call it whilst the shared lock is held.
+    // Only call it whilst the shared lock is held.
     private Map<K, V> merge(Path file, Map<K, V> mine, RegistryOps<JsonElement> ops) throws IOException {
         // A broken file is written over with what this game holds.
         Map<K, V> merged = Objects.requireNonNullElseGet(decode(file, ops), this::bounded);
@@ -311,7 +288,6 @@ public abstract class ServerLedger<K, V> {
         return merged;
     }
 
-    // Empty for a missing file and null for one that cannot be read.
     private Map<K, V> decode(Path file, RegistryOps<JsonElement> ops) {
         if (!Files.exists(file)) {
             return bounded();

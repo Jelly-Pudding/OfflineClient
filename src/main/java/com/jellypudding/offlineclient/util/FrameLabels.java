@@ -19,12 +19,10 @@ public final class FrameLabels {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // What the frames on each block show as read last.
     private final Map<BlockPos, List<ItemStack>> shown = new HashMap<>();
     private boolean wholeKinds;
 
-    // Reads every frame hung on a block the test accepts. With whole kinds a framed piece of gear
-    // stands for every item of its kind.
+    // With whole kinds a framed piece of gear stands for every item of its kind.
     public void read(Predicate<BlockPos> container, boolean wholeKinds) {
         shown.clear();
         this.wholeKinds = wholeKinds;

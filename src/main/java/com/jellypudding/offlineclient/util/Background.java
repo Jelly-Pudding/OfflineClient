@@ -4,7 +4,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-// Threads for work too slow for the game thread.
 public final class Background {
 
     private Background() {
@@ -15,7 +14,6 @@ public final class Background {
         return Executors.newSingleThreadExecutor(quiet(name));
     }
 
-    // That many quiet threads sharing the jobs.
     public static ExecutorService workers(String name, int threads) {
         return Executors.newFixedThreadPool(threads, quiet(name));
     }

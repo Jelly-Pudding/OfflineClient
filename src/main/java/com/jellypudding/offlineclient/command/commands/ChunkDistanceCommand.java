@@ -9,7 +9,6 @@ import net.minecraft.client.OptionInstance;
 import java.util.OptionalInt;
 import java.util.function.Supplier;
 
-// Sets a distance in chunks past the reach of its vanilla slider.
 public final class ChunkDistanceCommand extends Command {
 
     private final String label;

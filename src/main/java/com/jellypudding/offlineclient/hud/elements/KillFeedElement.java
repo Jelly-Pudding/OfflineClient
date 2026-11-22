@@ -20,11 +20,9 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-// The players you killed on this server this session with the newest first. The kills are
-// noted whether or not the piece is on.
+// The kills are noted whether or not the piece is on.
 public final class KillFeedElement extends RowsElement {
 
-    // Kills past this many are forgotten oldest first.
     private static final int MOST_KEPT = 100;
 
     private static final long SAMPLE_AGE = TimeUnit.SECONDS.toMillis(90);
@@ -39,7 +37,6 @@ public final class KillFeedElement extends RowsElement {
     private final ColorSetting color = new ColorSetting("Kill feed colour",
         "Colour of the names.", 0, 0.6f, 1f, false);
 
-    // Newest first.
     private final Deque<Kill> kills = new ArrayDeque<>();
     private final ServerWatch server = new ServerWatch();
 
@@ -71,7 +68,6 @@ public final class KillFeedElement extends RowsElement {
         return isActive() && OfflineClient.MC.player != null && !shown().isEmpty();
     }
 
-    // Two kills stand in whilst the editor is open and nobody has died by your hand.
     private List<Kill> shown() {
         forgetOtherServer();
         if (kills.isEmpty() && editing()) {

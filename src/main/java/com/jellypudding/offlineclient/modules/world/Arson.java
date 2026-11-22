@@ -31,24 +31,19 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Sets fire to the blocks round you or pours lava beside them. A spot that was lit is
-// tried again after a while if its block still stands.
 public final class Arson extends Module {
 
     public enum Method { FIRE, LAVA }
 
-    // A block to burn and the empty space beside it the fire or lava goes into. A fire
-    // carries its click and lava carries its pour.
+    // A fire carries its click and lava carries its pour.
     private record Target(BlockPos block, BlockPos cell, BlockHitResult click, LavaPours.Pour pour) {
     }
 
-    // Ticks before a space that was lit or poured into is tried again.
     private static final int RELIGHT_TICKS = 100;
 
-    // Blocks worked out each tick. The nearest are kept.
     private static final int MAX_TARGETS = 32;
 
-    // Lava pours worked out each tick. The flow test that keeps lava off you is costly.
+    // The flow test that keeps lava off you is costly.
     private static final int MAX_POUR_TESTS = 16;
 
     // Fire on top of a block is tried first and under it last.
@@ -92,7 +87,6 @@ public final class Arson extends Module {
     private final Cooldowns<BlockPos> tried = new Cooldowns<>();
     private final ChatWarning warning = new ChatWarning();
 
-    // Refilled every tick nearest first. The first few are set alight and all are drawn.
     private final List<Target> targets = new ArrayList<>();
 
     private int timer;
@@ -139,6 +133,9 @@ public final class Arson extends Module {
             return;
         }
         tried.tick();
+        if (Hands.slotsTaken()) {
+            return;
+        }
         // A scoop takes the tick. Lava poured before a switch to fire is still taken back.
         if (UseBudget.remaining() > 0 && pours.scoopDue(loan)) {
             return;
@@ -184,7 +181,6 @@ public final class Arson extends Module {
         }
     }
 
-    // What the method needs and the inventory lacks. Null when it is all there.
     private String missing() {
         if (method.is(Method.FIRE)) {
             return ignition.atHand() ? null : Ignition.NO_LIGHTER;
@@ -217,8 +213,7 @@ public final class Arson extends Module {
         return flammableOnly.isOn() ? state.ignitedByLava() : BlockUtil.isSolid(pos);
     }
 
-    // The fire goes into an empty space beside the block with a click on the block's own face.
-    // Beside a block that does not burn it only takes on top.
+    // Beside a block that does not burn fire only takes on top.
     private Target fireTarget(BlockPos block) {
         if (!BlockUtil.serverReaches(block)) {
             return null;
@@ -250,7 +245,6 @@ public final class Arson extends Module {
         return null;
     }
 
-    // A space not tried lately that sits clear of you.
     private boolean open(BlockPos cell) {
         return !tried.contains(cell)
             && mc.player.position().distanceTo(Vec3.atBottomCenterOf(cell)) >= keepAway.getValue();

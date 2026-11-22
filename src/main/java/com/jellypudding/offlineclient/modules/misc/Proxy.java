@@ -12,13 +12,11 @@ import com.jellypudding.offlineclient.util.ProxyTunnel;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-// Every join and server list ping goes through the proxy picked in the Proxies tab from the next
-// one on. Server packs are downloaded through it too. The address of the server is looked up here
+// Server packs are downloaded through the proxy too. The address of the server is looked up here
 // before it is handed to the proxy.
 public final class Proxy extends Module {
 
-    // A skipped server pack is said in chat once each time the module is switched on. The skip
-    // happens on a download thread and the line waits until you are in a world.
+    // The skip happens on a download thread and the line waits until you are in a world.
     private enum PackNotice { NONE, DUE, SAID }
 
     private volatile PackNotice packNotice = PackNotice.NONE;
@@ -57,14 +55,13 @@ public final class Proxy extends Module {
         }
     }
 
-    // Joins go through this proxy from the next one on.
     public void joinThrough(ProxyStore.Entry entry) {
         ProxyStore.get().pick(entry);
         setEnabled(true);
     }
 
-    // A fresh tunnel for one connection. Built on the network thread as each connection opens. A
-    // tunnel with no host turns the connection down.
+    // Built on the network thread as each connection opens. A tunnel with no host turns the
+    // connection down.
     public ProxyTunnel tunnel() {
         ProxyStore store = ProxyStore.get();
         ProxyStore.Entry picked = store.picked();
@@ -72,9 +69,8 @@ public final class Proxy extends Module {
             : new ProxyTunnel(picked.kind(), picked.host(), picked.port(), store.login(picked));
     }
 
-    // How a server pack download goes out. It runs on a download thread. Java takes a proxy login
-    // only for the whole game and a launcher proxy can hold that already. A download the proxy cannot
-    // carry never goes out straight.
+    // Runs on a download thread. Java takes a proxy login only for the whole game and a launcher
+    // proxy can hold that already. A download the proxy cannot carry never goes out straight.
     public java.net.Proxy downloadRoute() throws IOException {
         ProxyStore store = ProxyStore.get();
         ProxyStore.Entry picked = store.picked();

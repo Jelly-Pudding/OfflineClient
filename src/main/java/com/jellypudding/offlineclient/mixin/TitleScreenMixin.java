@@ -44,7 +44,6 @@ public abstract class TitleScreenMixin extends Screen {
     @Shadow
     private long fadeInStart;
 
-    // The client's buttons sit in a row in the top right corner above the logo.
     @Unique
     private static final int RECOVERY_WIDTH = 58;
 
@@ -95,7 +94,6 @@ public abstract class TitleScreenMixin extends Screen {
             removeWidget(copyright);
         }
 
-        // A way back to defaults when a saved setting breaks the game.
         addRenderableWidget(Button.builder(
                 Component.literal("Recovery"),
                 button -> minecraft.gui.setScreen(
@@ -108,8 +106,6 @@ public abstract class TitleScreenMixin extends Screen {
         }
     }
 
-    // A button left of Recovery that opens one list of the GUI before there is a world to open
-    // the GUI in. Place one is the nearest.
     @Unique
     private void offlineclient$listButton(String label, int place, TabView.Source source) {
         int right = width - RECOVERY_WIDTH - CORNER_GAP - (place - 1) * (LIST_WIDTH + CORNER_GAP);

@@ -6,11 +6,10 @@ import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
 import org.joml.Quaternionfc;
 import org.joml.Vector3fc;
 
-// A body the client draws on the screen in a picture of its own. The game keeps one picture for
-// each class of state and fills them all before the frame. Two bodies of one class would share it.
+// The game keeps one picture for each class of state and fills them all before the frame. Two
+// bodies of one class would share it.
 public sealed interface BodyPicture extends PictureInPictureRenderState {
 
-    // The body with its turn and lift inside a box given in screen pixels.
     record Scene(EntityRenderState renderState, Vector3fc translation, Quaternionfc rotation,
                  int x0, int y0, int x1, int y1, float scale) {
     }

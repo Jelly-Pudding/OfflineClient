@@ -12,9 +12,9 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.List;
 
-// What every walk the client makes has in common. The path package reads it. A walk also
-// follows the movement modules without being told. Jesus lets it cross water and lava and
-// NoFall lets it take any drop and Step lets it up a block without a jump.
+// The path package reads these settings. A walk also follows the movement modules without being
+// told. Jesus lets it cross water and lava and NoFall lets it take any drop and Step lets it up a
+// block without a jump.
 public final class PathfinderModule extends Module {
 
     private static final float ROUTE_HUE = 190;
@@ -50,8 +50,7 @@ public final class PathfinderModule extends Module {
         return false;
     }
 
-    // True whilst a walk ought to stand still for a fight. A walk that takes the player to
-    // the fight is part of it.
+    // A walk that takes the player to the fight is part of it.
     public static boolean pausesWalk() {
         PathfinderModule row = Modules.get(PathfinderModule.class);
         return row != null && row.pauseInFight.isOn() && Modules.fighting() && !Modules.walksToFight();
@@ -77,7 +76,6 @@ public final class PathfinderModule extends Module {
         return row != null && row.pillar.isOn();
     }
 
-    // True for a block a walk may lay.
     public static boolean lays(Block block) {
         PathfinderModule row = Modules.get(PathfinderModule.class);
         return row != null && row.blocks.contains(block);

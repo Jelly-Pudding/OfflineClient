@@ -25,9 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-// The settings of one block as text on the clipboard and back again. The text is the cut of the
-// config that holds the chosen values under the name of the module or HUD piece. Keys and secrets
-// stay out of it both ways. Text read back is treated as hostile.
+// Keys and secrets stay out of it both ways. Text read back is treated as hostile.
 final class SettingsCopy {
 
     private static final String SETTINGS = "settings";
@@ -42,16 +40,15 @@ final class SettingsCopy {
     private SettingsCopy() {
     }
 
-    // What a paste came to. The change is null when no setting moved and the line says why.
+    // The change is null when no setting moved and the line says why.
     record Pasted(Defaults.Change change, String line) {
     }
 
-    // What a text held. The name is the module or HUD piece the copy says it was made of.
     record Copy(String from, JsonObject settings) {
     }
 
-    // True for a setting a copy holds. It carries the values the player chose in the rows. Keys
-    // and secrets stay behind with whatever the player made rather than chose such as a marker.
+    // Keys and secrets stay behind with whatever the player made rather than chose such as a
+    // marker.
     private static boolean held(Setting<?> setting) {
         return setting.saves() && !setting.isInternal() && setting.hasDefault()
             && !(setting instanceof KeybindSetting) && !(setting instanceof TextSetting text && text.isSecret());
@@ -67,21 +64,19 @@ final class SettingsCopy {
         return held;
     }
 
-    // True for a block with anything to copy or paste. A copy is named after a module or a HUD
-    // piece and the rows of anything else could never take one back.
+    // A copy is named after a module or a HUD piece and the rows of anything else could never take
+    // one back.
     static boolean holds(SettingBlock block) {
         return (block.owner() instanceof Module || block.owner() instanceof HudElement)
             && block.settings().stream().anyMatch(SettingsCopy::held);
     }
 
-    // Puts the block on the clipboard and hands back how many settings went.
     static int copy(SettingBlock block) {
         List<Setting<?>> held = held(block);
         OfflineClient.MC.keyboardHandler.setClipboard(text(block.name(), held));
         return held.size();
     }
 
-    // The settings the way the config files them under the name of what they belong to.
     static String text(String name, List<Setting<?>> held) {
         JsonObject settings = new JsonObject();
         for (Setting<?> setting : held) {
@@ -94,8 +89,7 @@ final class SettingsCopy {
         return root.toString();
     }
 
-    // Reads the clipboard into the block as one change. A value no setting of the block takes
-    // is left out and counted.
+    // A value no setting of the block takes is left out and counted.
     static Pasted paste(SettingBlock block) {
         Copy copy = parse(OfflineClient.MC.keyboardHandler.getClipboard());
         String from = copy == null ? null : spelled(copy.from());
@@ -121,7 +115,6 @@ final class SettingsCopy {
             + misfits);
     }
 
-    // The block a text holds under the name it gives. Null for text that is no copy.
     static Copy parse(String text) {
         if (text == null || text.isBlank() || text.length() > MOST_CHARS) {
             return null;
@@ -139,8 +132,8 @@ final class SettingsCopy {
         }
     }
 
-    // The settings of the block a paste reaches. A HUD piece pasted from another piece stays where
-    // it is. The place of the other piece is taken out of the copy and is not counted.
+    // A HUD piece pasted from another piece stays where it is. The place of the other piece is
+    // taken out of the copy and is not counted.
     static List<Setting<?>> scope(SettingBlock block, String from, JsonObject settings) {
         List<Setting<?>> scope = held(block);
         if (!from.equals(block.name()) && block.owner() instanceof HudElement piece) {
@@ -152,7 +145,6 @@ final class SettingsCopy {
         return scope;
     }
 
-    // Hands each setting the value saved under its name and counts the ones that took theirs.
     // A value that is not sound never reaches a setting.
     static int apply(JsonObject settings, List<Setting<?>> scope, Function<Setting<?>, String> names) {
         int taken = 0;
@@ -165,7 +157,6 @@ final class SettingsCopy {
         return taken;
     }
 
-    // The name the way the client spells it. Null when it names no HUD piece and no module.
     private static String spelled(String name) {
         if (piece(name) != null) {
             return name;
@@ -174,7 +165,6 @@ final class SettingsCopy {
         return module == null ? null : module.getName();
     }
 
-    // Null when the overlay has no piece of that name.
     private static HudElement piece(String name) {
         HudModule hud = Modules.get(HudModule.class);
         if (hud != null) {
@@ -187,8 +177,6 @@ final class SettingsCopy {
         return null;
     }
 
-    // A copy fits the block it was made of and a HUD piece of the same kind such as another
-    // custom text.
     private static boolean fits(SettingBlock block, String from) {
         if (from.equals(block.name())) {
             return true;
@@ -197,16 +185,14 @@ final class SettingsCopy {
         return source != null && source.getClass() == block.owner().getClass();
     }
 
-    // What the copy calls a setting. A HUD piece names its settings after itself and the copy
-    // of another piece has that piece's name in the same place.
+    // A HUD piece names its settings after itself and the copy of another piece has that piece's
+    // name in the same place.
     private static String nameIn(String from, SettingBlock block, Setting<?> setting) {
         String name = setting.getName();
         return name.startsWith(block.name()) ? from + name.substring(block.name().length()) : name;
     }
 
-    // A value the setting chokes on leaves it as it was. The same goes for one it read
-    // something unsound out of such as a number written as the text NaN. A value the setting
-    // passed over such as text for a switch is not taken.
+    // A value the setting chokes on or reads something unsound out of leaves it as it was.
     private static boolean take(Setting<?> setting, JsonElement value) {
         JsonElement before = setting.toJson();
         Set<?> offered = setting instanceof PickList<?> list ? new HashSet<>(list.options()) : Set.of();
@@ -220,20 +206,19 @@ final class SettingsCopy {
                 return !after.equals(before) || sameValue(after, value);
             }
         } catch (RuntimeException e) {
-            // Put back below like a value that read unsound.
         }
         setting.fromJson(before);
         return false;
     }
 
-    // True when a setting already holds the value a copy gives it. The setting's own value is read
-    // back the way the copy was. A float and the text it was written as then compare alike.
+    // The setting's own value is read back the way the copy was. A float and the text it was
+    // written as then compare alike.
     private static boolean sameValue(JsonElement own, JsonElement copied) {
         return JsonParser.parseString(own.toString()).equals(copied);
     }
 
     // A pasted list keeps what its picker offered before the paste. Nothing else could have been
-    // picked by hand. An entry this game does not know goes as well and every count stays.
+    // picked by hand.
     private static <T> void keepOffered(PickList<T> list, Set<?> offered) {
         List<T> kept = new ArrayList<>(list.chosen());
         kept.removeIf(entry -> !offered.contains(entry));
@@ -251,8 +236,7 @@ final class SettingsCopy {
         }
     }
 
-    // True for a value that holds only what a player could have set by hand. Every number is
-    // finite and every text is one a text box would have taken.
+    // Every number is finite and every text is one a text box would have taken.
     private static boolean sound(JsonElement value) {
         if (value.isJsonArray()) {
             for (JsonElement element : value.getAsJsonArray()) {

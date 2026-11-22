@@ -9,7 +9,6 @@ import java.util.List;
 // earlier lines once a new one cannot point where they do.
 public final class BearingTrail {
 
-    // Enough for a long walk sideways to something far off.
     private static final int MAX_BEARINGS = 64;
 
     // A reading of something that stays put taken this close to the last one replaces it. A
@@ -45,9 +44,8 @@ public final class BearingTrail {
         return BearingFix.cross(joined, minSpread, tolerance);
     }
 
-    // Adds the bearing to a copy of this trail's lines or to the lines themselves. A reading
-    // that cannot point at a well founded fix means the thing moved on. Any new reading of a
-    // moving thing whilst you stand still means the same.
+    // A reading that cannot point at a well founded fix means the thing moved on. Any new reading
+    // of a moving thing whilst you stand still means the same.
     private void join(List<Bearing> lines, Bearing bearing, double minSpread) {
         BearingFix known = fix(minSpread);
         if ((moves && !lines.isEmpty() && lines.getLast().originDistance(bearing) < STILL)
@@ -66,7 +64,6 @@ public final class BearingTrail {
         }
     }
 
-    // True when the bearing could point where every line of this trail does.
     public boolean fits(Bearing bearing, double minSpread) {
         BearingFix known = fix(minSpread);
         if (known != null) {
@@ -77,7 +74,7 @@ public final class BearingTrail {
         return BearingFix.agree(joined, minSpread, tolerance);
     }
 
-    // True when every line of this trail could point at the spot. An empty trail points anywhere.
+    // An empty trail points anywhere.
     public boolean pointsAt(double x, double z) {
         BearingFix spot = new BearingFix(x, z, 0);
         for (Bearing bearing : bearings) {
@@ -107,7 +104,6 @@ public final class BearingTrail {
         return bearings.isEmpty();
     }
 
-    // Null whilst the trail is empty.
     public Bearing newest() {
         return bearings.isEmpty() ? null : bearings.getLast();
     }

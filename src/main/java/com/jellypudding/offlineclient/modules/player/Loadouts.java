@@ -19,11 +19,11 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 
-// Puts the inventory back into a layout saved with the loadout command. Each move brings
-// the biggest stack of the right kind into the first slot that holds the wrong thing.
+// Each move brings the biggest stack of the right kind into the first slot that holds the wrong
+// thing.
 public final class Loadouts extends Module {
 
-    // The order slots are filled in. The hotbar and the offhand matter most in a fight.
+    // The hotbar and the offhand matter most in a fight.
     private static final int[] ORDER = IntStream.concat(
         IntStream.concat(IntStream.range(0, InventoryUtil.HOTBAR_SIZE), IntStream.of(Inventory.SLOT_OFFHAND)),
         IntStream.range(InventoryUtil.MAIN_START, InventoryUtil.WHOLE_INVENTORY)).toArray();
@@ -54,7 +54,6 @@ public final class Loadouts extends Module {
         return restoring == null ? null : restoring.name();
     }
 
-    // Every filled slot of the inventory as the kind of item in it.
     public Map<Integer, String> currentLayout() {
         Map<Integer, String> layout = new TreeMap<>();
         for (int index : ORDER) {
@@ -92,7 +91,6 @@ public final class Loadouts extends Module {
             timer--;
             return;
         }
-        // The restore waits whilst a container is open or a stack is on the cursor or ShulkerPacker packs.
         if (!InventoryUtil.cursorFree() || Modules.packing()) {
             return;
         }
@@ -106,7 +104,7 @@ public final class Loadouts extends Module {
         timer = delay.getInt();
     }
 
-    // Fills the first slot that holds the wrong thing. False once no slot can be put right.
+    // False once no slot can be put right.
     private boolean moveOne() {
         for (int target : ORDER) {
             String wanted = restoring.slots().get(target);
@@ -123,7 +121,6 @@ public final class Loadouts extends Module {
         return false;
     }
 
-    // The biggest stack of the kind that is not already sitting where the loadout wants it.
     private int sourceFor(String wanted, int target) {
         int best = -1;
         int bestCount = 0;

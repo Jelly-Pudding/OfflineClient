@@ -18,11 +18,10 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
-// A line that comes up whilst lava lies close under your feet and says how far down. It looks
-// through whatever is in between. Stone under your boots is no help once you dig through it.
+// It looks through whatever is in between. Stone under your boots is no help once you dig through
+// it.
 public final class LavaWarningElement extends HudElement {
 
-    // Stands in for the distance whilst the editor is open and no lava is near.
     private static final int SAMPLE_DEPTH = 3;
 
     // A box that ends right on a block edge does not reach into the next block.
@@ -32,7 +31,6 @@ public final class LavaWarningElement extends HudElement {
         "How many blocks under your feet it looks for lava.", 8, 1, 32, 1, " blocks");
     private final ColorSetting color = new ColorSetting("Lava warning colour",
         "Colour of the warning.", 20, 1f, 1f, false);
-    // The look goes down every column you stand over.
     private final RowCache<String> lines = new RowCache<>(this::build);
 
     public LavaWarningElement() {
@@ -65,8 +63,6 @@ public final class LavaWarningElement extends HudElement {
         return "Lava " + Tally.counted(below, "block") + " below";
     }
 
-    // How many blocks under the box the nearest lava lies in the columns the box stands over.
-    // Nought when there is none within the reach or above the lowest block of the world.
     public static int lavaBelow(BlockGetter level, AABB box, int reach, int lowest) {
         int feet = Mth.floor(box.minY);
         int deepest = Math.max(lowest, feet - reach);

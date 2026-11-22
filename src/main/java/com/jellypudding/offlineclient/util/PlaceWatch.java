@@ -13,7 +13,6 @@ public final class PlaceWatch {
     private static final double SAME_SPOT = 4;
 
     private final WorldWatch world = new WorldWatch();
-    // The server and the dimension and where you stood on the last tick. Null before the first.
     private String worldKey;
     private Vec3 lastAt;
 

@@ -9,13 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// A command over a store of named entries that can each go on a key. Listing and removing
-// entries and choosing a key work the same for every store. Each command adds its own verbs.
 public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Command {
 
     private static final List<String> SHARED_VERBS = List.of("remove", "list", "key");
 
-    // What chat calls one entry.
     private final String noun;
     private final List<String> verbs;
 
@@ -29,13 +26,10 @@ public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Comman
 
     protected abstract KeyedStore<T> store();
 
-    // Runs one of the command's own verbs. Anything else shows the usage.
     protected abstract void runOwn(String verb, String[] args);
 
-    // What the list shows after the name and key of an entry.
     protected abstract String summary(T entry);
 
-    // What chat says once an entry has its key.
     protected abstract String keyedMessage(T entry, String keyName);
 
     @Override
@@ -49,7 +43,6 @@ public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Comman
         }
     }
 
-    // Null after telling the player nothing answers to that name.
     protected T find(String name) {
         T entry = store().find(name);
         if (entry == null) {

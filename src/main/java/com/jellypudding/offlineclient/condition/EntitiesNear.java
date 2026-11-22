@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Too many entities of the picked kinds gathering close to you such as end crystals in a fight.
 final class EntitiesNear extends Condition {
 
     enum Count { TOGETHER, EACH }
@@ -72,7 +71,6 @@ final class EntitiesNear extends Condition {
         return false;
     }
 
-    // The words say how many of what such as 2 end crystals.
     private boolean met(int found, NumberSetting limit, String words) {
         if (found < limit.getInt()) {
             return false;

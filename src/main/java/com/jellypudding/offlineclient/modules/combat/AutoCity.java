@@ -32,21 +32,18 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-// Strips the blast proof cover from an enemy. With a crystal of its own the block comes out
-// from under or beside the crystal and the hit follows the packet that breaks it. The server
-// reads the two in order and the blast finds the gap before anyone can fill it.
+// The hit follows the packet that breaks the block. The server reads the two in order and the blast
+// finds the gap before anyone can fill it.
 public final class AutoCity extends Module {
 
     public enum Plan { BURROW, SIDE, HEAD, TRAP }
 
-    // Ticks a crystal that was placed gets to show up before another goes down.
     private static final int PLACE_WAIT = 6;
 
     // The crystal goes down once the block is this many ticks from breaking. Long enough for
     // the server to answer and short enough that nobody gets to hit it first.
     private static final int CRYSTAL_LEAD = 10;
 
-    // Tries at a crystal for one block before it is mined without one.
     private static final int MAX_CRYSTALS = 3;
 
     // Ticks the job may stop fitting before it is given up. A jump or a blast lifts the
@@ -55,7 +52,6 @@ public final class AutoCity extends Module {
 
     private static final int NEVER = Integer.MIN_VALUE / 2;
 
-    // The block being mined for the plan that picked it and the enemy it was picked for.
     private record Job(Plan plan, BlockPos block, Player target) {
     }
 
@@ -97,15 +93,11 @@ public final class AutoCity extends Module {
         "Outlines the block being mined and the spot of the crystal.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0f).under(render);
 
-    // Holds the crystals and the support block for one click each.
     private final SlotSwap hands = new SlotSwap();
     private final CrystalGuard crystals = new CrystalGuard();
     private Job job;
-    // Ticks in a row the job has not fit its target or a plan higher up has had a block.
     private int strayed;
-    // Where the crystal for the job stands or goes. Null whilst none is used.
     private BlockPos crystalSpot;
-    // True from the moment the crystal is due until it goes off with the block.
     private boolean crystalDue;
     private int placedAt = NEVER;
     private int crystalTries;
@@ -132,18 +124,16 @@ public final class AutoCity extends Module {
         return plans.ranked().contains(Plan.SIDE);
     }
 
-    // True whilst anything of the settings can make the module place a block or a crystal.
     private boolean places() {
         return crystalFirst.isOn() || (support.isOn() && minesSides());
     }
 
-    // True whilst the crystal on this spot is the one the break waits for. CrystalAura leaves
-    // it standing.
+    // CrystalAura leaves the crystal the break waits for standing.
     public boolean holds(BlockPos spot) {
         return job != null && crystalDue && spot.equals(crystalSpot);
     }
 
-    // True whilst the tool has to stay in hand. CrystalAura then hands the slot back every tick.
+    // CrystalAura hands the slot back every tick whilst the tool has to stay in hand.
     public boolean keepsTool() {
         return job != null && miner.keepsTool();
     }
@@ -195,8 +185,6 @@ public final class AutoCity extends Module {
         }
     }
 
-    // The enemy of the job in hand for as long as they stay in range. Otherwise the one the
-    // priority picks.
     private Player target() {
         Player held = job == null ? null : job.target();
         if (held != null && held.level() == mc.level && EntityUtil.isEnemy(held)
@@ -267,13 +255,10 @@ public final class AutoCity extends Module {
             && BlockUtil.distanceTo(pos) <= breakRange.getValue();
     }
 
-    // A job whose plan has left the list or whose block is out of reach goes at once.
     private boolean usable(Job held) {
         return plans.ranked().contains(held.plan()) && BlockUtil.distanceTo(held.block()) <= breakRange.getValue();
     }
 
-    // True whilst the block still sits where its plan looks. A spot kept clear under Break
-    // again is empty and only its place counts.
     private static boolean fits(Job held) {
         Player target = held.target();
         BlockPos block = held.block();
@@ -290,7 +275,6 @@ public final class AutoCity extends Module {
         return block.getY() == centre.getY() && block.distManhattan(centre) == 1;
     }
 
-    // A feeder or the packer has the hand and a swap would break what it is doing.
     private boolean standsAside() {
         return Hands.slotsTaken() || (pauseOnUse.isOn() && mc.player.isUsingItem());
     }
@@ -307,14 +291,11 @@ public final class AutoCity extends Module {
             return;
         }
         EndCrystal crystal = keepCrystal(target, block);
-        // Without a spot for a crystal the block is simply mined.
         boolean mayFinish = crystalSpot == null || crystal != null;
         miner.drive(block, mayFinish, () -> pop(crystal));
     }
 
-    // Looks after the crystal of the job. The spot is picked at once and the block then
-    // waits for the crystal. The crystal itself only goes down near the end. Null whilst
-    // none stands on the spot.
+    // The crystal only goes down near the end.
     private EndCrystal keepCrystal(Player target, BlockPos block) {
         EndCrystal standing = crystalSpot == null ? null : crystalAt(crystalSpot);
         if (standing == null && !awaitingCrystal()) {
@@ -341,8 +322,6 @@ public final class AutoCity extends Module {
         return crystalSpot != null && since >= 0 && since < PLACE_WAIT;
     }
 
-    // The spot on top of the block or beside it where a blast would hurt the target most
-    // once the block is gone.
     private BlockPos bestSpot(Player target, BlockPos block) {
         BlockPos best = null;
         float bestDamage = 0;
@@ -400,15 +379,12 @@ public final class AutoCity extends Module {
         hands.restore();
     }
 
-    // Sets the crystal off unless its blast would now break a limit. It then stays standing.
     private void pop(EndCrystal crystal) {
         if (crystal != null && limits.allows(crystal.position(), ExplosionUtil.CRYSTAL_POWER, job.block())) {
             crystals.hit(crystal, rotate.isOn(), swing.getValue());
         }
     }
 
-    // The block is down. A crystal still on its spot goes off and the job is done unless
-    // the spot is to be kept clear.
     private void blockGone() {
         EndCrystal crystal = crystalSpot == null ? null : crystalAt(crystalSpot);
         pop(crystal);
@@ -435,8 +411,6 @@ public final class AutoCity extends Module {
         }
     }
 
-    // Fills the hole under the block about to fall. True when obsidian went down this tick
-    // and mining should wait.
     private boolean placeSupport(BlockPos below) {
         if (!BlockUtil.isReplaceable(below) || BlockUtil.intersectsPlayer(below)
             || BlockUtil.distanceTo(below) > placeRange.getValue()) {

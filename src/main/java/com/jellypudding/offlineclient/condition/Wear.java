@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// A piece of gear you wear or hold that is nearly worn out.
 final class Wear extends Condition {
 
     enum Gear {
@@ -21,7 +20,6 @@ final class Wear extends Condition {
             EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND), true);
 
         private final List<EquipmentSlot> slots;
-        // False for the choice that leaves an elytra out.
         private final boolean elytra;
 
         Gear(List<EquipmentSlot> slots, boolean elytra) {

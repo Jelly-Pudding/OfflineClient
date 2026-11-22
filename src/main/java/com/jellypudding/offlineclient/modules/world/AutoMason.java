@@ -14,12 +14,10 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 import java.util.List;
 
-// Cuts whole stacks at an open stonecutter into the chosen results. The recipe list is known
-// on this side but only the server fills the result slot. A shift click on it cuts the
-// whole input stack.
+// The recipe list is known on this side but only the server fills the result slot. A shift click on
+// it cuts the whole input stack.
 public final class AutoMason extends StationModule<StonecutterMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
     private final RegistryListSetting<Item> results = new RegistryListSetting<>("Cut into",
@@ -98,7 +96,6 @@ public final class AutoMason extends StationModule<StonecutterMenu> {
         MenuClicks.quickMove(menu, slot);
     }
 
-    // The button of the first recipe that makes a chosen result. Minus one when none does.
     private int wantedRecipe(SelectableRecipe.SingleInputSet<StonecutterRecipe> recipes, ContextMap context) {
         List<SelectableRecipe.SingleInputEntry<StonecutterRecipe>> entries = recipes.entries();
         for (int i = 0; i < entries.size(); i++) {

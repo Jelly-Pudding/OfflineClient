@@ -15,7 +15,6 @@ public final class Duo {
 
     public static final String NO_SERVER = "No server folder is named in testing/local.properties";
 
-    // Where the first player stands at the start of a case. It looks north.
     private static final double HOME_X = 0.5;
     private static final double HOME_Y = -60;
     private static final double HOME_Z = 0.5;
@@ -46,12 +45,10 @@ public final class Duo {
         return RigConfig.server() != null;
     }
 
-    // Starts the server and brings both players onto it.
     public static Duo open(Rig rig, PaperServer.Setup setup) {
         return open(rig, setup, true);
     }
 
-    // The same with the first player alone for cases that need a real server and nobody else.
     public static Duo alone(Rig rig, PaperServer.Setup setup) {
         return open(rig, setup, false);
     }
@@ -60,7 +57,7 @@ public final class Duo {
         PaperServer server = PaperServer.start(rig, setup);
         try {
             rig.enter(PaperWorld.join(rig, server, PaperServer.address()));
-            server.console(STEADY_WORLD);
+            rig.world().quietly(STEADY_WORLD);
             Partner partner = both ? Partner.get(rig) : null;
             Duo duo = new Duo(rig, server, partner);
             duo.leadHome();
@@ -95,7 +92,7 @@ public final class Duo {
     // Puts the second player back on its spot in survival with a full life and empty hands and
     // its client the way a first run starts.
     public void partnerHome() {
-        server.console(List.of("gamemode survival " + Partner.NAME, "clear " + Partner.NAME,
+        rig.world().quietly(List.of("gamemode survival " + Partner.NAME, "clear " + Partner.NAME,
             "effect clear " + Partner.NAME, "effect give " + Partner.NAME + " instant_health 1 20 true",
             "tp " + Partner.NAME + " " + PARTNER_SPOT));
         partner.ask("defaults");
@@ -109,19 +106,17 @@ public final class Duo {
         if (hardy) {
             lines.add("effect give " + Partner.NAME + " resistance 600 4 true");
         }
-        server.console(lines);
+        rig.world().quietly(lines);
         partner.ask("ticks", Integer.toString(SEEN_TICKS));
     }
 
-    // Puts the second player on a spot of the case's own choosing.
     public void partnerAt(double x, double y, double z, float yaw) {
-        server.console(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f %.1f 0", Partner.NAME, x, y, z, yaw));
+        rig.world().quietly(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f %.1f 0", Partner.NAME, x, y, z, yaw));
         partner.ask("ticks", Integer.toString(SEEN_TICKS));
     }
 
-    // Sends the second player out of the first one's sight.
     public void partnerAway() {
-        server.console("tp " + Partner.NAME + " " + FAR_SPOT);
+        rig.world().quietly("tp " + Partner.NAME + " " + FAR_SPOT);
         partner.ask("ticks", Integer.toString(SEEN_TICKS));
     }
 
@@ -133,12 +128,10 @@ public final class Duo {
         leadHome();
     }
 
-    // What the server holds about the first player this tick.
     public Map<String, String> lead() {
         return server.player(rig.world().player());
     }
 
-    // What the first player did on the server since the tallies were reset.
     public Map<String, Double> leadTally() {
         return server.tally(rig.world().player());
     }

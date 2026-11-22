@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.condition;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 
-// Being below or above a level such as sinking under a highway.
 final class Height extends Condition {
 
     enum Side { BELOW, ABOVE }

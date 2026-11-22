@@ -17,11 +17,9 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
 import java.util.List;
 
-// Strips the enchantments off the chosen items at an open grindstone one item at a time.
 // The grindstone works its result out on this side as well and the item comes straight back.
 public final class Grinder extends StationModule<GrindstoneMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
     private static final int[] INPUT_SLOTS = {GrindstoneMenu.INPUT_SLOT, GrindstoneMenu.ADDITIONAL_SLOT};
@@ -93,7 +91,6 @@ public final class Grinder extends StationModule<GrindstoneMenu> {
         return true;
     }
 
-    // A chosen item with something besides curses on it and nothing worth keeping.
     private boolean grindable(ItemStack stack) {
         if (!items.contains(stack.getItem())) {
             return false;

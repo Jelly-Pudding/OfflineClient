@@ -25,13 +25,10 @@ public final class MapPicture {
 
     public static final int SIDE = MapGrid.SIDE;
 
-    // A file this long from north to south carries a north line.
     private static final int WITH_LINE = SIDE + 1;
-    // The most cells a picture covers. That is a map square and the line north of it.
     public static final int MOST_CELLS = WITH_LINE * SIDE;
     // A file wider or longer than this is no map and is not looked over.
     private static final int MOST_ACROSS = 2 * WITH_LINE;
-    // Nor is one taller than this.
     private static final int MOST_LAYERS = 400;
     // A block of the row waited for is clicked on the floor under it or on the block behind it or
     // on the block beside it towards the middle of the strip.
@@ -72,12 +69,10 @@ public final class MapPicture {
         return SIDE - firstRow;
     }
 
-    // True for a cell of the map square itself. A north line lies outside it.
     public static boolean inSquare(int x, int z) {
         return x >= 0 && x < SIDE && z >= 0 && z < SIDE;
     }
 
-    // The picture in a file. The top block of each column is taken and the rest is left out.
     public static Read of(Blueprint file) {
         Vec3i size = file.size();
         if (size.getX() > MOST_ACROSS || size.getZ() > MOST_ACROSS || size.getY() > MOST_LAYERS) {
@@ -151,7 +146,6 @@ public final class MapPicture {
             + SIDE + " by " + WITH_LINE + " with a line on its north side";
     }
 
-    // How high above the floor the feet stand on the highest block of the picture.
     public double standHeight() {
         double highest = 0;
         for (BlockState kind : blueprint.palette()) {
@@ -196,12 +190,10 @@ public final class MapPicture {
         return false;
     }
 
-    // How many strips of that width cover the square.
     public static int strips(int width) {
         return (SIDE + width - 1) / width;
     }
 
-    // The west column of a strip and the one past its east column.
     public static int stripWest(int strip, int width) {
         return strip * width;
     }

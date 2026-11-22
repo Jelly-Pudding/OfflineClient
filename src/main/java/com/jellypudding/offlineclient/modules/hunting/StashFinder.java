@@ -42,14 +42,10 @@ import java.util.Map;
 
 public final class StashFinder extends Module implements FindSource {
 
-    // What every find of this module is called in messages and waypoints.
     private static final String KIND = "stash";
 
-    // The fewest chunks looked at each tick. A long view distance needs more.
     private static final int SCANS_PER_TICK = 4;
 
-    // Ticks before a chunk is looked at again. Chests placed after the first
-    // look are picked up on the next.
     private static final int RESCAN_TICKS = 200;
 
     private static final int MAX_SCANNED = 20_000;
@@ -88,7 +84,6 @@ public final class StashFinder extends Module implements FindSource {
     // When each chunk in the current dimension was last counted. Oldest first.
     private final Map<Long, Integer> scanned = new LinkedHashMap<>();
     private int tick;
-    // Where the walk over the square around you stopped. The next tick carries on from there.
     private int cursor;
 
     private final WorldWatch world = new WorldWatch();

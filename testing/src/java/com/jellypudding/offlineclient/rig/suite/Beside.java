@@ -10,10 +10,14 @@ import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -25,6 +29,7 @@ final class Beside {
     private static final int FORWARD = InputConstants.KEY_W;
     private static final int JUMP = InputConstants.KEY_SPACE;
     private static final String PANIC = "Panic";
+    private static final String SURVIVAL = "survival";
     private static final String TOTEM = "totem_of_undying";
     private static final String CHESTPLATE = "diamond_chestplate";
     private static final int SWAP_TICKS = 40;
@@ -36,10 +41,20 @@ final class Beside {
         + "attributes:[{id:\"minecraft:max_health\",base:200}]}";
     private static final int SEEN_TICKS = 5;
     private static final int FIGHT_TICKS = 40;
-    private static final int DIG_TICKS = 40;
+    // Stone falls in seven ticks to a player on the ground and in thirty to one who flies. Flight
+    // keeps even a standing player flying. The game rests five ticks between two blocks.
+    private static final int DIG_TICKS = 50;
     private static final int WALK_TICKS = 30;
     private static final int FLOOR_REACH = 6;
     private static final int PERCH = 8;
+    private static final String FOOD = "cooked_beef 16";
+    private static final int FOOD_SLOT = 3;
+    // AutoEat starts a meal at fourteen points as it ships.
+    private static final int HUNGRY = 6;
+    // A meal takes 32 ticks once the food is in hand.
+    private static final int MEAL_TICKS = 60;
+    private static final float NORTH = 180;
+    private static final float AT_THE_GROUND = 60;
 
     // The modules that stop each of them on purpose and why. Autopilot only does when an
     // earlier case left it a spot to fly to.
@@ -58,14 +73,15 @@ final class Beside {
         "Blink", "it keeps every move from the server",
         "Sneak", "Scaffold takes a held sneak for the wish to build downwards",
         "Freecam", "the keys move the camera and the body stays",
+        "Kaboom", "it blows away the floor under the player with everything Scaffold lays there",
         "Autopilot", FLIES_OFF);
     private static final Map<String, String> TOTEM_STOPPED_BY = Map.of();
     private static final Map<String, String> ARMOUR_STOPPED_BY = Map.of();
     private static final Map<String, String> FLIGHT_STOPPED_BY = Map.of(
         "Freecam", "the keys move the camera and the body stays",
         "Staircase", "it switches Flight off since a flying player never lands on the steps it builds");
+    private static final Map<String, String> EATER_STOPPED_BY = Map.of();
 
-    // What a core module needs on the stage and the proof that it did its work there.
     private interface Core {
 
         String module();
@@ -260,12 +276,47 @@ final class Beside {
         }
     };
 
+    private static final Core EATER = new Core() {
+        @Override
+        public String module() {
+            return "AutoEat";
+        }
+
+        @Override
+        public String work() {
+            return "eats once you are hungry";
+        }
+
+        // The food waits in another slot than the one in hand. The crosshair rests on the ground
+        // ahead as it mostly does and a module that takes clicks has something to take.
+        @Override
+        public void setUp(Rig rig, BlockPos home) {
+            rig.world().hotbar(FOOD_SLOT, FOOD);
+            Props.hold(rig, 0);
+            rig.controls().look(NORTH, AT_THE_GROUND);
+            rig.world().foodLevel(HUNGRY);
+        }
+
+        @Override
+        public boolean worked(Rig rig, BlockPos home) {
+            return within(rig, MEAL_TICKS, () -> Integer.parseInt(rig.world().facts().get("food")) > HUNGRY);
+        }
+
+        @Override
+        public Map<String, String> stoppedBy() {
+            return EATER_STOPPED_BY;
+        }
+    };
+
     private Beside() {
     }
 
-    // True once the server says it within the time a swap of slots takes.
     private static boolean within(Rig rig, BooleanSupplier holds) {
-        for (int waited = 0; waited <= SWAP_TICKS; waited += POLL_TICKS) {
+        return within(rig, SWAP_TICKS, holds);
+    }
+
+    private static boolean within(Rig rig, int limitTicks, BooleanSupplier holds) {
+        for (int waited = 0; waited <= limitTicks; waited += POLL_TICKS) {
             if (holds.getAsBoolean()) {
                 return true;
             }
@@ -274,37 +325,61 @@ final class Beside {
         return false;
     }
 
+    private static final List<Core> CORES = List.of(AURA, NUKER, SCAFFOLD, TOTEM_HAND, ARMOUR, WINGS, EATER);
+    private static final long SAMPLE_SEED = 20261120;
+    private static final int SAMPLE = 40;
+
     // One case for each core module and each category of the others. The stage is the one the
     // suite stands on when the case runs.
     static List<Case> cases(List<Module> modules, Supplier<Stage> stage) {
         List<Case> cases = new ArrayList<>();
-        for (Core core : List.of(AURA, NUKER, SCAFFOLD, TOTEM_HAND, ARMOUR, WINGS)) {
+        for (Core core : CORES) {
             for (Category category : Category.values()) {
                 List<Module> others = modules.stream().filter(module -> module.getCategory() == category).toList();
                 cases.add(Case.of(core.module() + " " + core.work() + " beside every " + category.getDisplayName()
-                    + " module in turn", rig -> sweep(rig, stage.get(), core, others)));
+                    + " module in turn", rig -> sweep(rig, stage.get(), core, others, false)));
             }
         }
         return cases;
     }
 
-    private static void sweep(Rig rig, Stage stage, Core core, List<Module> others) {
+    // A real server cannot be hurried and the whole list would take an hour there. Each core
+    // module is played beside a sample that the seed picks the same on every run.
+    static List<Case> sampled(List<Module> modules, Supplier<Stage> stage, String where) {
+        Random random = new Random(SAMPLE_SEED);
+        List<Case> cases = new ArrayList<>();
+        for (Core core : CORES) {
+            List<Module> shuffled = new ArrayList<>(modules);
+            Collections.shuffle(shuffled, random);
+            List<Module> others = List.copyOf(shuffled.subList(0, SAMPLE));
+            cases.add(Case.of(core.module() + " " + core.work() + " beside " + SAMPLE + " modules picked by a seed"
+                + where, rig -> {
+                    rig.world().gameMode(SURVIVAL);
+                    sweep(rig, stage.get(), core, others, true);
+                }));
+        }
+        return cases;
+    }
+
+    private static void sweep(Rig rig, Stage stage, Core core, List<Module> others, boolean served) {
         Module main = rig.client().module(core.module());
         rig.expect(played(rig, stage, core, null), core.module() + " did not work by itself. That proves nothing");
         List<String> stopped = new ArrayList<>();
         List<String> onPurpose = new ArrayList<>();
         int beside = 0;
         for (Module other : others) {
-            if (other == main || !takesPart(other, main)) {
+            if (other == main || !takesPart(other, main, served)) {
                 continue;
             }
             beside++;
             if (played(rig, stage, core, other)) {
                 continue;
             }
+            rig.expect(stage.worldStands(), core.module() + " beside " + other.getName() + " lost the world");
             String why = core.stoppedBy().get(other.getName());
             if (why == null) {
                 stopped.add(other.getName());
+                rig.note("Beside " + other.getName() + " the player ended " + ended(rig, stage.home()));
             } else {
                 onPurpose.add(other.getName() + " (" + why + ")");
             }
@@ -313,11 +388,19 @@ final class Beside {
         rig.expect(stopped.isEmpty(), core.module() + " stopped working beside " + stopped);
     }
 
+    // Where a pairing that failed left the player. A module that moved or lifted the player is
+    // the usual cause.
+    private static String ended(Rig rig, BlockPos home) {
+        return rig.ask(mc -> String.format(Locale.ROOT, "%.2f blocks from home and %.2f up %s",
+            mc.player.position().subtract(Vec3.atBottomCenterOf(home)).horizontalDistance(),
+            mc.player.getY() - home.getY(), mc.player.onGround() ? "on the ground" : "in the air"));
+    }
+
     // A module that will not run in a blanket case stays out and one the core module clashes
     // with would only switch it off.
-    private static boolean takesPart(Module other, Module main) {
+    private static boolean takesPart(Module other, Module main, boolean served) {
         return other.isTogglable() && !other.getName().equals(PANIC)
-            && SmokeSuite.leftOut(other.getName(), false) == null && !main.clashesWith(other);
+            && SmokeSuite.leftOut(other.getName(), served) == null && !main.clashesWith(other);
     }
 
     // One go of the core module on a fresh stage with the other module on beside it. A fault in
@@ -337,7 +420,9 @@ final class Beside {
         } finally {
             rig.controls().release(FORWARD);
             rig.controls().release(JUMP);
-            rig.act(mc -> mc.gui.setScreen(null));
+            if (stage.worldStands()) {
+                rig.act(mc -> mc.gui.setScreen(null));
+            }
         }
     }
 }

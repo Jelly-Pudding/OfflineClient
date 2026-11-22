@@ -21,7 +21,6 @@ public final class PathProbe {
         return steps.size();
     }
 
-    // Every step the rules allow from where the player stands as they read the world this tick.
     public static String stepsFromPlayer() {
         BlockPos start = PathFinder.standingAt(OfflineClient.MC.player);
         PathFinder.Rules rules = new PathFinder().liveRules();

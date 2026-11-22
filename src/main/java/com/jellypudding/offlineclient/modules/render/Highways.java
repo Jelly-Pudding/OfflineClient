@@ -16,8 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// The roads out of 0 0 are drawn at your height out to the horizon either way from the
-// point on each road nearest you. Coordinates read the same in every dimension.
 public final class Highways extends Module {
 
     // Yaws of the roads through 0 0. Each one is also drawn the opposite way.
@@ -44,7 +42,6 @@ public final class Highways extends Module {
     private final ColorSetting ringColor = new ColorSetting("Ring colour",
         "Colour of the ring roads.", 120, false).under(rings);
 
-    // The distances read from the text the last time it changed.
     private String parsedText;
     private List<Double> ringList = List.of();
 

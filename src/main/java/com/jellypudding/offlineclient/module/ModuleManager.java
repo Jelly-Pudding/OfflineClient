@@ -342,10 +342,8 @@ public final class ModuleManager {
     // Keyed by lower case name. Insertion order is the order modules were added.
     private final Map<String, Module> modules = new LinkedHashMap<>();
 
-    // Lookup by type without walking the name map.
     private final Map<Class<? extends Module>, Module> byType = new ConcurrentHashMap<>();
 
-    // The modules a held key switched on and has not yet let go of.
     private final Set<Module> heldOn = new LinkedHashSet<>();
 
     public ModuleManager() {
@@ -360,7 +358,7 @@ public final class ModuleManager {
         OfflineClient.INSTANCE.getEventBus().register(this);
     }
 
-    // Runs once the client holds this manager. A saved config loaded afterwards wins.
+    // A saved config loaded afterwards wins.
     public void enableDefaults() {
         for (Module module : modules.values()) {
             if (module.enabledByDefault()) {
@@ -370,7 +368,6 @@ public final class ModuleManager {
     }
 
     // Each category lists its modules in the order the panels show them.
-    // Related modules sit together and the everyday ones lead each group.
     private void registerCombat() {
         add(new KillAura());
         add(new TriggerBot());
@@ -753,13 +750,12 @@ public final class ModuleManager {
         byType.put(module.getClass(), module);
     }
 
-    // Spaces and case are ignored.
     public Module get(String name) {
         return modules.get(Setting.idFor(name));
     }
 
-    // The registered module of the given type. A concrete class hits the
-    // index directly. A shared base class falls back to a walk that caches the match.
+    // A concrete class hits the index directly. A shared base class falls back to a walk that
+    // caches the match.
     public <T extends Module> T get(Class<T> clazz) {
         Module module = byType.get(clazz);
         if (module == null) {
@@ -785,7 +781,6 @@ public final class ModuleManager {
         return new ArrayList<>(modules.values());
     }
 
-    // Registration order. Every category lists its everyday modules first.
     public List<Module> getByCategory(Category category) {
         List<Module> result = new ArrayList<>();
         for (Module module : modules.values()) {
@@ -796,7 +791,6 @@ public final class ModuleManager {
         return result;
     }
 
-    // For a picker of modules to switch. The module asking is left out.
     public List<String> togglableNames(Module asking) {
         List<String> names = new ArrayList<>();
         for (Module module : modules.values()) {
@@ -817,15 +811,14 @@ public final class ModuleManager {
         return result;
     }
 
-    // What the config writes for the switch of a module. One that is only on whilst its key is
-    // down is written as off. One a dormant Panic will bring back is written as on.
+    // One that is only on whilst its key is down is written as off. One a dormant Panic will bring
+    // back is written as on.
     public boolean savesAsOn(Module module) {
         return module.savesEnabledState() && !heldOn.contains(module)
             && (module.isEnabled() || get(Panic.class).bringsBack(module));
     }
 
     // A held key switches a module that is off on until it is let go and says nothing in chat.
-    // On a module that is already on it is a plain switch like any other key.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
         if (OfflineClient.MC.gui.screen() != null) {

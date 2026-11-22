@@ -19,7 +19,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-// The players near you with how far away and how hurt they are.
 public final class PlayerListElement extends RowsElement {
 
     private final NumberSetting range = new NumberSetting("Player list range",
@@ -34,7 +33,6 @@ public final class PlayerListElement extends RowsElement {
         "Writes how far away each one is.", true);
     private final BoolSetting health = new BoolSetting("Player list health",
         "Writes how much health each one has left.", true);
-    // Each gathering measures every player in the world and sorts them.
     private final RowCache<TextRow> rows = new RowCache<>(this::build);
 
     public PlayerListElement() {
@@ -42,13 +40,6 @@ public final class PlayerListElement extends RowsElement {
         add(range, limit, friends, friendsFirst, distance, health);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !rows(ClientFonts.hud()).isEmpty();
-    }
-
-    // A friend at full health and a hurt stranger stand in whilst the editor is open and
-    // nobody is near.
     @Override
     protected List<TextRow> rows(Font font) {
         List<TextRow> built = rows.get();
@@ -94,7 +85,6 @@ public final class PlayerListElement extends RowsElement {
         return found.size() > limit.getInt() ? found.subList(0, limit.getInt()) : found;
     }
 
-    // The name then how far away and how much health is left whilst those are written.
     private TextRow rowOf(Font font, String name, double away, float healthLeft, int color) {
         String row = name;
         if (distance.isOn()) {
@@ -106,8 +96,6 @@ public final class PlayerListElement extends RowsElement {
         return TextRow.of(font, row, color);
     }
 
-    // A friend keeps the friend colour and a listed enemy the enemy colour. Everyone else fades
-    // from green to red.
     private static int colorOf(AbstractClientPlayer player) {
         if (EntityUtil.isFriend(player)) {
             return EntityColors.friendColor();

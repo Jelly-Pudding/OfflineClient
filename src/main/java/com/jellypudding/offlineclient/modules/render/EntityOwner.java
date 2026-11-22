@@ -37,7 +37,7 @@ public final class EntityOwner extends Module {
 
     private static final String SESSION_SERVER = "https://sessionserver.mojang.com/session/minecraft/profile/";
 
-    // Names fetched for owners who are not online. An empty name is a lookup in flight.
+    // An empty name is a lookup in flight.
     private final Map<UUID, String> names = new ConcurrentHashMap<>();
 
     private final NumberSetting scale = new NumberSetting("Scale",
@@ -140,8 +140,7 @@ public final class EntityOwner extends Module {
         return lookedUp(uuid);
     }
 
-    // The name the session server knows for an offline owner. Fetched once on
-    // a worker thread and the short id shows until it arrives.
+    // Fetched once on a worker thread and the short id shows until it arrives.
     private String lookedUp(UUID uuid) {
         String known = names.get(uuid);
         if (known != null) {

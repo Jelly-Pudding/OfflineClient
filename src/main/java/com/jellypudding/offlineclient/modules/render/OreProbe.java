@@ -51,10 +51,9 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// Uncovers the ores anti xray hides near you. Paper resends the hidden blocks one and two
-// steps from any block a player digs at within reach. A change of dig face is the one dig
-// packet that changes nothing else on the server. What turns up is only taken from block
-// updates because anti xray never touches those.
+// Paper resends the hidden blocks one and two steps from any block a player digs at within reach. A
+// change of dig face is the one dig packet that changes nothing else on the server. What turns up
+// is only taken from block updates because anti xray never touches those.
 public final class OreProbe extends Module {
 
     // What one section's palette shows. The ore kinds it may hide with one bit for each kind.
@@ -71,10 +70,8 @@ public final class OreProbe extends Module {
     // Only a server that lends a long reach comes near this. Further would look over too many
     // blocks each survey.
     private static final double MOST_REACH = 8;
-    // How far a resent block lies from the block dug at.
     private static final int SPREAD = 2;
 
-    // Every block within this many of the player in order of distance.
     private static final int[][] NEAR = near((int) Math.ceil(MOST_REACH) + SPREAD + 1);
 
     // In its other modes Paper lists its whole hidden list in every low section. A real section
@@ -86,22 +83,17 @@ public final class OreProbe extends Module {
     // A section on the global palette lists nothing and may hide any ore.
     private static final Reading UNLISTED = new Reading(EVERY_KIND, false, false);
 
-    // Low sections that list a block Paper hides. The server is judged once this many are read.
     private static final int JUDGED_AFTER = 64;
     // The server hides its ores the way the probes uncover when one in this many of them bears a
     // mark. Paper marks nearly all. Elsewhere a mark is only the entry a removed block left behind.
     private static final int MARKED_ONE_IN = 8;
-    // Chunks this far round the player are read at once when it is switched on in a world.
     private static final int READ_RADIUS = 2;
 
-    // The blocks round a player who stands still are looked over again this often.
     private static final int SURVEY_TICKS = 10;
     // Packets left for the rest of the tick and for other modules.
     private static final int HEADROOM = 40;
-    // Time spent probing with nothing sent back before the server is taken to resend nothing.
     private static final int UNANSWERED_SECONDS = 15;
     private static final int UNANSWERED_TICKS = UNANSWERED_SECONDS * SharedConstants.TICKS_PER_SECOND;
-    // Records of chunks that have gone are dropped this often.
     private static final int PURGE_TICKS = 200;
 
     private static final long NONE = Long.MIN_VALUE;
@@ -117,24 +109,19 @@ public final class OreProbe extends Module {
     private final Long2IntOpenHashMap hides = new Long2IntOpenHashMap();
     // The blocks the server was asked to resend with one bit for each block of a section.
     private final Long2ObjectOpenHashMap<BitSet> asked = new Long2ObjectOpenHashMap<>();
-    // The ores the server sent by place.
     private final Long2ObjectOpenHashMap<OreKind> found = new Long2ObjectOpenHashMap<>();
     // Block updates read on the network thread and handled on the next tick.
     private final Queue<Packet<?>> updates = new ConcurrentLinkedQueue<>();
 
-    // The blocks round the player that may hide a picked ore with the nearest first.
     private final LongArrayList suspects = new LongArrayList();
     private final LongOpenHashSet suspected = new LongOpenHashSet();
     private int nextSuspect;
     private long surveyedFrom = NONE;
     private int surveyedAt;
     private int ticks;
-    // Ticks in which probes went out since the server last sent an asked block.
     private int probingTicks;
     private boolean stale;
     private List<Spot> shown = List.of();
-    // Low sections read in this world that list a block Paper hides and those of them that bear
-    // its marks. The server is judged once on the first ones read.
     private int listing;
     private int marked;
     private boolean judged;
@@ -191,8 +178,6 @@ public final class OreProbe extends Module {
         judged = false;
     }
 
-    // The chunks round the player that came before it was on. The server is judged on them
-    // without waiting for chunks to arrive.
     private void readAround() {
         ChunkPos centre = mc.player.chunkPosition();
         for (int dx = -READ_RADIUS; dx <= READ_RADIUS; dx++) {
@@ -270,8 +255,6 @@ public final class OreProbe extends Module {
         }
     }
 
-    // Said once a world when too few of the sections read bear the marks the probes depend on.
-    // Single player hides nothing and is judged at once.
     private void judge() {
         boolean alone = mc.hasSingleplayerServer();
         if (judged || !alone && listing < JUDGED_AFTER) {
@@ -311,7 +294,6 @@ public final class OreProbe extends Module {
         return spots;
     }
 
-    // Drops what it knows of chunks the client has unloaded.
     private void purge() {
         hides.keySet().removeIf(key -> !LoadedChunks.hasChunk(SectionPos.x(key), SectionPos.z(key)));
         asked.keySet().removeIf(key -> !LoadedChunks.hasChunk(SectionPos.x(key), SectionPos.z(key)));
@@ -362,7 +344,6 @@ public final class OreProbe extends Module {
             && !mc.player.isSleeping() && !MoveGate.held(false);
     }
 
-    // Lists the blocks within reach of a probe that could be hiding a picked ore with the nearest first.
     private void survey(Vec3 eye, double reach) {
         suspects.clear();
         suspected.clear();
@@ -406,8 +387,6 @@ public final class OreProbe extends Module {
         return picked;
     }
 
-    // The block in reach whose probe uncovers this one and the most other suspects with it.
-    // None when every such block is out of reach.
     private long bestProbe(long suspect, Vec3 eye, double reach) {
         int x = BlockPos.getX(suspect);
         int y = BlockPos.getY(suspect);
@@ -488,7 +467,6 @@ public final class OreProbe extends Module {
         return kinds;
     }
 
-    // The ore kinds a section may hide. Low sections read before the server is judged count towards it.
     private int readSection(LevelChunkSection section, int sectionY) {
         Reading reading = read(section);
         if (!judged && reading.listing() && SectionPos.sectionToBlockCoord(sectionY) < AntiXray.HIDDEN_BELOW) {

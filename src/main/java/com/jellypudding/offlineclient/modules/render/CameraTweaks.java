@@ -16,7 +16,6 @@ import java.util.Locale;
 // CameraMixin reads the distance and the wall setting from the third person distance hook.
 public final class CameraTweaks extends Module {
 
-    // Share of the current distance one wheel notch changes at sensitivity one.
     private static final double NOTCH_SHARE = 0.25;
     private static final double MIN_DISTANCE = 0.5;
 
@@ -37,7 +36,6 @@ public final class CameraTweaks extends Module {
     private final BoolSetting noClip = new BoolSetting("No clip",
         "Lets the camera pass through walls instead of snapping back to your head.", true);
 
-    // The distance after scrolling. Goes back to the setting when the view changes.
     private double scrolled;
     private double lastSetting;
     private CameraType lastView;
@@ -67,7 +65,6 @@ public final class CameraTweaks extends Module {
         lastSetting = scrolled;
     }
 
-    // A new view or a slider change throws the scrolled distance away.
     @Subscribe
     private void onTick(TickEvent event) {
         CameraType view = mc.options.getCameraType();

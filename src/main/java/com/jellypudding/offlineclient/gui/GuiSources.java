@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.util.SearchRank;
 
-// What the tabs read and write. The client owns all of it already.
 final class GuiSources {
 
     static final String IN_USE = "in use";
@@ -10,7 +9,7 @@ final class GuiSources {
     private GuiSources() {
     }
 
-    // What a tab opens. Null for the HUD tab which opens the HUD editor in its place.
+    // Null for the HUD tab which opens the HUD editor in its place.
     static TabView.Source of(TabStrip.Tab tab, Runnable beforeSave, Runnable afterLoad) {
         return switch (tab) {
             case FRIENDS -> new FriendsTab();

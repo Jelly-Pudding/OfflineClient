@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -58,7 +59,6 @@ public final class TriggerBot extends Module implements Targeting {
         searchTags("click aura", "trigger");
     }
 
-    // What it swings at near the crosshair. Null whilst nothing is in reach and whilst it holds off.
     @Override
     public Entity getFought() {
         return target;
@@ -82,7 +82,7 @@ public final class TriggerBot extends Module implements Targeting {
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
         if ((mc.player.isUsingItem() && !blocking) || BlockMiner.handMines()
-            || Modules.feedersPauseCombat() || Modules.maceComboAirborne()) {
+            || Feeding.pausingCombat() || Modules.maceComboAirborne()) {
             return;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {

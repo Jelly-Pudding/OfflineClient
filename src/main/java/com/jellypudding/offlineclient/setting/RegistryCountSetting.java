@@ -15,17 +15,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-// Entries picked from a registry each with a number of its own. A number belongs to its entry and
-// never to a place in the list. Ids and numbers are stored in the config.
+// A number belongs to its entry and never to a place in the list.
 public final class RegistryCountSetting<T> extends Setting<Map<Identifier, Integer>> implements CountedPickList<T> {
 
     private final Registry<T> registry;
-    // The number a new pick starts with.
     private final ToIntFunction<T> firstCount;
-    // No number is kept below this.
     private final int lowest;
 
-    // Picked entries with their numbers. Read from other threads and replaced whole.
+    // Read from other threads and replaced whole.
     private volatile Map<T, Integer> resolved = Map.of();
 
     public RegistryCountSetting(String name, String description, Registry<T> registry, Map<T, Integer> defaults,
@@ -54,7 +51,6 @@ public final class RegistryCountSetting<T> extends Setting<Map<Identifier, Integ
         return resolved.getOrDefault(entry, -1);
     }
 
-    // The picked entries and their numbers in pick order.
     public Map<T, Integer> counts() {
         return resolved;
     }

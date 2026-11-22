@@ -41,7 +41,6 @@ public final class Speed extends Module {
     // this pace skips a gap one block wide and lands past a ledge.
     private static final int STRIDE_RUN = 2;
 
-    // How much of a kept push is left a tick later and the least worth keeping.
     private static final double PUSH_KEPT = 0.9;
     private static final double LEAST_PUSH = 0.02;
 
@@ -79,11 +78,9 @@ public final class Speed extends Module {
     private final NumberSetting timer = new NumberSetting("Timer",
         "Speeds up the game whilst you move. 1 is normal.", 1, 1, 3, 0.1, "x");
 
-    // The strongest push since the last tick. A blast is heard on the netty thread.
+    // A blast is heard on the netty thread.
     private final DoubleAccumulator pushed = new DoubleAccumulator(Math::max, 0);
-    // What is left of the pushes being kept.
     private double push;
-    // The last hop as the jump left it and as the boost set it.
     private int hopTick = Integer.MIN_VALUE;
     private Vec3 jumped = Vec3.ZERO;
     private Vec3 boosted = Vec3.ZERO;
@@ -219,8 +216,7 @@ public final class Speed extends Module {
         hopTick = mc.player.tickCount;
     }
 
-    // Called from LivingEntityMixin once the keys have pushed the move. A hop whose whole move passes
-    // the cap is held there but never below the plain hop with the same push at normal game speed.
+    // Called from LivingEntityMixin once the keys have pushed the move.
     public void holdHop(Vec3 unpushed) {
         if (mc.player.tickCount != hopTick || unpushed.x != boosted.x || unpushed.z != boosted.z) {
             return;

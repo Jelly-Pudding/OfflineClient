@@ -76,13 +76,10 @@ public final class FastBreak extends Module {
     private final BoolSetting airPenalty = new BoolSetting("No air penalty",
         "Lets you mine at full speed in the air. Vanilla mines five times slower off the ground.", true);
 
-    // Ticks the vanilla wait is left alone after a guarded click.
     private int guardTicks;
 
-    // True from a fresh press until the first block it lands on.
     private boolean freshClick;
 
-    // The block the chance was last rolled for and how the roll went.
     private BlockPos rolledFor;
     private boolean rolled;
 
@@ -175,8 +172,6 @@ public final class FastBreak extends Module {
         return progress + delta >= BreakTime.SERVER_ACCEPTS ? 1 : delta;
     }
 
-    // True when a first click should remove the block outright with a start and
-    // stop pair. Damage mode only.
     public boolean instamines(BlockState state, BlockPos pos) {
         if (!isEnabled() || !inGame() || !mode.is(Mode.DAMAGE) || !instamine.isOn()
             || mc.player.getAbilities().instabuild || !allows(state.getBlock()) || !lucky(pos)) {
@@ -186,8 +181,6 @@ public final class FastBreak extends Module {
         return delta > INSTAMINE_PROGRESS && delta < 1;
     }
 
-    // True when a fresh click on an instantly breakable block should be swallowed.
-    // The vanilla wait then runs before a held key breaks it.
     public boolean guardsClick(BlockState state, BlockPos pos) {
         if (!isEnabled() || !inGame() || !safeFirstClick.isOn() || !freshClick) {
             return false;

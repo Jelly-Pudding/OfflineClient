@@ -16,10 +16,9 @@ import com.jellypudding.offlineclient.util.Modules;
 import java.util.List;
 import java.util.Map;
 
-// Reads across what a save written below the version of the client holds differently. A save
-// carries the version that wrote it. ConfigManager asks here twice. Before its values are
-// applied the save itself is rewritten where this version files a value under another name.
-// Once they are applied whatever a renamed value cannot say is put right on the modules.
+// ConfigManager asks here twice. Before its values are applied the save itself is rewritten where
+// this version files a value under another name. Once they are applied whatever a renamed value
+// cannot say is put right on the modules.
 final class SaveConversion {
 
     // Below this version the switch of a game part says whether the part is drawn and the
@@ -39,8 +38,6 @@ final class SaveConversion {
     private static final String AUTO_LOG = "AutoLog";
     private static final String TRIGGERS = "Triggers";
 
-    // The word a Triggers rule of such a save names its condition by and the condition it is
-    // at this version.
     private static final Map<String, String> RULE_CONDITIONS = Map.of("LOW_HEALTH", "Health",
         "PLAYER_NEAR", "Player near", "DIMENSION", "Dimension", "FALLING", "Falling far", "JOINING", "Joining",
         "KILL", "Kill");
@@ -49,8 +46,7 @@ final class SaveConversion {
     private SaveConversion() {
     }
 
-    // True for a save written below a version that holds something differently. A save that
-    // names no version counts as below every one. Such a save only reads right as a whole.
+    // A save that names no version counts as below every one.
     static boolean isOlder(JsonObject root) {
         return versionOf(root) < PICKED_CONDITIONS;
     }
@@ -61,8 +57,7 @@ final class SaveConversion {
             ? written.getAsInt() : 0;
     }
 
-    // Rewrites what a save written below this version files under other names. Call it before
-    // the values are applied. Only the save is read and written and nothing of the client.
+    // Call it before the values are applied.
     static void reshape(JsonObject root) {
         if (!isOlder(root)) {
             return;
@@ -76,8 +71,7 @@ final class SaveConversion {
         }
     }
 
-    // True when the save was written below this version and was read across. Call it once the
-    // values are applied.
+    // Call it once the values are applied.
     static boolean convert(JsonObject root) {
         if (!isOlder(root)) {
             return false;
@@ -165,7 +159,6 @@ final class SaveConversion {
         }
     }
 
-    // Nought for a value that is missing or is no number.
     private static double number(JsonObject settings, String name) {
         JsonElement saved = settings.get(name);
         return saved != null && saved.isJsonPrimitive() && saved.getAsJsonPrimitive().isNumber()
@@ -241,7 +234,6 @@ final class SaveConversion {
         return saved != null && saved.isJsonPrimitive() && saved.getAsJsonPrimitive().isBoolean();
     }
 
-    // What the save holds for a module. Null when it holds nothing for it.
     private static JsonObject savedOf(JsonObject modules, Module module) {
         return module == null ? null : objectIn(modules, module.getName());
     }

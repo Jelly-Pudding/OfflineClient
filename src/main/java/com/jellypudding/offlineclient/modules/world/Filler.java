@@ -18,13 +18,10 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Comparator;
 import java.util.List;
 
-// Fills a box marked with two corners. The bottom layer goes in first and each layer has the
-// one below it to stand on.
 public final class Filler extends AreaPlacer implements CornerPicker.Taker {
 
     private static final int TARGET_COLOR = 0xFF60D060;
 
-    // How often the whole box is looked over for spots still to fill.
     private static final int COUNT_TICKS = 20;
 
     private final NumberSetting maxBlocks = CornerPicker.maxBlocks();
@@ -36,7 +33,6 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
 
     private final CornerPicker corners = new CornerPicker(this, boxStyle, maxBlocks::getInt, "filled");
     private final WorldWatch world = new WorldWatch();
-    // Spots of the box still to fill or break at the last count and the ticks to the next one.
     private int left;
     private int countWait;
 
@@ -165,8 +161,6 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
             .thenComparingDouble(pos -> eye.distanceToSqr(Vec3.atCenterOf(pos))));
     }
 
-    // A block that is not on the list and can be dug from here. The block underfoot waits
-    // until you move off it.
     private boolean inBreakReach(BlockPos pos) {
         return corners.contains(pos) && inReach(pos) && inTheWay(pos) && !BlockUtil.isStandingOn(pos);
     }
@@ -175,7 +169,6 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
         return !BlockUtil.isReplaceable(pos) && BlockUtil.diggable(pos) && !allowed(BlockUtil.state(pos).getBlock());
     }
 
-    // Spots of the whole box that still want a block. Replace adds the blocks in the way.
     private int countLeft() {
         int count = 0;
         for (BlockPos pos : BlockPos.betweenClosed(corners.first(), corners.second())) {

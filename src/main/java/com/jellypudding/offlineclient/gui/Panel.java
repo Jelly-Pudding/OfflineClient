@@ -9,7 +9,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// A draggable column of module rows under a category header.
 public final class Panel extends PanelFrame {
 
     private final List<ModuleRow> rows = new ArrayList<>();
@@ -22,7 +21,6 @@ public final class Panel extends PanelFrame {
         refresh(modules);
     }
 
-    // Rebuilds the rows and leaves open the ones that were open.
     public void refresh(List<Module> modules) {
         Set<String> open = new HashSet<>();
         for (ModuleRow row : rows) {

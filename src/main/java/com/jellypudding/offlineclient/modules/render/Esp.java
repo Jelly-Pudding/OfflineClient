@@ -43,7 +43,6 @@ public final class Esp extends Module {
 
     public enum Size { ACCURATE, FANCY }
 
-    // How much a fancy box grows on every side and how far it lifts.
     private static final double FANCY_GROW = 0.05;
 
     private final EnumSetting<Style> style = new EnumSetting<>("Style",
@@ -176,7 +175,6 @@ public final class Esp extends Module {
         return style.is(Style.SHADER) && !ShaderOutline.works() ? Style.BOXES : style.getValue();
     }
 
-    // A rectangle round the projected corners of each box.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         if (!style.is(Style.FLAT) || !inGame() || !WorldToScreen.update()) {
@@ -213,7 +211,7 @@ public final class Esp extends Module {
         }
     }
 
-    // The screen rectangle that holds all eight corners or null when any sit behind the camera.
+    // Null when any corner sits behind the camera.
     private static double[] screenBounds(AABB box) {
         double minX = Double.MAX_VALUE;
         double minY = Double.MAX_VALUE;
@@ -234,7 +232,6 @@ public final class Esp extends Module {
         return new double[] {minX, minY, maxX, maxY};
     }
 
-    // Hitboxes expands the reach of a hit and a fancy box sits a little outside the model.
     private AABB grownBox(Entity entity, float partial, Hitboxes hitboxes) {
         AABB box = EntityUtil.lerpedBox(entity, partial);
         double grow = hitboxes == null ? 0 : hitboxes.expansionFor(entity);

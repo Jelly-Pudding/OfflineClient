@@ -21,32 +21,24 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Locale;
 
-// A strip of the compass that slides past as you turn. Stretching it wider lengthens the strip
-// and leaves the marks and letters their shape.
 public final class CompassElement extends HudElement {
 
     public enum Reading { NONE, YAW, BEARING }
 
     public enum Labels { POINTS, AXES, BOTH }
 
-    // Degrees between the small marks. Every third one is a compass point.
     private static final int MINOR_STEP = 15;
     private static final int FULL_TURN = 360;
 
-    // The strip before any stretch.
     private static final int LENGTH = 160;
 
     private static final int TICK_HEIGHT = 3;
     private static final int MINOR_TICK_HEIGHT = 1;
-    // A waypoint is a block three pixels wide. The marks beside it are one.
     private static final int WAYPOINT_WIDTH = 3;
-    // The needle reaches a little past the marks.
     private static final int NEEDLE_HEIGHT = TICK_HEIGHT + 2;
     private static final int GAP = 2;
-    // The first row of names sits under the line and the marks.
     private static final int NAMES_TOP = 1 + TICK_HEIGHT + GAP;
 
-    // Marks fade out across this share of the field at each end of the strip.
     private static final double FADE_SHARE = 0.1;
     private static final int LINE_COLOUR = 0x50FFFFFF;
 
@@ -73,7 +65,6 @@ public final class CompassElement extends HudElement {
     private final BoolSetting waypoints = new BoolSetting("Compass waypoints",
         "Shows each waypoint on the strip in its own colour.", true);
 
-    // The waypoints on the strip. They are gathered at most every fifty milliseconds.
     private final RowCache<WaypointStore.Waypoint> marks = new RowCache<>(() -> {
         Waypoints module = Modules.get(Waypoints.class);
         return module == null ? List.of() : module.visible();
@@ -110,19 +101,16 @@ public final class CompassElement extends HudElement {
         context.disableScissor();
     }
 
-    // Where a heading this many degrees off the view sits along the strip.
     private float along(double offset) {
         double span = field.getValue();
         return (float) ((offset + span / 2) / span * LENGTH);
     }
 
-    // Marks fade out towards each end of the strip.
     private float strength(double offset) {
         double span = field.getValue();
         return (float) ((span / 2 - Math.abs(offset)) / (span * FADE_SHARE));
     }
 
-    // Each waypoint sits on the strip the way it lies from the camera.
     private void drawWaypoints(GuiGraphicsExtractor context, float yaw) {
         if (OfflineClient.MC.player == null) {
             return;
@@ -156,7 +144,6 @@ public final class CompassElement extends HudElement {
         }
     }
 
-    // The number under the names. Null whilst there is none.
     private String number(float yaw) {
         return switch (reading.getValue()) {
             case NONE -> null;
@@ -165,7 +152,6 @@ public final class CompassElement extends HudElement {
         };
     }
 
-    // An upright bar with its middle on x.
     private void bar(GuiGraphicsExtractor context, float x, int width, int top, int height, int tint) {
         float squeeze = squeeze();
         context.pose().pushMatrix();
@@ -175,7 +161,7 @@ public final class CompassElement extends HudElement {
         context.pose().popMatrix();
     }
 
-    // The ink centred on x. A glyph advances one pixel past its ink.
+    // A glyph advances one pixel past its ink.
     private void label(GuiGraphicsExtractor context, Font font, String text, float x, int y, int tint) {
         float squeeze = squeeze();
         context.pose().pushMatrix();
@@ -185,7 +171,6 @@ public final class CompassElement extends HudElement {
         context.pose().popMatrix();
     }
 
-    // Undoes the extra width a stretch gave the strip. Marks and letters keep their shape.
     private float squeeze() {
         return (float) (scaleY() / scaleX());
     }

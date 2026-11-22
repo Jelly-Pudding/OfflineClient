@@ -4,11 +4,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-// Wide vanilla buttons centred in two rows at the foot of a screen. The disconnected screen and the
-// loading screen keep the buttons the client adds there.
 public final class FootButtons {
 
-    // How far above the bottom edge each row starts. They sit as far apart as stacked vanilla buttons.
     private static final int UPPER_ROW = 52;
     private static final int LOWER_ROW = 28;
 

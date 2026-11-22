@@ -6,7 +6,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.phys.Vec3;
 
-// How a module turns towards whatever it is acting on.
 public enum FaceMode {
     OFF, SERVER, CLIENT, SPAM;
 

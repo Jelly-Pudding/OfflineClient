@@ -56,8 +56,7 @@ public final class Hitboxes extends Module {
         return expand.getValueString();
     }
 
-    // Extra pick radius for one entity. Zero keeps it vanilla. The copies the built in server
-    // holds keep their size for whatever it aims at them.
+    // The copies the built in server holds keep their size for whatever it aims at them.
     public double expansionFor(Entity entity) {
         if (!isEnabled() || entity == mc.player || !entity.level().isClientSide() || !holdingWeapon()) {
             return 0;
@@ -68,7 +67,6 @@ public final class Hitboxes extends Module {
         return entities.contains(entity.getType()) ? expand.getValue() : 0;
     }
 
-    // Extra margin for the attack range check.
     public float margin() {
         if (!isEnabled() || entities.resolved().isEmpty() || !holdingWeapon()) {
             return 0;
@@ -76,8 +74,7 @@ public final class Hitboxes extends Module {
         return expand.getFloat();
     }
 
-    // How far the outline of the block grows for the crosshair as a share of the way to the edge of
-    // its own block space. Nought leaves it alone.
+    // A share of the way to the edge of the block's own space. Nought leaves it alone.
     public double aimGrowth(BlockState state) {
         return isEnabled() && blocks.contains(state.getBlock()) ? blockGrowth.getValue() / 100 : 0;
     }

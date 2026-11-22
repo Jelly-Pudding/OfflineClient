@@ -13,7 +13,6 @@ public final class BlockLetters {
 
     private static final int GLYPH_WIDTH = 5;
     private static final int GLYPH_HEIGHT = 7;
-    // A space is three fifths of a letter wide.
     private static final int SPACE_WIDTH = 3;
 
     // Each glyph is its seven rows from the top. A row holds its five columns with the left one
@@ -74,9 +73,8 @@ public final class BlockLetters {
         return Map.entry(letter, rows);
     }
 
-    // The text written the given number of blocks tall as upright cells round its middle. Left
-    // counts as plus x the way a template does. A character the table lacks leaves a space. Empty when
-    // nothing in the text can be drawn.
+    // Left counts as plus x the way a template does. A character the table lacks leaves a space.
+    // Empty when nothing in the text can be drawn.
     public static List<BuildTemplate.Entry> cells(String text, int height) {
         double scale = height / (double) GLYPH_HEIGHT;
         int letterWidth = Math.max(1, (int) Math.round(GLYPH_WIDTH * scale));
@@ -114,8 +112,7 @@ public final class BlockLetters {
         return entries;
     }
 
-    // The glyph row or column a block at this place in the stretched letter shows. Each block
-    // takes the glyph cell under its centre.
+    // Each block takes the glyph cell under its centre.
     private static int sample(int place, int stretched, int glyphSize) {
         return (int) ((place + 0.5) * glyphSize / stretched);
     }

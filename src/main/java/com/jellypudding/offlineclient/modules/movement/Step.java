@@ -81,19 +81,16 @@ public final class Step extends Module {
         "Also snaps the boat or mount you ride down small drops.", false)
         .under(stepDown);
 
-    // The step height the crystals around allow this tick. Worked out once a tick
-    // because the game asks for the step height several times in one move.
+    // Worked out once a tick because the game asks for the step height several times in one move.
     private double safeHeight;
 
     private int legitStage;
     private double legitRise;
     private double legitFoot;
 
-    // Set on the tick a swimmer is lifted onto a bank.
     private boolean lifted;
 
-    // Whether the player and the ridden vehicle stood on something last tick. A snap
-    // only follows a walk off a ledge and never a jump.
+    // A snap only follows a walk off a ledge and never a jump.
     private boolean wasOnGround;
     private boolean vehicleWasOnGround;
 
@@ -124,16 +121,14 @@ public final class Step extends Module {
         return Math.max(vanilla, (float) safeHeight);
     }
 
-    // True whilst simple mode hands the game a taller step.
-    // EntityMixin reads this. A bouncy block must not read a step up as a huge bounce.
+    // Read by EntityMixin. A bouncy block must not read a step up as a huge bounce.
     public boolean raisesStepHeight() {
         return isEnabled() && mc.player != null && mode.is(Mode.SIMPLE) && allowed()
             && safeHeight > 0;
     }
 
-    // Read by PlayerMixin. How deep a drop a sneaker walks down. The game probes by the
-    // step height and a raised one would walk them off every drop it covers. EdgeGuard
-    // needs the plain depth to hold anyone.
+    // Read by PlayerMixin. The game probes a sneaker's drop by the step height and a raised one
+    // would walk them off every drop it covers.
     public float edgeProbe(float plain) {
         if (!isEnabled() || !sneakOffEdges.isOn() || Modules.enabled(EdgeGuard.class)) {
             return plain;
@@ -141,7 +136,6 @@ public final class Step extends Module {
         return Math.max(plain, (float) maxRise());
     }
 
-    // The tallest ledge the mode climbs.
     private double maxRise() {
         return mode.is(Mode.LEGIT) ? LEGIT_LIMIT : height.getValue();
     }
@@ -161,12 +155,10 @@ public final class Step extends Module {
         return safeHealth.isOn() && healthAfter(0) <= healthLimit.getFloat();
     }
 
-    // Hearts left once the damage has landed.
     private float healthAfter(double damage) {
         return (float) ((EntityUtil.totalHealth(mc.player) - damage) / EntityUtil.HEART);
     }
 
-    // The worst a crystal around could do to the player moved by the offset.
     private double crystalDamageAt(Vec3 offset) {
         double worst = 0;
         for (Entity entity : mc.level.entitiesForRendering()) {
@@ -177,14 +169,11 @@ public final class Step extends Module {
         return worst;
     }
 
-    // True when standing at the offset is no worse than where the player is now.
     private boolean saferThan(double current, Vec3 offset) {
         double there = crystalDamageAt(offset);
         return healthAfter(there) > healthLimit.getFloat() || there <= current;
     }
 
-    // The tallest step that keeps the crystals around from hurting past the limit.
-    // Each block up is tested where the player is and a stride onto the ledge.
     private double crystalSafeHeight() {
         double max = height.getValue();
         if (!safeStep.isOn() || !safeCrystals.isOn()) {
@@ -264,7 +253,6 @@ public final class Step extends Module {
         return MovementUtil.ledgeRise(mc.player, MovementUtil.inputDirection());
     }
 
-    // Walks the two heights a real jump passes through at one a tick.
     private void stepLegit() {
         if (legitStage > 0) {
             climbLegit();
@@ -348,7 +336,6 @@ public final class Step extends Module {
         mc.player.setDeltaMovement(velocity.x, -downSpeed.getValue(), velocity.z);
     }
 
-    // True when ground sits within the down distance under an entity already off its ledge.
     private boolean groundWithinReach(Entity entity) {
         double drop = downDistance.getValue() + 0.01;
         return !mc.level.noCollision(entity, entity.getBoundingBox().expandTowards(0, -drop, 0));

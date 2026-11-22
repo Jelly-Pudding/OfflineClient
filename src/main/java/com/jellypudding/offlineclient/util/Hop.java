@@ -37,7 +37,6 @@ public enum Hop {
     private static final int FLOAT_TICKS = 60;
     private static final double DIP = 0.1;
 
-    // A trip that goes this long without a hop gives up.
     private static final int PATIENCE = 40;
 
     // A pull back this many ticks after a trip that moved up or down or through a block is
@@ -88,7 +87,6 @@ public enum Hop {
     // A trip that ended badly may leave the server holding a fall. The wipe waits a tick
     // for a pull back to land on the client.
     private static boolean wipeAfterPull;
-    // Ticks left in which a pull back still owes that wipe.
     private static int watching;
     // The trip whose hop through a block the server has yet to answer and the ticks left
     // in which a pull back is that answer.
@@ -120,29 +118,23 @@ public enum Hop {
         return trip != null;
     }
 
-    // The vehicle the player steers or else the player.
     public static Entity mover(LocalPlayer player) {
         Entity root = player.getRootVehicle();
         return root != player && root.isLocalInstanceAuthoritative() ? root : player;
     }
 
-    // True when the mover and anyone riding it have room at the spot.
     public static boolean fits(Entity mover, Vec3 spot) {
         return HopPath.fits(mover, spot);
     }
 
-    // The nearest spot within two blocks where the mover fits clear of lava. Null when
-    // there is none.
     public static Vec3 nearestFit(Entity mover, Vec3 spot) {
         return HopPath.nearestFit(mover, spot);
     }
 
-    // True when the mover fits at the spot clear of lava.
     public static boolean safeAt(Entity mover, Vec3 spot) {
         return HopPath.landing(mover, spot);
     }
 
-    // The box the mover fills once it stands at the spot.
     public static AABB boxAt(Entity mover, Vec3 spot) {
         return HopPath.boxAt(mover, spot);
     }
@@ -153,13 +145,10 @@ public enum Hop {
         return HopPath.clearWay(mover, from, to);
     }
 
-    // The first spot that way past whatever blocks the mover where it fits clear of lava.
-    // Null when nothing blocks the way or nothing behind it is free within the reach.
     public static Vec3 beyond(Entity mover, Vec3 way, double reach) {
         return HopPath.beyond(mover, mover.position(), way, reach);
     }
 
-    // Says in chat how a trip went once it is over.
     public static Consumer<Result> telling(String done) {
         return result -> ClientLines.inChat(() -> {
             if (result == Result.MOVED) {
@@ -367,12 +356,10 @@ public enum Hop {
             return this;
         }
 
-        // The first problem the plan met. Null whilst it can still go.
         public Result problem() {
             return problem;
         }
 
-        // The longest single hop the plan may take.
         public double longestHop() {
             return hop;
         }
@@ -445,7 +432,6 @@ public enum Hop {
             }
         }
 
-        // The last spot the plan stood on apart from a wipe.
         private Vec3 footing() {
             for (int i = stops.size() - 1; i >= 0; i--) {
                 Stop stop = stops.get(i);
@@ -663,7 +649,6 @@ public enum Hop {
         }
     }
 
-    // Tells the trip whose hop through a block was still waiting how it went.
     private static void answer(Result result) {
         Trip waiting = unanswered;
         unanswered = null;
@@ -710,7 +695,6 @@ public enum Hop {
         return true;
     }
 
-    // True when a leg of the burst moves across without rising.
     private static boolean crossesLevel(Trip current, Burst burst) {
         Vec3 from = current.at;
         int legs = 0;

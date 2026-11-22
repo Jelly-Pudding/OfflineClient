@@ -42,11 +42,10 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-// What the client knows about one entity with what can be done to it. Facts the server never
-// sends stay out. Another player's effects only show through their swirls and carry no time.
+// Facts the server never sends stay out. Another player's effects only show through their swirls
+// and carry no time.
 public final class InspectorScreen extends ListWindow {
 
-    // The groups down the side.
     private enum Tab {
         ABOUT("About"),
         EFFECTS("Effects"),
@@ -61,7 +60,6 @@ public final class InspectorScreen extends ListWindow {
         }
     }
 
-    // The buttons at the end of a row.
     private enum Action implements RowList.Button {
         GO("go", "Walks there with the pathfinder and closes this window."),
         COPY("copy", "Puts it on the clipboard."),
@@ -91,7 +89,6 @@ public final class InspectorScreen extends ListWindow {
         }
     }
 
-    // What a row can act on. Each part is null when the row has no use for it.
     private record Use(String copied, BlockPos spot, String message) {
 
         private static final Use NONE = new Use(null, null, null);
@@ -104,7 +101,6 @@ public final class InspectorScreen extends ListWindow {
     private static final int EYES_WIDTH = 44;
     private static final int MARK_WIDTH = 56;
     private static final int BUTTON_GAP = 4;
-    // Health and places move as you play. The rows are worked out again this often.
     private static final long REFRESH_MS = 500;
     private static final String SEPARATOR = " · ";
     private static final int DECIMALS = 3;
@@ -116,7 +112,7 @@ public final class InspectorScreen extends ListWindow {
     private final Inspector inspector;
     private final Entity entity;
     private final RowList<Use> rows = new RowList<>();
-    // Every row of every tab as last worked out. An entity that has gone keeps them.
+    // An entity that has gone keeps them.
     private final Map<Tab, List<RowList.Row<Use>>> known = new EnumMap<>(Tab.class);
     private Tab tab = Tab.ABOUT;
     private boolean stale = true;
@@ -128,7 +124,6 @@ public final class InspectorScreen extends ListWindow {
         this.entity = entity;
     }
 
-    // Opens the sheet over whatever screen is open.
     public static void open(Inspector inspector, Entity entity) {
         openOver(parent -> new InspectorScreen(parent, inspector, entity));
     }
@@ -138,7 +133,6 @@ public final class InspectorScreen extends ListWindow {
         stale = true;
     }
 
-    // True whilst the entity is still in the world the client holds.
     private boolean present() {
         return !entity.isRemoved() && entity.level() == OfflineClient.MC.level;
     }
@@ -167,7 +161,6 @@ public final class InspectorScreen extends ListWindow {
         rows.show(shown);
     }
 
-    // The footer shows the whole row whilst the pointer rests on it. A long one is cut short in the list.
     private static RowList.Row<Use> row(String text, String detail, Use use, List<Action> buttons) {
         String shown = cut(text);
         String under = cut(detail);
@@ -239,7 +232,6 @@ public final class InspectorScreen extends ListWindow {
         };
     }
 
-    // Effects the client holds in full come with their time. The rest are known by their swirls.
     private List<RowList.Row<Use>> effects() {
         List<RowList.Row<Use>> effects = new ArrayList<>();
         if (!(entity instanceof LivingEntity living)) {
@@ -442,8 +434,8 @@ public final class InspectorScreen extends ListWindow {
         footer.say(inspector.toggleMark(entity) ? "Marked " + name + " with a glow" : "Took the glow off " + name);
     }
 
-    // A null button is a click on the row itself. The chat box gets a space after the line for
-    // whatever comes next and the game trims it off a line sent as it is.
+    // The chat box gets a space after the line for whatever comes next and the game trims it off a
+    // line sent as it is.
     private void press(Use use, RowList.Button button) {
         if (use.message() != null && (button == null || button == Action.WRITE)) {
             OfflineClient.MC.gui.setScreen(new ChatScreen(use.message() + " ", false));

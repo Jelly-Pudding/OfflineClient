@@ -49,12 +49,11 @@ public final class GhostHand extends Module {
         searchTags("through walls", "chest", "lever", "hand no clip");
     }
 
-    // Read by BlockStateBaseMixin. True for a block the crosshair should pass through.
+    // Read by BlockStateBaseMixin.
     public boolean passesThrough(BlockPos pos) {
         return isEnabled() && seeThrough.isOn() && inGame() && !wanted(pos);
     }
 
-    // The usual storage plus every colour of shulker box.
     private static List<Block> defaultBlocks() {
         List<Block> list = new ArrayList<>(List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST,
             Blocks.ENDER_CHEST, Blocks.BARREL, Blocks.DISPENSER, Blocks.DROPPER, Blocks.HOPPER));
@@ -63,9 +62,7 @@ public final class GhostHand extends Module {
         return list;
     }
 
-    // True for a block this module reaches for. The list decides alone. Any container
-    // goes by what opens a screen. An ender chest opens one too and yet hands out no
-    // menu since its block entity holds nothing.
+    // An ender chest opens a screen and yet hands out no menu since its block entity holds nothing.
     private boolean wanted(BlockPos pos) {
         BlockState state = mc.level.getBlockState(pos);
         if (!everything.isOn()) {

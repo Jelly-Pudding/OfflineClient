@@ -9,11 +9,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// The panel an element can draw behind itself. Its settings are named after the element.
 public final class Backdrop {
 
-    // How far the panel reaches past the element on every side in GUI pixels. The editor
-    // draws its outline round an element at the same distance.
+    // The editor draws its outline round an element at the same distance.
     public static final int PAD = 2;
 
     // A dark blue that keeps white text readable over any sky.
@@ -42,7 +40,6 @@ public final class Backdrop {
         return List.of(on, color, opacity);
     }
 
-    // Round a box of this size with its corner at the origin. Nothing whilst the switch is off.
     void around(GuiGraphicsExtractor context, int width, int height) {
         if (on.isOn()) {
             context.fill(-PAD, -PAD, width + PAD, height + PAD,

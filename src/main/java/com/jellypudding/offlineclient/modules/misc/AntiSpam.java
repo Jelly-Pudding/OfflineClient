@@ -42,10 +42,8 @@ public final class AntiSpam extends Module {
 
     private static final Pattern COUNTER = Pattern.compile(" x(\\d{1,8})$");
 
-    // How many writers are counted and how many stay muted at once.
     private static final int MAX_PLAYERS = 256;
 
-    // Ignore commands that may wait for room under the server's spam count.
     private static final int MAX_WAITING = 16;
 
     private final NumberSetting depth = new NumberSetting("Depth",
@@ -69,14 +67,13 @@ public final class AntiSpam extends Module {
             + " screen.", "")
         .under(muteSpammers);
 
-    // When each writer wrote their last few lines by lower case name.
+    // Keyed by lower case name.
     private final Map<String, Deque<Long>> written = new BoundedMap<>(MAX_PLAYERS, true);
-    // When each mute ends by lower case name.
+    // Keyed by lower case name.
     private final Map<String, Long> muted = new BoundedMap<>(MAX_PLAYERS);
-    // Spammers the server has yet to be told to ignore.
     private final Deque<String> toIgnore = new ArrayDeque<>();
-    // Spammers the server was told to ignore by lower case name. The common ignore commands
-    // lift an ignore when they are sent again. The names belong to the server with this key.
+    // The common ignore commands lift an ignore when they are sent again. The names belong to the
+    // server with this key.
     private final Set<String> ignored = Collections.newSetFromMap(new BoundedMap<>(MAX_PLAYERS));
     private String ignoredOn;
     private final JoinWatch joins = new JoinWatch();
@@ -105,7 +102,6 @@ public final class AntiSpam extends Module {
         toIgnore.clear();
     }
 
-    // A repeat of a recent line takes that line out and comes back with a count on the end.
     public Component fold(ChatComponent chat, Component message) {
         if (!isEnabled()) {
             return message;
@@ -122,7 +118,6 @@ public final class AntiSpam extends Module {
             .append(Component.literal(" x" + countAfter(removed, incoming)).withStyle(ChatFormatting.GRAY));
     }
 
-    // The count a stored line reaches once the incoming one joins it. Zero when they differ.
     private static int countAfter(String line, String incoming) {
         String existing = BetterChat.withoutStamp(line);
         if (existing.equals(incoming)) {
@@ -135,7 +130,6 @@ public final class AntiSpam extends Module {
         return 0;
     }
 
-    // True for a line on its way into chat that a muted spammer wrote.
     public boolean hides(Component message, GuiMessageSource source) {
         if (!isEnabled() || muted.isEmpty()) {
             return false;
@@ -144,7 +138,6 @@ public final class AntiSpam extends Module {
         return writer != null && mutes(writer);
     }
 
-    // True whilst the player is muted as a spammer. A mute that has run out is dropped.
     public boolean mutes(String name) {
         String key = name.toLowerCase(Locale.ROOT);
         Long until = isEnabled() && muteSpammers.isOn() ? muted.get(key) : null;
@@ -181,8 +174,6 @@ public final class AntiSpam extends Module {
         }
     }
 
-    // The spammers told to ignore on the server with that key. The names of another server are
-    // forgotten.
     private Set<String> ignored(String server) {
         if (!server.equals(ignoredOn)) {
             ignored.clear();

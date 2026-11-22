@@ -40,12 +40,10 @@ public record Landing(double dropKept, double dropAdded, float scale) {
         };
     }
 
-    // True when the block charges a fall the way plain ground does.
     public boolean plain() {
         return equals(PLAIN);
     }
 
-    // True when the block charges no fall at all.
     public boolean spares() {
         return scale == 0;
     }

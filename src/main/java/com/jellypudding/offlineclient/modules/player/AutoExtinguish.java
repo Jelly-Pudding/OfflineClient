@@ -33,8 +33,6 @@ import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-// Puts you out when you catch fire. Each tick the first remedy on the player's list that
-// can work where you stand is tried. Fire and lava can also be walled off before you reach them.
 public final class AutoExtinguish extends Module {
 
     public enum Remedy {
@@ -50,16 +48,12 @@ public final class AutoExtinguish extends Module {
         }
     }
 
-    // Ticks a pour gets to put the fire out before the next remedy is tried.
     private static final int POUR_GRACE = 10;
 
-    // Ticks poured water waits to be taken back before it is left where it is.
     private static final int COLLECT_GIVE_UP = 60;
 
-    // Ticks Nearby water rests after a walk that went nowhere.
     private static final int WALK_RETRY = 40;
 
-    // Ticks to wait after a drink or a throw whilst the effect lands.
     private static final int SETTLE_TICKS = 10;
 
     private final RankSetting<Remedy> remedies = new RankSetting<>("Remedies",
@@ -71,11 +65,10 @@ public final class AutoExtinguish extends Module {
     private final BoolSetting wallOff = new BoolSetting("Wall off fire",
         "Fire and lava stop you like solid blocks. Fire resistance lets you through.", true);
 
-    private final Feeding feeding = new Feeding();
+    private final Feeding feeding = new Feeding(this);
     private final InventoryUtil.HotbarLoan bucketLoan = new InventoryUtil.HotbarLoan();
     private final Trip trip = new Trip();
 
-    // Where the bucket poured its water. Null whilst nothing waits to be taken back.
     private BlockPos poured;
     private int pouredTick;
     // Ticks ShulkerPacker has packed since the pour. They do not count towards giving the water up.
@@ -96,14 +89,6 @@ public final class AutoExtinguish extends Module {
         return trip.active() ? "walking" : null;
     }
 
-    public boolean isBusy() {
-        return isEnabled() && feeding.isActive();
-    }
-
-    public boolean bottleLanding() {
-        return isEnabled() && feeding.isLanding();
-    }
-
     @Override
     protected void onDisable() {
         stopAll();
@@ -115,7 +100,7 @@ public final class AutoExtinguish extends Module {
         letGoOfPour();
     }
 
-    // Read by BlockCollisionsMixin. Fire and lava stand in your way as full blocks.
+    // Read by BlockCollisionsMixin.
     public boolean isWall(BlockState state) {
         LocalPlayer player = mc.player;
         if (!wallOff.isOn() || player == null || player.getAbilities().invulnerable || player.isInLava()
@@ -171,7 +156,7 @@ public final class AutoExtinguish extends Module {
         };
     }
 
-    // Punches out the fire you stand in. You still burn for a while but it cannot light you again.
+    // You still burn for a while but the fire cannot light you again.
     private boolean breakFire() {
         for (BlockPos pos : BlockPos.betweenClosed(mc.player.getBoundingBox())) {
             if (BlockUtil.state(pos).getBlock() instanceof BaseFireBlock) {
@@ -186,7 +171,6 @@ public final class AutoExtinguish extends Module {
         return poured != null && mc.player.tickCount - pouredTick < POUR_GRACE;
     }
 
-    // Pours a water bucket straight down. It only counts when the water lands on you.
     private boolean pour() {
         LocalPlayer player = mc.player;
         if (!player.onGround() || player.isInLava() || !InventoryUtil.inventoryFree() || Modules.packing()) {
@@ -212,14 +196,12 @@ public final class AutoExtinguish extends Module {
         return true;
     }
 
-    // Where a bucket poured straight down puts its water. The bucket casts this same ray.
+    // The bucket casts this same ray.
     private BlockPos pourSpot() {
         BlockHitResult hit = Buckets.ray(mc.player.getYRot(), RotationManager.STRAIGHT_DOWN, ClipContext.Fluid.NONE);
         return hit == null ? null : Buckets.pourSpot(hit.getBlockPos(), mc.player.isShiftKeyDown());
     }
 
-    // Takes the water back once the server has put the fire out. The emptied bucket is still in hand.
-    // Nothing moves whilst ShulkerPacker packs. The swap that sends the bucket home waits as well.
     private void collect() {
         if (poured == null) {
             return;
@@ -276,7 +258,7 @@ public final class AutoExtinguish extends Module {
     // A splash bottle thrown at your feet works at once and goes before a drink. A bottle already
     // thrown may still bring fire resistance and is waited for.
     private boolean takeFireResistance() {
-        if (!InventoryUtil.inventoryFree() || Modules.feeding(this) || Modules.bottleLanding()
+        if (!InventoryUtil.inventoryFree() || Feeding.busy(this) || Feeding.bottleLanding()
             || Modules.packing()) {
             return false;
         }
@@ -304,12 +286,10 @@ public final class AutoExtinguish extends Module {
         }
     }
 
-    // The inventory index of a bottle of that kind that gives fire resistance or minus one.
     private static int fireResistanceSlot(Item bottle) {
         return InventoryUtil.findSlot(stack -> resists(stack, bottle), InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // A bottle of that kind that gives fire resistance.
     private static boolean resists(ItemStack stack, Item bottle) {
         return stack.is(bottle) && ItemUtil.carriesEffect(stack, MobEffects.FIRE_RESISTANCE.value());
     }

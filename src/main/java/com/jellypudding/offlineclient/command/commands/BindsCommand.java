@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// A bind held by more than one thing is shown in yellow.
 public final class BindsCommand extends Command {
 
     private static final String FREE = "free";
@@ -62,7 +61,6 @@ public final class BindsCommand extends Command {
         }
     }
 
-    // The letters and digits and F keys. The keys a player reaches for when picking one.
     private static void listFree() {
         List<String> free = new ArrayList<>();
         addFree(free, InputConstants.KEY_A, InputConstants.KEY_0);
@@ -83,8 +81,7 @@ public final class BindsCommand extends Command {
         }
     }
 
-    // The ClickGUI keeps its key. Without one the menu could only be opened by typing. The keys of
-    // modules can be brought back with the undo link. A macro or a loadout loses its key for good.
+    // The ClickGUI keeps its key. Without one the menu could only be opened by typing.
     private static void clear() {
         KeybindSetting menu = OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class).getKeybind();
         List<KeybindSetting> keys = KeyUse.keySettings().stream().filter(key -> key != menu).toList();

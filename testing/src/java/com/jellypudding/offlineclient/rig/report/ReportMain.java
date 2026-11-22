@@ -103,7 +103,6 @@ public final class ReportMain {
         return new Outcome(suite, name, Verdict.FAILED, message.strip(), 0, List.of());
     }
 
-    // Why the game stopped as far as its own files tell.
     private static String death(Path out, Path game) throws IOException {
         if (Files.isRegularFile(out.resolve(TIMEOUT_FILE))) {
             return Files.readAllLines(out.resolve(TIMEOUT_FILE)).getFirst();

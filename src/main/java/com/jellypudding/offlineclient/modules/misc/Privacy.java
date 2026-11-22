@@ -44,14 +44,11 @@ public final class Privacy extends Module {
 
     private final AtomicInteger blocked = new AtomicInteger();
 
-    // The visit the three fields under it speak of. It holds nothing before the game first asks
-    // on a visit and a server you left is never kept alive.
+    // The visit the three fields under it speak of. A server you left is never kept alive.
     private WeakReference<ClientPacketListener> visit = new WeakReference<>(null);
-    // True once the server of the visit has said or shown that it refuses unsigned chat.
     private boolean forced;
-    // What the settings asked for when they were last looked at.
     private boolean unsignedWanted;
-    // True whilst the chat session of the visit is held back. Read on the network thread.
+    // Read on the network thread.
     private volatile boolean held;
 
     public Privacy() {
@@ -68,7 +65,6 @@ public final class Privacy extends Module {
         return true;
     }
 
-    // Reports stopped since the game started.
     @Override
     public String getSuffix() {
         return count(blocked.get());
@@ -141,15 +137,13 @@ public final class Privacy extends Module {
         settle();
     }
 
-    // The connection of the visit whilst you are still on it. Null once you have left.
     private ClientPacketListener visited() {
         ClientPacketListener connection = mc.getConnection();
         return connection != null && connection == visit.get() ? connection : null;
     }
 
-    // Brings the visit in line with the settings. Signing can start at any moment and the game
-    // is asked for a session at once. Going unsigned waits for the next join because a server
-    // that has your key refuses every unsigned line.
+    // Signing can start at any moment. Going unsigned waits for the next join because a server that
+    // has your key refuses every unsigned line.
     private void settle() {
         ClientPacketListener connection = visited();
         if (connection == null) {
@@ -204,7 +198,6 @@ public final class Privacy extends Module {
             + " signed on servers that refuse unsigned chat and can be reported there.");
     }
 
-    // A link that sets Sign if forced through the set command. The next tick settles the visit.
     private Component forcedLink(String shown, boolean on, String hover) {
         return ChatUtil.commandLink("§b[" + shown + "]",
             "set " + Setting.idFor(getName()) + " " + signIfForced.id() + " " + on, hover);

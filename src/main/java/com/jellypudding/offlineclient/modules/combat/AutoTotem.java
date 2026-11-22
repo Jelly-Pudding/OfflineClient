@@ -63,7 +63,7 @@ public final class AutoTotem extends Module {
         return counter.isOn() ? totems + " left" : null;
     }
 
-    // True whilst the offhand is claimed for a totem. Offhand steps aside for it.
+    // Offhand steps aside whilst the offhand is claimed for a totem.
     public boolean isLocked() {
         return isEnabled() && locked;
     }
@@ -136,8 +136,6 @@ public final class AutoTotem extends Module {
         return count;
     }
 
-    // True when the health line is already crossed or something already in the world
-    // would push the player under it before the next tick could react.
     private boolean threatened(float minHealth) {
         if (elytra.isOn() && mc.player.isFallFlying()
             && mc.player.getDeltaMovement().length() > ELYTRA_TRIGGER_SPEED) {

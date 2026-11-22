@@ -17,7 +17,6 @@ public final class Client {
     // The colour code the client starts a refusal with.
     private static final String ERROR_MARK = "§c";
     private static final String COLOUR_CODE = "§.";
-    // Ticks a command gets to finish what it scheduled.
     private static final int COMMAND_TICKS = 2;
 
     private final Rig rig;
@@ -54,7 +53,6 @@ public final class Client {
         rig.act(mc -> module.setEnabled(on));
     }
 
-    // Presses the key of a module that is no switch and does its work on the press.
     public void press(String name) {
         Module module = module(name);
         // A module that is no switch does its work on its key. A control run keeps that back too.
@@ -68,8 +66,8 @@ public final class Client {
         return rig.ask(mc -> module.isEnabled());
     }
 
-    // Types a client command without its prefix and hands back what the client wrote in reply
-    // with the colour codes taken out.
+    // The command is typed without its prefix. Hands back what the client wrote in reply with the
+    // colour codes taken out.
     public List<String> command(String line) {
         int mark = ChatTap.mark();
         rig.act(mc -> {
@@ -82,7 +80,6 @@ public final class Client {
         return plain(ChatTap.since(mark));
     }
 
-    // Says a line the way a player types it into the chat box and presses enter.
     public void say(String line) {
         rig.act(mc -> {
             ChatScreen box = new ChatScreen("", false);
@@ -123,7 +120,6 @@ public final class Client {
         return ChatTap.mark();
     }
 
-    // What the client told the player since the mark with the colour codes taken out.
     public List<String> saidSince(int mark) {
         return plain(ChatTap.since(mark));
     }

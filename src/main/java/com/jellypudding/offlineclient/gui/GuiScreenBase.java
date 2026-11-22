@@ -14,8 +14,6 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-// Shared by both ClickGUI styles. Owns the search box and the typing and
-// binding state.
 public abstract class GuiScreenBase extends ScaledScreen {
 
     private static final String SEARCH_KEY = "search";
@@ -64,7 +62,6 @@ public abstract class GuiScreenBase extends ScaledScreen {
         textInput.set(searchBar.isFocused() || settings.isEditing() || extraTyping());
     }
 
-    // A screen may own another field that takes characters.
     protected boolean extraTyping() {
         return false;
     }
@@ -157,8 +154,6 @@ public abstract class GuiScreenBase extends ScaledScreen {
         return searchBar.click(mx, my);
     }
 
-    // The search survives closing the GUI. Reopening lands on the same
-    // results and the cross in the box clears them. Both styles share it.
     protected final void restoreSearch() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(SEARCH_KEY) || !gui.get(SEARCH_KEY).isJsonPrimitive()) {
@@ -217,8 +212,7 @@ public abstract class GuiScreenBase extends ScaledScreen {
         return Modules.get(ClickGuiModule.class).getKeybind();
     }
 
-    // The mouse button the GUI is bound to closes it like its key does. Never whilst a row
-    // listens for a bind.
+    // Never whilst a row listens for a bind.
     private boolean closesGui(MouseButtonEvent event) {
         return guiKey().answers(event) && !settings.isListening() && !extraTyping();
     }

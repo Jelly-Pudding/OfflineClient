@@ -13,12 +13,10 @@ public final class MapGrid {
     private MapGrid() {
     }
 
-    // How many blocks a side a map zoomed out that often shows.
     public static int side(int zoom) {
         return SIDE << zoom;
     }
 
-    // The west or the north edge of the square a map of that zoom made at a coordinate shows.
     public static int edge(double coordinate, int zoom) {
         int side = side(zoom);
         return Mth.floor((coordinate + SHIFT) / side) * side - SHIFT;

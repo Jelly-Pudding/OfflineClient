@@ -9,8 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-// The conditions one module or one rule watches. A pick list holds the ones in use and each
-// picked one lists its rows beneath it. Nothing of a condition that is not picked shows.
 public final class Conditions {
 
     private final ChoiceListSetting list;
@@ -20,7 +18,6 @@ public final class Conditions {
     // The one condition that is told of a pop as it happens. Every list offers it.
     private TotemPops pops;
 
-    // The picked ones in the order they are offered.
     private List<Condition> picked = List.of();
     private final List<Condition> holding = new ArrayList<>();
 
@@ -42,23 +39,19 @@ public final class Conditions {
         repick();
     }
 
-    // Everything there is for a rule that may be set off by anything. The tail ends every row
-    // name and keeps the rows of one rule apart from the next.
+    // The tail ends every row name and keeps the rows of one rule apart from the next.
     public static Conditions forRule(String listName, String description, String tail) {
         return new Conditions(listName, description, tail, Catalogue.all(), new String[0]);
     }
 
-    // The conditions that are a reason to get away. The names given start picked.
     public static Conditions forEscape(String listName, String description, String... startPicked) {
         return new Conditions(listName, description, "", Catalogue.dangers(), startPicked);
     }
 
-    // The pick list and then the rows of every condition.
     public Setting<?>[] settings() {
         return settings.toArray(new Setting<?>[0]);
     }
 
-    // The pick list. Whatever shows with the rule hangs under it.
     public ChoiceListSetting list() {
         return list;
     }
@@ -80,8 +73,7 @@ public final class Conditions {
         holding.retainAll(now);
     }
 
-    // Call as the owner goes on or begins to watch again. Every condition forgets what happened
-    // before. Clocks start again and a hit or a kill from earlier is no news.
+    // Call as the owner goes on or begins to watch again.
     public void start() {
         holding.clear();
         for (Condition condition : picked) {
@@ -89,7 +81,6 @@ public final class Conditions {
         }
     }
 
-    // Says in chat why a picked condition can never hold as it is set up.
     public void tellProblems() {
         for (Condition condition : picked) {
             String problem = condition.problem();
@@ -107,14 +98,12 @@ public final class Conditions {
         }
     }
 
-    // The same for an owner that acts on the pop itself. Hands back Totem pops when the pop
-    // met it and null otherwise. The next tick does not see that pop again.
+    // For an owner that acts on the pop itself. The next tick does not see that pop again.
     public Condition popped(TotemPopEvent event) {
         heard(event);
         return picked.contains(pops) && pops.holds() ? pops : null;
     }
 
-    // True when one of the picked can be met with no world. Only leaving the server can.
     public boolean watchesOutside() {
         for (Condition condition : picked) {
             if (condition.watchesOutside()) {
@@ -124,7 +113,7 @@ public final class Conditions {
         return false;
     }
 
-    // Asks every picked condition once. Call it once a tick whilst in a world.
+    // Call it once a tick whilst in a world.
     public void tick() {
         holding.clear();
         for (Condition condition : picked) {
@@ -134,7 +123,6 @@ public final class Conditions {
         }
     }
 
-    // The same for a tick with no world. Only leaving the server can hold there.
     public void tickOutside() {
         holding.clear();
         for (Condition condition : picked) {
@@ -144,27 +132,23 @@ public final class Conditions {
         }
     }
 
-    // How many are picked.
     public int size() {
         return picked.size();
     }
 
-    // True when one of the picked held on the last tick.
     public boolean anyHolds() {
         return !holding.isEmpty();
     }
 
-    // True when every one of the picked held on the last tick. Never with nothing picked.
+    // Never with nothing picked.
     public boolean allHold() {
         return !picked.isEmpty() && holding.size() == picked.size();
     }
 
-    // The first of the picked that held on the last tick. Null when none did.
     public Condition firstHolding() {
         return holding.isEmpty() ? null : holding.getFirst();
     }
 
-    // True when one of the picked is over in a tick and has no end to wait for.
     public boolean hasMoment() {
         for (Condition condition : picked) {
             if (condition.isMoment()) {
@@ -174,8 +158,6 @@ public final class Conditions {
         return false;
     }
 
-    // A few words for a module suffix. What the one picked condition is set to or how many
-    // are picked. Null with none.
     public String summary() {
         if (picked.isEmpty()) {
             return null;

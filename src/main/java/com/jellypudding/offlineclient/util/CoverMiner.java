@@ -14,14 +14,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-// Mines one block of an enemy's cover for a combat module. The module names the block every
-// tick and says when the packet that breaks it may go. The server counts a break from its
-// start with whatever is in hand when the stop arrives and keeps the block as its target
-// afterwards. A block put back on a spot it still counts on goes with one stop. A stop
-// sent with the start parks the block and the server may then finish it whenever it likes.
-// A break that has to wait for the caller starts without one. The server keeps one target
-// for each player and a miner that started on another block takes it away. Only one miner
-// works at a time and the rest wait their turn. See BreakSlots.
+// Mines one block of an enemy's cover for a combat module. The module names the block every tick
+// and says when the packet that breaks it may go. Only one miner works at a time and the rest wait
+// their turn. See BreakSlots for how the server counts a break.
 public final class CoverMiner {
 
     public enum Mode { HOLD, PACKET, SILENT }
@@ -29,7 +24,6 @@ public final class CoverMiner {
     private static final Minecraft MC = OfflineClient.MC;
     private static final int IDLE = Integer.MIN_VALUE / 2;
 
-    // Ticks the stop that should break the block gets to show before anything more is done.
     private static final int SETTLE_TICKS = 5;
 
     // Stops in a row that left the block standing before the count is started afresh. The
@@ -57,7 +51,6 @@ public final class CoverMiner {
     private BlockPos current;
     private int stopSentAt = IDLE;
     private int misses;
-    // The last tick the module worked on the block or rested on it.
     private int seenAt = IDLE;
 
     public CoverMiner(BooleanSupplier rotate, Supplier<SwingMode> swing) {
@@ -75,23 +68,18 @@ public final class CoverMiner {
         return this;
     }
 
-    // The block being worked on or kept clear. Null whilst there is none.
     public BlockPos target() {
         return current;
     }
 
-    // True whilst the tool has to stay in hand for the block to come down.
     public boolean keepsTool() {
         return owner == this && current != null && !mode.is(Mode.SILENT) && !BlockUtil.state(current).isAir();
     }
 
-    // True whilst another miner or PacketMine has the server's break target. Nothing goes out
-    // meanwhile.
     public boolean waiting() {
         return (owner != null && owner != this && owner.working()) || Modules.packetMining();
     }
 
-    // True whilst a block is in hand and the module still looks after it every tick.
     private boolean working() {
         int since = MC.player.tickCount - seenAt;
         return current != null && since >= 0 && since <= 1;
@@ -144,14 +132,11 @@ public final class CoverMiner {
         return start(pos, tool, mayFinish, followUp);
     }
 
-    // True for a few ticks after the stop that should break the block went out. The server
-    // has yet to answer and the block still shows.
     public boolean settling() {
         int since = MC.player.tickCount - stopSentAt;
         return since >= 0 && since < SETTLE_TICKS;
     }
 
-    // Ticks before the packet that breaks the block may go. Nought once it may.
     public int ticksLeft(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         float perTick = BreakTime.breakDelta(toolFor(state), pos);
@@ -181,7 +166,6 @@ public final class CoverMiner {
         }
     }
 
-    // Gives the hand back for a tick without letting go of the block.
     public void rest() {
         slots.standAside();
         if (current != null && MC.player != null) {
@@ -189,7 +173,6 @@ public final class CoverMiner {
         }
     }
 
-    // Lets go of the block. A break left half done is called off.
     public void stop() {
         if (owner == this && current != null && MC.player != null && MC.level != null) {
             BlockMiner.release(current);
@@ -215,7 +198,7 @@ public final class CoverMiner {
         }
     }
 
-    // The hotbar slot of the tool for the block. Minus one keeps what is held.
+    // Minus one keeps what is held.
     private int toolSlot(BlockState state) {
         return autoTool.isOn() ? Modules.toolSlot(state) : -1;
     }
@@ -225,8 +208,7 @@ public final class CoverMiner {
         return slot == -1 ? MC.player.getMainHandItem() : MC.player.getInventory().getItem(slot);
     }
 
-    // Takes the server's break target for the block. False whilst another miner has it and
-    // the hand goes back meanwhile.
+    // False whilst another miner has the server's break target.
     private boolean claim(BlockPos pos) {
         if (waiting()) {
             slots.restore();
@@ -247,7 +229,6 @@ public final class CoverMiner {
         return true;
     }
 
-    // The lone stop the server breaks its target on once the count is up.
     private boolean finish(BlockPos pos, int tool, Runnable followUp) {
         if (settling()) {
             return false;
@@ -307,7 +288,6 @@ public final class CoverMiner {
             && game.offlineclient$destroyProgress() + state.getDestroyProgress(MC.player, MC.level, pos) >= 1;
     }
 
-    // Runs the packets with the tool in hand. Silent hands the slot straight back.
     private void withTool(BlockPos pos, int tool, Runnable packets) {
         if (rotate.getAsBoolean()) {
             BlockUtil.faceVector(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)), RotationPriority.MINE);

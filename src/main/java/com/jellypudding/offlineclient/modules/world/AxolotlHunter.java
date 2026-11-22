@@ -28,10 +28,9 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-// The server sends every axolotl with its colour. Each marked one is boxed in that colour.
+// The server sends every axolotl with its colour.
 public final class AxolotlHunter extends Module {
 
-    // Ticks before the same axolotl is tried again.
     private static final int COOLDOWN = 20;
 
     private static final int PINK = 0xFFF7A1C4;
@@ -53,7 +52,6 @@ public final class AxolotlHunter extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards the axolotl on the server side.", true).under(catchThem);
 
-    // Rebuilt once a tick.
     private List<Axolotl> found = List.of();
     private final Sightings sightings = new Sightings();
     private final Cooldowns<Integer> tried = new Cooldowns<>();

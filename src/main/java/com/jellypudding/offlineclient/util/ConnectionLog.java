@@ -64,8 +64,6 @@ public final class ConnectionLog extends AbstractAppender {
         attached.clear();
     }
 
-    // The newest lines that fit between the top of the screen and the bottom given. The oldest of
-    // them is drawn at the top.
     public static void draw(GuiGraphicsExtractor graphics, Font font, int width, int bottom) {
         if (Conceal.hides(Conceal.Part.OVERLAY)) {
             return;

@@ -22,11 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Every kind of entity the server has sent you with how many of each there are. Dropped items
-// and minecarts and arrows count too and a sudden pile of them gives a base away.
 public final class EntityListElement extends RowsElement {
 
-    // Stand in whilst the editor is open and nothing is about.
     private static final List<Counted> SAMPLE = List.of(new Counted("Item", 14), new Counted("Zombie", 3),
         new Counted("Chest minecart", 1));
 
@@ -38,7 +35,6 @@ public final class EntityListElement extends RowsElement {
         "Counts other players as a kind.", true);
     private final ColorSetting color = labelColor("Entity list colour",
         "Colour of the kinds. The counts stay white.");
-    // Each gathering walks every entity the client holds.
     private final RowCache<Counted> counts = new RowCache<>(this::build);
 
     public EntityListElement() {
@@ -46,18 +42,13 @@ public final class EntityListElement extends RowsElement {
         add(range, limit, players, color);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !shown().isEmpty();
-    }
-
     private List<Counted> shown() {
         List<Counted> built = counts.get();
         return built.isEmpty() && editing() ? SAMPLE : built;
     }
 
-    // Yourself and a body only this client has are left out. Each kind goes by the words of its
-    // id whatever language the game is in and however a resource pack names it.
+    // Each kind goes by the words of its id whatever language the game is in and however a resource
+    // pack names it.
     private List<Counted> build() {
         LocalPlayer self = OfflineClient.MC.player;
         ClientLevel level = OfflineClient.MC.level;

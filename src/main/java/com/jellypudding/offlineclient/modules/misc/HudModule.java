@@ -76,7 +76,6 @@ public final class HudModule extends Module {
         "Switches the whole overlay off and on again. It does what the switch of this module does.",
         KeybindSetting.UNBOUND).heardWhilstOff();
 
-    // Every row the module shows and the revision of the pieces it was gathered at.
     private List<Setting<?>> rows;
     private int rowsAt;
     // True from the draw with the game's own HUD until the debug text is down in a frame that
@@ -159,9 +158,7 @@ public final class HudModule extends Module {
         elements.forEach(manager::add);
     }
 
-    // The rows of every piece follow the module's own in the order the pieces are listed. Pieces
-    // come and go as the player adds and removes them and the rows are gathered afresh then. The
-    // store of the added pieces leads. A load makes those pieces before any of their rows is
+    // The store of the added pieces leads. A load makes those pieces before any of their rows is
     // looked for and a bad value further down cannot lose them.
     @Override
     public List<Setting<?>> getSettings() {
@@ -199,16 +196,12 @@ public final class HudModule extends Module {
         return smoothFont.isOn();
     }
 
-    // The game's own bars that are switched on follow their elements whilst the HUD is on
-    // and always in the editor where they are being placed.
     public boolean placesGameParts() {
         return isEnabled() || HudElement.editing();
     }
 
-    // True whilst the overlay drawn with the game's own HUD steps aside. Hide in menus hides it
-    // under any screen but the chat box and Hide in debug screen whilst the debug screen is open.
-    // A menu with the debug screen open hides it whatever the two say. The game draws the debug
-    // text over the menu and the overlay goes over that text or not at all.
+    // A menu with the debug screen open hides it whatever the two settings say. The game draws the
+    // debug text over the menu and the overlay goes over that text or not at all.
     public boolean overlayHidden() {
         Screen screen = mc.gui.screen();
         boolean menu = screen != null && !(screen instanceof ChatScreen);
@@ -232,9 +225,8 @@ public final class HudModule extends Module {
         renderOverlay(event.getContext());
     }
 
-    // The overlay drawn along with the game's own HUD. Whilst it steps aside only the elements
-    // that stay are drawn. Whilst the debug screen is open they are all that is drawn here as
-    // well and the rest waits for renderOverDebugText. The editor draws all of it itself.
+    // Whilst the debug screen is open only the elements that stay are drawn here and the rest waits
+    // for renderOverDebugText. The editor draws all of it itself.
     public void renderOverlay(GuiGraphicsExtractor context) {
         if (HudElement.editing()) {
             return;
@@ -252,9 +244,8 @@ public final class HudModule extends Module {
         }
     }
 
-    // The last draw of each frame. The debug text still draws over a hidden HUD whilst a
-    // screen is open and the covers stay with it. Hide in menus leaves them alone. The editor
-    // draws them itself.
+    // The last draw of each frame. Hide in menus leaves the covers alone and the editor draws them
+    // itself.
     public void renderOnTop(GuiGraphicsExtractor context) {
         if (!isEnabled() || mc.level == null || HudElement.editing()) {
             return;

@@ -21,14 +21,13 @@ import java.util.concurrent.ConcurrentHashMap;
 // input handlers. The real keyboard and mouse of the machine are never read or moved.
 public final class Controls {
 
-    // Where the pointer waits whilst nothing should be hovered.
     private static final double PARKED = -100;
     private static final double FACE_INSET = 0.5;
 
     private final Rig rig;
     private final TestInput input;
     private final Set<InputConstants.Key> held = new LinkedHashSet<>();
-    // The keyboard keys held right now. The game asks from any thread.
+    // The game asks from any thread.
     private static final Set<Integer> HELD_CODES = ConcurrentHashMap.newKeySet();
 
     Controls(Rig rig) {
@@ -36,16 +35,22 @@ public final class Controls {
         this.input = rig.context().getInput();
     }
 
+    // A key goes down on a world the client has seen. Letting go waits for nothing.
+    private TestInput input() {
+        rig.hear();
+        return input;
+    }
+
     // One press and release of a key. The game hears it within the next tick.
     public void press(int key) {
-        input.pressKey(key);
+        input().pressKey(key);
     }
 
     public void hold(int key) {
         InputConstants.Key down = InputConstants.Type.KEYBOARD.getOrCreate(key);
         held.add(down);
         HELD_CODES.add(key);
-        input.holdKey(down);
+        input().holdKey(down);
     }
 
     public void release(int key) {
@@ -55,21 +60,20 @@ public final class Controls {
         input.releaseKey(up);
     }
 
-    // True whilst the rig holds that key of the keyboard down. Read by the rig's own mixin where
-    // the game asks the keyboard itself.
+    // Read by the rig's own mixin where the game asks the keyboard itself.
     public static boolean holds(int key) {
         return HELD_CODES.contains(key);
     }
 
     // One click of a mouse button of the game's own numbering.
     public void click(int button) {
-        input.pressMouse(button);
+        input().pressMouse(button);
     }
 
     public void holdMouse(int button) {
         InputConstants.Key down = InputConstants.Type.MOUSE.getOrCreate(button);
         held.add(down);
-        input.holdKey(down);
+        input().holdKey(down);
     }
 
     public void releaseMouse(int button) {
@@ -78,7 +82,6 @@ public final class Controls {
         input.releaseKey(up);
     }
 
-    // Lets go of everything a case left down.
     void letGo() {
         for (InputConstants.Key key : Set.copyOf(held)) {
             input.releaseKey(key);
@@ -88,15 +91,15 @@ public final class Controls {
     }
 
     public void type(String text) {
-        input.typeChars(text);
+        input().typeChars(text);
     }
 
     public void scroll(double amount) {
-        input.scroll(amount);
+        input().scroll(amount);
     }
 
     public void look(float yaw, float pitch) {
-        input.lookAt(yaw, pitch);
+        input().lookAt(yaw, pitch);
         rig.ticks(1);
     }
 
@@ -152,7 +155,7 @@ public final class Controls {
             return new double[] {guiX * window.getScreenWidth() / window.getGuiScaledWidth(),
                 guiY * window.getScreenHeight() / window.getGuiScaledHeight()};
         });
-        input.setCursorPos(spot[0], spot[1]);
+        input().setCursorPos(spot[0], spot[1]);
     }
 
     // The same for a place in the pixels the client's own screens are laid out in.
@@ -163,7 +166,7 @@ public final class Controls {
 
     // Takes the pointer off the screen. Nothing is hovered in a picture taken afterwards.
     public void parkPointer() {
-        input.setCursorPos(PARKED, PARKED);
+        input().setCursorPos(PARKED, PARKED);
     }
 
     public void clickInView(double viewX, double viewY, int button) {

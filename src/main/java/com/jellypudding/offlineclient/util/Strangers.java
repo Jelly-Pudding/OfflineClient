@@ -9,8 +9,6 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.function.Predicate;
 
-// The other players in view who may mean you harm and what they are up to. The rules that
-// act for you and the warnings about players read the same tests here.
 public final class Strangers {
 
     private Strangers() {
@@ -24,7 +22,6 @@ public final class Strangers {
             && (!enemiesOnly || EntityUtil.isListedEnemy(entity));
     }
 
-    // The closest such player within the range who passes the test. Null when none does.
     public static Player nearest(double range, boolean enemiesOnly, Predicate<Player> test) {
         LocalPlayer self = OfflineClient.MC.player;
         ClientLevel level = OfflineClient.MC.level;
@@ -40,8 +37,7 @@ public final class Strangers {
         return best;
     }
 
-    // True whilst the player has a bed in either hand. What a player carries out of hand is
-    // never sent to anyone else.
+    // What a player carries out of hand is never sent to anyone else.
     public static boolean holdsBed(Player player) {
         return player.getMainHandItem().is(ItemTags.BEDS) || player.getOffhandItem().is(ItemTags.BEDS);
     }

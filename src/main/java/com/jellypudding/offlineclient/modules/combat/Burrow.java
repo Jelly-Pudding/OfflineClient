@@ -75,7 +75,6 @@ public final class Burrow extends Module {
     private BlockPos anchor;
     private int waited;
 
-    // True once the burrow has been set off. Manual mode waits for the jump key.
     private boolean armed;
 
     private boolean pullBack;
@@ -139,7 +138,6 @@ public final class Burrow extends Module {
         Timer.override(TIMER_KEY, 1f);
     }
 
-    // Sets the burrow off. A real jump starts here and the packet lift needs nothing yet.
     private void arm() {
         armed = true;
         waited = 0;
@@ -180,7 +178,6 @@ public final class Burrow extends Module {
             return;
         }
         if (!armed) {
-            // The player may walk to another block before the jump.
             if (mc.player.onGround()) {
                 anchor = mc.player.blockPosition();
             }

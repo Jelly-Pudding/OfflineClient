@@ -6,11 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.ToIntFunction;
 
-// Scores how well a candidate answers a search. Every list the client filters
-// uses this to order results with the closest match first.
 public final class SearchRank {
 
-    // Nothing about the candidate answers the query.
     public static final int NO_MATCH = 0;
 
     private static final int EXACT = 10_000;
@@ -22,8 +19,8 @@ public final class SearchRank {
     private SearchRank() {
     }
 
-    // Higher is a better answer and NO_MATCH means no answer at all. Shorter candidates
-    // win ties because a query is usually most of what the searcher wanted to type.
+    // Shorter candidates win ties because a query is usually most of what the searcher wanted to
+    // type.
     public static int score(String candidate, String query) {
         if (candidate == null || candidate.isEmpty() || query == null || query.isEmpty()) {
             return NO_MATCH;
@@ -52,8 +49,8 @@ public final class SearchRank {
         return CONTAINS + shortness - Math.min(at, 100);
     }
 
-    // The best score across several fields. Every field after the name drops
-    // one band. A strong tag match can still outrank a weak name match.
+    // Every field after the name drops one band. A strong tag match can still outrank a weak name
+    // match.
     public static int best(String query, String name, String... weaker) {
         int best = score(name, query);
         int penalty = 0;
@@ -67,7 +64,6 @@ public final class SearchRank {
         return best;
     }
 
-    // The candidate that answers the query best or an empty string when none does.
     public static String strongest(String query, Iterable<String> candidates) {
         String best = "";
         int bestScore = NO_MATCH;
@@ -84,8 +80,7 @@ public final class SearchRank {
     private record Scored<T>(T candidate, int score) {
     }
 
-    // The candidates that answer the query at all with the best first. Equal
-    // scores keep the order they were given in.
+    // Equal scores keep the order they were given in.
     public static <T> List<T> rank(List<T> candidates, ToIntFunction<T> scorer) {
         List<Scored<T>> scored = new ArrayList<>();
         for (T candidate : candidates) {

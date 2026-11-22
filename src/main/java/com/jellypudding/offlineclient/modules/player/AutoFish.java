@@ -49,21 +49,16 @@ import java.util.concurrent.ThreadLocalRandom;
 // The delays run at the server's tick rate. A lagging server still reels in on time.
 public final class AutoFish extends Module {
 
-    // Durability points left that count as about to break.
     private static final int NEARLY_BROKEN = 2;
 
-    // What each enchantment level is worth when picking the best rod.
     private static final int LUCK_WORTH = 9;
     private static final int LURE_WORTH = 9;
     private static final int UNBREAKING_WORTH = 2;
 
-    // A random shift is cut off at this many standard deviations.
     private static final double SPREAD_CUTOFF = 3;
 
-    // How far the player may drift before a recorded spot is thrown away.
     private static final double SPOT_DRIFT = 0.4;
 
-    // Two casts count as the same aim within this many degrees.
     private static final float SAME_AIM = 0.5f;
 
     public enum BiteMode {
@@ -144,7 +139,6 @@ public final class AutoFish extends Module {
     private boolean outOfRods;
     private boolean warnedShallow;
 
-    // One cast of the rod. The bobber lands where the aim sent it.
     private record Spot(Vec3 playerPos, float yaw, float pitch, Vec3 bobberPos) {
     }
 
@@ -329,13 +323,10 @@ public final class AutoFish extends Module {
         return true;
     }
 
-    // How much of a server tick one client tick is worth.
     private static double serverTick() {
         return TickRate.INSTANCE.tps() / SharedConstants.TICKS_PER_SECOND;
     }
 
-    // The delay shifted by a random amount that is usually small and never
-    // more than the spread either way.
     private static double shifted(int delay, int spread) {
         if (spread == 0) {
             return delay;
@@ -345,8 +336,6 @@ public final class AutoFish extends Module {
         return Math.max(0, delay + Math.round(share * spread));
     }
 
-    // The hand to fish with. Null whilst the hands are taken or no hand holds a rod worth using
-    // or a rod moved this tick.
     private InteractionHand pickRod() {
         if (Hands.taken()) {
             return null;
@@ -387,7 +376,6 @@ public final class AutoFish extends Module {
         return loan.select(best) && InventoryUtil.selectedSlot() == before ? InteractionHand.MAIN_HAND : null;
     }
 
-    // The main hand goes first as it does for a click made by hand.
     private InteractionHand heldRod() {
         for (InteractionHand hand : InteractionHand.values()) {
             if (rodScore(mc.player.getItemInHand(hand)) >= 0) {
@@ -397,7 +385,6 @@ public final class AutoFish extends Module {
         return null;
     }
 
-    // Minus one when the stack is no rod or no rod worth using.
     private int rodScore(ItemStack stack) {
         if (!(stack.getItem() instanceof FishingRodItem)) {
             return -1;
@@ -451,8 +438,6 @@ public final class AutoFish extends Module {
         toldReady = false;
     }
 
-    // Remembers where this cast is aimed and turns towards the next spot when
-    // the current one has given up its share of the fish.
     private boolean readyToCast() {
         castPos = mc.player.position();
         castYaw = mc.player.getYRot();
@@ -487,7 +472,6 @@ public final class AutoFish extends Module {
         return turnToNextSpot();
     }
 
-    // False whilst the view is still swinging round or the spot has gone stale.
     private boolean turnToNextSpot() {
         if (mc.player.position().distanceToSqr(nextSpot.playerPos()) > SPOT_DRIFT * SPOT_DRIFT) {
             spots.remove(nextSpot);
@@ -538,7 +522,6 @@ public final class AutoFish extends Module {
             && spot.playerPos().distanceToSqr(castPos) <= SPOT_DRIFT * SPOT_DRIFT;
     }
 
-    // The nearest aim that lands the bobber clear of the spot in use.
     private Spot chooseNextSpot() {
         Vec3 here = mc.player.position();
         return spots.stream()

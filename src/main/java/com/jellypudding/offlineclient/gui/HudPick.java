@@ -9,16 +9,12 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-// The pieces picked together in the HUD editor. A drag across empty space draws a box and
-// every piece it touches is picked once the button comes up.
 final class HudPick {
 
-    // How strongly the box and every picked piece are tinted with the accent.
     private static final float WASH = 0.18f;
 
     private final Set<HudElement> picked = new HashSet<>();
 
-    // Where the box began and where the pointer has dragged it. Only whilst one is drawn.
     private boolean drawing;
     private double fromX;
     private double fromY;
@@ -37,7 +33,6 @@ final class HudPick {
         picked.clear();
     }
 
-    // Lets go of every piece that is not among the given ones.
     void keepOnly(Collection<HudElement> pieces) {
         picked.retainAll(pieces);
     }
@@ -55,7 +50,6 @@ final class HudPick {
         toY = y;
     }
 
-    // The pieces the box touched become the pick and the box goes.
     void finish(Collection<HudElement> touched) {
         picked.clear();
         picked.addAll(touched);
@@ -73,7 +67,6 @@ final class HudPick {
             && box.top() < frame.top() + frame.height() && frame.top() < box.top() + box.height();
     }
 
-    // Laid over a picked piece inside its outline.
     void tint(GuiGraphicsExtractor context, Box frame) {
         context.fill(frame.left(), frame.top(), frame.left() + frame.width(), frame.top() + frame.height(),
             ColorUtil.fade(GuiTheme.accent(), WASH));
@@ -88,7 +81,6 @@ final class HudPick {
         context.outline(box.left(), box.top(), box.width(), box.height(), GuiTheme.accent());
     }
 
-    // Whole pixels round both corners and never less than one either way.
     private Box box() {
         int left = (int) Math.floor(Math.min(fromX, toX));
         int top = (int) Math.floor(Math.min(fromY, toY));

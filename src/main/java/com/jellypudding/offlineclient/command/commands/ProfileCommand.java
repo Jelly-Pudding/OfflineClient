@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-// A profile holds parts of the setup. Part words after the name save or load only those.
 public final class ProfileCommand extends Command {
 
     private static final String SAVE = "save";
@@ -77,7 +76,6 @@ public final class ProfileCommand extends Command {
         }
     }
 
-    // Ties the server you are on to a profile or with off to none.
     private void join(Profiles profiles, String[] args) {
         if (args.length != 2) {
             usage(JOIN_USAGE);

@@ -34,7 +34,6 @@ public final class ColorUtil {
         return 0xFF000000 | channel(r) << 16 | channel(g) << 8 | channel(b);
     }
 
-    // A vivid colour of any hue picked at random.
     public static int randomBright() {
         return hsv(ThreadLocalRandom.current().nextFloat(360f), 0.85f, 1f);
     }
@@ -43,10 +42,8 @@ public final class ColorUtil {
         return Math.clamp(Math.round(share * 255f), 0, 255);
     }
 
-    // Neighbouring letters or rows sit this many degrees apart round the colour wheel.
     private static final float RAINBOW_STEP = 8;
     private static final float RAINBOW_SATURATION = 0.65f;
-    // How long one turn takes at the normal speed.
     private static final double RAINBOW_SECONDS = 4;
     private static final double MILLIS_PER_SECOND = 1000;
 
@@ -77,19 +74,15 @@ public final class ColorUtil {
         return 0.2126f * r + 0.7152f * g + 0.0722f * b;
     }
 
-    // Hue nought is red and hue a hundred and twenty is green.
     public static final float GREEN_HUE = 120;
     public static final float RAMP_SATURATION = 0.85f;
 
-    // Half a turn of the colour wheel in degrees.
     private static final float HALF_TURN = 180;
 
-    // A smooth red to green ramp for a share from nought to one.
     public static int redToGreen(float share) {
         return hsv(Math.clamp(share, 0f, 1f) * GREEN_HUE, RAMP_SATURATION, 1f);
     }
 
-    // Green under a hundred milliseconds. Amber under two hundred and fifty. Red beyond.
     public static int ping(int latency) {
         if (latency < 0) {
             return 0xFF909090;

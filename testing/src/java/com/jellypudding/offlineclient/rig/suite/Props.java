@@ -33,7 +33,6 @@ final class Props {
     private Props() {
     }
 
-    // Puts an item in a hotbar slot counted from nought and takes that slot in the hand.
     static void hold(Rig rig, int slot, String item) {
         rig.world().hotbar(slot, item);
         hold(rig, slot);
@@ -44,7 +43,6 @@ final class Props {
         rig.ticks(HELD_TICKS);
     }
 
-    // Puts an item in a slot of the backpack counted from nought.
     static void pack(Rig rig, int slot, String item) {
         World world = rig.world();
         world.command("item replace entity " + world.player() + " inventory." + slot + " with " + item);
@@ -55,13 +53,12 @@ final class Props {
         world.command("item replace entity " + world.player() + " " + slot + " with " + item);
     }
 
-    // Stands a mob in the middle of a block. The tags follow the id with no space between.
+    // The tags follow the id with no space between.
     static void summon(Rig rig, String mob, BlockPos at, String tags) {
         rig.world().command("summon " + mob + " " + (at.getX() + 0.5) + " " + at.getY() + " " + (at.getZ() + 0.5)
             + " " + tags);
     }
 
-    // How many of an entity the server holds near the stage.
     static int living(Rig rig, String type) {
         return rig.world().count("execute if entity @e[type=" + type + "]");
     }
@@ -71,13 +68,12 @@ final class Props {
         return rig.world().count("data get entity @e[type=" + type + ",limit=1] Health");
     }
 
-    // How many of an item the player carries.
     static int carried(Rig rig, String item) {
         World world = rig.world();
         return world.count("clear " + world.player() + " " + item + " 0");
     }
 
-    // True when the slot of the player holds the item. The slot is named the way commands name it.
+    // The slot is named the way commands name it.
     static boolean holds(Rig rig, String slot, String item) {
         World world = rig.world();
         return world.attempt("execute if items entity " + world.player() + " " + slot + " " + item);
@@ -91,8 +87,6 @@ final class Props {
         return rig.world().blockAt(pos).equals("minecraft:" + block);
     }
 
-    // Waits for something only the server can say and asks every few ticks. Hands back the ticks
-    // it took.
     static int await(Rig rig, String what, int limitTicks, BooleanSupplier holds) {
         for (int waited = 0; waited <= limitTicks; waited += POLL_TICKS) {
             if (holds.getAsBoolean()) {
@@ -113,12 +107,10 @@ final class Props {
         rig.act(mc -> ((RegistryListSetting<?>) owner.getSetting(setting)).setValue(picked));
     }
 
-    // Picks the first option of a choice list whose name holds the words whatever their case.
     static void choose(Rig rig, String module, String setting, String words) {
         chooseSome(rig, module, setting, words, 1);
     }
 
-    // Picks every such option.
     static void chooseAll(Rig rig, String module, String setting, String words) {
         chooseSome(rig, module, setting, words, Integer.MAX_VALUE);
     }
@@ -137,19 +129,16 @@ final class Props {
         });
     }
 
-    // Types words into a text setting. They may hold spaces.
     static void text(Rig rig, String module, String setting, String words) {
         Module owner = rig.client().module(module);
         rig.act(mc -> ((TextSetting) owner.getSetting(setting)).setValue(words));
     }
 
-    // The number a module writes beside its name in the module list. Nought when it writes none.
     static int tally(Module module) {
         Matcher number = NUMBER.matcher(String.valueOf(module.getSuffix()));
         return number.find() ? Integer.parseInt(number.group()) : 0;
     }
 
-    // True when the game has a stack like that anywhere on the player.
     static boolean has(Inventory pack, Predicate<ItemStack> wanted) {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             if (wanted.test(pack.getItem(slot))) {

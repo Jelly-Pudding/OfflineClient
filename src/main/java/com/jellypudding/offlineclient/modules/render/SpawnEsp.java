@@ -23,7 +23,6 @@ public final class SpawnEsp extends Module {
     private record Spot(BlockPos pos, boolean night) {
     }
 
-    // How far above the floor the marker is drawn.
     private static final double LIFT = 0.02;
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",

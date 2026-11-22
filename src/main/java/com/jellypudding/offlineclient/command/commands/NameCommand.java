@@ -56,8 +56,6 @@ public final class NameCommand extends Command {
         tell(store, " from your next join");
     }
 
-    // The word all saves every name the server lists. A player who is called all can only be saved
-    // by joining as them.
     private static void add(NameStore store, String word) {
         List<String> names = word.equalsIgnoreCase(ALL) ? listed() : new ArrayList<>();
         if (!word.equalsIgnoreCase(ALL)) {
@@ -80,7 +78,6 @@ public final class NameCommand extends Command {
         }
     }
 
-    // Every name in the player list of the server that a join could send.
     private static List<String> listed() {
         List<String> names = new ArrayList<>();
         ClientPacketListener connection = OfflineClient.MC.getConnection();

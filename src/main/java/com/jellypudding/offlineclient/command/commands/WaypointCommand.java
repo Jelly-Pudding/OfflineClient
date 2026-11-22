@@ -29,21 +29,17 @@ import java.util.Locale;
 import java.util.OptionalDouble;
 import java.util.function.UnaryOperator;
 
-// Saves and edits waypoints from chat. On its own it opens the list.
 public final class WaypointCommand extends Command {
 
     private static final String AUTO = "auto";
     private static final String RAINBOW = "rainbow";
-    // Puts an option back to what the Waypoints module gives.
     private static final String RESET = "reset";
     private static final String ON = "on";
     private static final String OFF = "off";
     // Saturation and brightness are typed from nought to a hundred.
     private static final float PERCENT = 100;
-    // Places a typed scale or distance is written back to.
     private static final int PLACES = 4;
 
-    // Ends each form that may name another dimension.
     private static final String DIMENSION_WORD = " [overworld|nether|end]";
 
     private static final String ADD_USAGE = "waypoint add <name> [x y z" + DIMENSION_WORD + "]";
@@ -94,7 +90,6 @@ public final class WaypointCommand extends Command {
         }
     }
 
-    // Typed coordinates may name another dimension. The waypoint then shows across a portal.
     private void add(String[] args) {
         if (args.length != 2 && args.length != 5 && args.length != 6) {
             usage(ADD_USAGE);
@@ -143,8 +138,6 @@ public final class WaypointCommand extends Command {
         ChatUtil.message("§b" + waypoint.name() + " §7is now called §b" + name + "§7.");
     }
 
-    // Puts a waypoint on another spot. A dimension word takes it into that dimension. The waypoint
-    // of that name already there is the one moved and otherwise the one in the dimension you are in.
     private void move(String[] args) {
         if (args.length != 5 && args.length != 6) {
             usage(MOVE_USAGE);
@@ -182,8 +175,6 @@ public final class WaypointCommand extends Command {
             + ".");
     }
 
-    // A hue from 0 to 360 keeps the shade the waypoint has unless a saturation and a brightness follow
-    // it. The word auto goes back to the colour of the name and rainbow turns through every colour.
     private void colour(String[] args) {
         boolean shadeTyped = args.length > 3 && Dimension.named(args[3]) == null;
         Waypoint waypoint = target(args, shadeTyped ? 5 : 3, COLOUR_USAGE);
@@ -279,7 +270,6 @@ public final class WaypointCommand extends Command {
         }
     }
 
-    // Whether the waypoint shows on the other side of a nether portal.
     private void across(String[] args) {
         Waypoint waypoint = target(args, 3, "waypoint across <name> <" + ON + "|" + OFF + "|" + RESET + ">"
             + DIMENSION_WORD);
@@ -297,7 +287,6 @@ public final class WaypointCommand extends Command {
         }
     }
 
-    // What the waypoint does once you come within a distance of it. The distance may be left out.
     private void near(String[] args) {
         boolean distanceTyped = args.length > 3 && Dimension.named(args[3]) == null;
         Waypoint waypoint = target(args, distanceTyped ? 4 : 3, "waypoint near <name> <"
@@ -325,7 +314,6 @@ public final class WaypointCommand extends Command {
         }
     }
 
-    // A hidden waypoint stays saved but is not drawn.
     private void hidden(String[] args, boolean hide) {
         Waypoint waypoint = target(args, 2, "waypoint " + (hide ? "hide" : "show") + " <name>" + DIMENSION_WORD);
         if (waypoint != null) {
@@ -344,15 +332,12 @@ public final class WaypointCommand extends Command {
         save(waypoint, waypoint.withOptions(edit.apply(waypoint.options())), said);
     }
 
-    // Puts the changed waypoint in the place of the one it came from and says what changed.
     private static void save(Waypoint from, Waypoint changed, String said) {
         if (WaypointStore.get().replace(from, changed)) {
             ChatUtil.message("§b" + changed.name() + " §7" + said);
         }
     }
 
-    // The waypoint the word after the verb names. A dimension word after the given number of words
-    // looks in that dimension instead of this one. Null after telling the player what was wrong.
     private Waypoint target(String[] args, int words, String form) {
         String dimension = args.length == words || args.length == words + 1 ? dimension(args, words) : null;
         if (dimension == null) {
@@ -366,8 +351,6 @@ public final class WaypointCommand extends Command {
         return waypoint;
     }
 
-    // The dimension the word at that index names or the one you are in when the line stops short
-    // of it. Null for a word that names no dimension.
     private static String dimension(String[] args, int index) {
         if (args.length <= index) {
             return ServerInfo.dimension();
@@ -376,12 +359,10 @@ public final class WaypointCommand extends Command {
         return named == null ? null : named.id();
     }
 
-    // Words that name the dimension when it is not the one you are in.
     private static String elsewhere(String dimension) {
         return dimension.equals(ServerInfo.dimension()) ? "" : " in the " + ServerInfo.dimensionName(dimension);
     }
 
-    // The constant a typed word names. Null after telling the player which words there are.
     private static <E extends Enum<E>> E constant(Class<E> type, String typed, String what) {
         for (E constant : type.getEnumConstants()) {
             if (word(constant).equalsIgnoreCase(typed)) {
@@ -401,13 +382,11 @@ public final class WaypointCommand extends Command {
         return constant.name().toLowerCase(Locale.ROOT);
     }
 
-    // A distance the way it was typed such as 1 block or 2.5 blocks. A count of whole blocks
-    // would round the fraction away.
+    // A count of whole blocks would round the fraction away.
     private static String blocks(double distance) {
         return ChatUtil.decimal(distance, PLACES) + (distance == 1 ? " block" : " blocks");
     }
 
-    // The dimension you are in comes first and then every other one of this server that holds a waypoint.
     private void list() {
         List<String> dimensions = WaypointStore.get().dimensions();
         if (dimensions.isEmpty()) {
@@ -427,7 +406,6 @@ public final class WaypointCommand extends Command {
         }
     }
 
-    // Only the waypoints the list shows go and only once the command comes a second time.
     private void clear() {
         if (WaypointStore.get().onServer().isEmpty()) {
             ChatUtil.message(NONE_YET);
@@ -462,7 +440,6 @@ public final class WaypointCommand extends Command {
                 options.add(RESET);
             }
         }
-        // The dimension word comes last in each form that takes one.
         boolean last = switch (verb) {
             case "add", "move" -> index == 6;
             case "colour" -> index == 4 || index == 6;

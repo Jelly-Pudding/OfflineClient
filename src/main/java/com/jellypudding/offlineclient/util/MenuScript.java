@@ -13,7 +13,6 @@ import java.util.Locale;
 // Swap 12 with 3 trades a slot with a hotbar key and wait 10 waits and close shuts the menu.
 public final class MenuScript {
 
-    // What a played step does. The player of the script runs one of them at a time.
     public sealed interface Action permits Click, Wait, Close {
     }
 
@@ -26,7 +25,6 @@ public final class MenuScript {
     public record Close() implements Action {
     }
 
-    // The words a description can list for the player.
     public static final String HELP = "Write left or right or shift or drop or dropall or double or middle"
         + " and then a slot number such as shift 12. Two numbers with the word to between them click every"
         + " slot from the first to the last such as shift 0 to 26. The word outside in place of a number"
@@ -57,8 +55,7 @@ public final class MenuScript {
         }
     }
 
-    // A step as written. A click runs from one slot to another and the two are the same for a
-    // single slot.
+    // A click runs from one slot to another and the two are the same for a single slot.
     private record Step(Action fixed, Press press, int from, int to) {
     }
 
@@ -69,7 +66,6 @@ public final class MenuScript {
     private static final String TO = "to";
     private static final String OUTSIDE = "outside";
     private static final String OFFHAND = "offhand";
-    // Another word for a left click.
     private static final String CLICK = "click";
 
     // No slot number or wait is longer. A longer run of digits is a slip of the hand.
@@ -83,8 +79,8 @@ public final class MenuScript {
         this.unread = unread;
     }
 
-    // Reads the rows in order. A blank row is passed over. The first row that makes no sense
-    // ends the reading and is kept to show the player.
+    // A blank row is passed over. The first row that makes no sense ends the reading and is kept to
+    // show the player.
     public static MenuScript parse(List<String> rows) {
         List<Step> steps = new ArrayList<>();
         for (String row : rows) {
@@ -101,7 +97,6 @@ public final class MenuScript {
         return new MenuScript(List.copyOf(steps), null);
     }
 
-    // The first row that could not be read as it was written. Null when every row was.
     public String unread() {
         return unread;
     }
@@ -110,8 +105,8 @@ public final class MenuScript {
         return steps.isEmpty();
     }
 
-    // What to do in a menu with that many slots. A row of slots is cut down to the slots the
-    // menu has and a slot it lacks is left out. The game crashes on a click past the last slot.
+    // A row of slots is cut down to the slots the menu has and a slot it lacks is left out. The
+    // game crashes on a click past the last slot.
     public List<Action> actionsFor(int slots) {
         List<Action> actions = new ArrayList<>();
         for (Step step : steps) {
@@ -139,7 +134,6 @@ public final class MenuScript {
         return new Click(slot, step.press().button, step.press().kind);
     }
 
-    // Null for a row that makes no sense.
     private static Step read(String[] words) {
         return switch (words[0]) {
             case WAIT -> words.length == 2 && number(words[1]) >= 0
@@ -192,7 +186,6 @@ public final class MenuScript {
         return null;
     }
 
-    // Minus one for anything but a short run of digits.
     private static int number(String word) {
         if (word.isEmpty() || word.length() > MOST_DIGITS || !word.chars().allMatch(Character::isDigit)) {
             return -1;

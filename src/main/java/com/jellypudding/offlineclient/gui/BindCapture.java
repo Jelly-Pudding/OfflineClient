@@ -7,8 +7,6 @@ import net.minecraft.client.input.KeyEvent;
 
 import java.util.function.Consumer;
 
-// Works out the bind a player asks for whilst a row waits for one. The screen hands it every
-// key and click until one of them ends the wait.
 public final class BindCapture {
 
     public static final String LISTENING = "press a key";
@@ -22,8 +20,7 @@ public final class BindCapture {
         waiting = KeybindSetting.UNBOUND;
     }
 
-    // True once the key ended the wait. A key hands over itself with the modifiers held. Delete
-    // and backspace hand over no bind and escape hands over nothing.
+    // Delete and backspace hand over no bind and escape hands over nothing.
     public boolean keyPressed(KeyEvent event, Consumer<Bind> taker) {
         int key = event.key();
         if (key == InputConstants.KEY_ESCAPE) {

@@ -10,8 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-// The stacks of a container as a file keeps them. Each one is written with its slot and the
-// empty slots are left out.
 final class SlotStacks {
 
     private SlotStacks() {
@@ -35,8 +33,7 @@ final class SlotStacks {
         return entries;
     }
 
-    // The stacks back in their slots with the empty ones in place. A slot past the size and a
-    // stack the game cannot read are left out.
+    // A slot past the size and a stack the game cannot read are left out.
     static List<ItemStack> decode(JsonArray entries, int size, RegistryOps<JsonElement> ops) {
         List<ItemStack> items = new ArrayList<>(Collections.nCopies(size, ItemStack.EMPTY));
         for (JsonElement entry : entries) {

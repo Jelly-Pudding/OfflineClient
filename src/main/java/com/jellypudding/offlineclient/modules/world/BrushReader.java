@@ -22,11 +22,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-// The server sends the find of a suspicious block with the first stroke of the brush. This
-// names it in chat and can break the block out when the find is not wanted.
+// The server sends the find of a suspicious block with the first stroke of the brush.
 public final class BrushReader extends Module {
 
-    // Blocks whose find was named are kept from being named again. The oldest are let go first.
     private static final int MAX_NAMED = 256;
 
     private final BoolSetting breakUnwanted = new BoolSetting("Break unwanted",
@@ -37,7 +35,6 @@ public final class BrushReader extends Module {
 
     private final Set<BlockPos> named = Collections.newSetFromMap(new BoundedMap<>(MAX_NAMED));
     private final WorldWatch world = new WorldWatch();
-    // The block with an unwanted find that is being broken. Null whilst none is.
     private BlockPos breaking;
 
     public BrushReader() {

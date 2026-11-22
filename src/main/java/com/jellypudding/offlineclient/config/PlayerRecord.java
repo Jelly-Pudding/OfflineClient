@@ -22,18 +22,14 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-// What was learnt about one player on one server. The newest of every list comes first.
 public final class PlayerRecord {
 
-    // Where a player was seen and when.
     public record Place(BlockPos pos, String dimension, long time) {
 
-        // Written as x y z and the dimension.
         private String text() {
             return BlockUtil.text(pos) + " " + dimension;
         }
 
-        // Null for text that holds no place.
         private static Place parse(String text, long time) {
             int split = text.lastIndexOf(' ');
             BlockPos pos = split < 0 ? null : BlockUtil.parse(text.substring(0, split));
@@ -41,18 +37,15 @@ public final class PlayerRecord {
         }
     }
 
-    // What happened in one line of the log. Seen and died carry a place and popped carries a count.
     public enum Kind { JOINED, LEFT, SEEN, POPPED, DIED, MODE, RENAMED }
 
-    // One line of the log.
     public record Event(long time, Kind kind, String detail) {
 
-        // Null for an event without a place.
         public Place place() {
             return kind == Kind.SEEN || kind == Kind.DIED ? Place.parse(detail, time) : null;
         }
 
-        // False for a place or a count that cannot be read back. Only a hand edited file holds one.
+        // Only a hand edited file holds a place or a count that cannot be read back.
         private boolean readable() {
             try {
                 return switch (kind) {
@@ -79,22 +72,17 @@ public final class PlayerRecord {
         }
     }
 
-    // A line about the player. The coordinates of a place follow the text and the detail
-    // is written fainter after it.
     public record Fact(String text, String detail, Place place) {
 
-        // The whole line as plain words.
         public String plain() {
             String coordinates = place == null ? "" : " " + BlockUtil.text(place.pos());
             return text + coordinates + (detail.isEmpty() ? "" : SEPARATOR + detail);
         }
     }
 
-    // The worn pieces from head to feet and then both hands.
     public static final List<EquipmentSlot> GEAR_SLOTS = List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST,
         EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND);
 
-    // The longest lists a record keeps. They keep the file small.
     private static final int MAX_EVENTS = 20;
     private static final int MAX_NAMES = 8;
     private static final int MAX_HELD = 12;
@@ -108,20 +96,15 @@ public final class PlayerRecord {
     private String name;
     private final List<String> pastNames = new ArrayList<>();
     private final long firstSeen;
-    // Nought for a player never seen in the tab list.
     private long lastOnline;
-    // The joins seen whilst you played.
     private int joins;
     private long lastJoin;
     private long lastLeave;
     // Below nought until the tab list gives a figure.
     private int ping = -1;
     private String mode = "";
-    // Null for a player never seen in the world.
     private Place place;
-    // An item id and its enchantments for each of the gear slots. Empty until the first look.
     private List<String> gear = List.of();
-    // The item ids of what they were seen holding.
     private final List<String> held = new ArrayList<>();
     private int pops;
     private int deaths;
@@ -168,17 +151,14 @@ public final class PlayerRecord {
         return lastOnline;
     }
 
-    // Null for a player never seen in the world.
     public Place place() {
         return place;
     }
 
-    // The newest moment the player was online or in view. Nought for neither.
     public long lastSeen() {
         return Math.max(lastOnline, place == null ? 0 : place.time());
     }
 
-    // True when the name differs from the one on record.
     public boolean rename(String newName, long now) {
         if (newName.isEmpty() || newName.equals(name)) {
             return false;
@@ -191,8 +171,7 @@ public final class PlayerRecord {
         return true;
     }
 
-    // True when the game mode differs from the one on record. The first one seen goes in
-    // without a line in the log.
+    // The first mode seen goes in without a line in the log.
     public boolean mode(String newMode, long now) {
         if (newMode.equals(mode)) {
             return false;
@@ -209,7 +188,6 @@ public final class PlayerRecord {
         ping = latency;
     }
 
-    // Online up to this moment at least.
     public void online(long now) {
         lastOnline = now;
     }
@@ -227,7 +205,6 @@ public final class PlayerRecord {
         log(now, Kind.LEFT, "");
     }
 
-    // Where a look at the world found the player. True when it goes in the log as a fresh sighting.
     public boolean seen(Place at, boolean cameIntoView) {
         Place before = place;
         place = at;
@@ -239,8 +216,6 @@ public final class PlayerRecord {
         return fresh;
     }
 
-    // True when any piece differs from the last look. A player wearing and holding nothing
-    // keeps no lines.
     public boolean wear(List<String> pieces) {
         List<String> kept = pieces.stream().allMatch(String::isEmpty) ? List.of() : List.copyOf(pieces);
         if (kept.equals(gear)) {
@@ -250,7 +225,6 @@ public final class PlayerRecord {
         return true;
     }
 
-    // Puts the items in their hands at the front of the items seen held. True when the list changed.
     public boolean hold(List<String> items) {
         List<String> before = List.copyOf(held);
         for (String item : items.reversed()) {
@@ -271,7 +245,6 @@ public final class PlayerRecord {
         }
     }
 
-    // A null place leaves the spot out of the log.
     public void died(Place at, long now) {
         deaths++;
         log(now, Kind.DIED, at == null ? "" : at.text());
@@ -288,7 +261,6 @@ public final class PlayerRecord {
         }
     }
 
-    // Everything on record except the log. Live is the tab list entry whilst they are online.
     public List<Fact> facts(PlayerInfo live, long now) {
         List<Fact> facts = new ArrayList<>();
         facts.add(status(live, now));
@@ -336,7 +308,6 @@ public final class PlayerRecord {
                 : SEPARATOR + ping + " ms ping" + SEPARATOR + mode), null);
     }
 
-    // Null for an empty slot.
     private static Fact piece(String piece, EquipmentSlot slot) {
         if (piece.isEmpty()) {
             return null;
@@ -351,7 +322,6 @@ public final class PlayerRecord {
         return ChatUtil.words(Identifier.tryParse(id));
     }
 
-    // The dimension and how far and how long ago such as Nether · 40 blocks away · 3 hours ago.
     // The distance only shows in the dimension you are in.
     public static String where(Place at, long now) {
         StringBuilder text = new StringBuilder(ServerInfo.dimensionName(at.dimension()));
@@ -363,7 +333,6 @@ public final class PlayerRecord {
         return text.append(SEPARATOR).append(ChatUtil.ago(now - at.time())).toString();
     }
 
-    // The log as lines with the newest first.
     public List<Fact> history(long now) {
         List<Fact> lines = new ArrayList<>();
         for (Event event : events) {
@@ -375,7 +344,6 @@ public final class PlayerRecord {
         return lines;
     }
 
-    // The name and every fact and the whole log as plain lines for the clipboard.
     public String plainText(PlayerInfo live, long now) {
         List<String> lines = new ArrayList<>();
         lines.add(name + " " + id);
@@ -384,7 +352,6 @@ public final class PlayerRecord {
         return String.join("\n", lines);
     }
 
-    // Leaves out what was never learnt to keep the file small.
     public JsonObject toJson() {
         JsonObject json = new JsonObject();
         json.addProperty("name", name);

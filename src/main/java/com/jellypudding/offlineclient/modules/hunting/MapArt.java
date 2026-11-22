@@ -43,13 +43,10 @@ import java.util.Set;
 // saved picture uses the same colours.
 public final class MapArt extends Module {
 
-    // Every map is this many pixels wide and high.
     private static final int SIZE = 128;
-    // The maps the client holds are looked over once a second.
     private static final int CHECK_TICKS = 20;
     private static final String FOLDER = "maps";
     private static final String PNG = ".png";
-    // How solid the paint behind a map held twice is.
     private static final float PAINT_SHARE = 0.5f;
 
     private final BoolSetting frames = new BoolSetting("Mark frames",
@@ -73,13 +70,9 @@ public final class MapArt extends Module {
     private final ColorSetting duplicateColor = new ColorSetting("Duplicate colour",
         "Colour painted behind a map held more than once.", 0, false).under(duplicates);
 
-    // The maps of the current server looked up in the folder since you arrived.
     private final Set<Integer> checked = new HashSet<>();
-    // The maps of the current server already on disk or on their way there.
     private final Set<Integer> saved = new HashSet<>();
-    // The ones whose picture was on disk before this visit came across them.
     private final Set<Integer> savedBefore = new HashSet<>();
-    // The maps the menu last asked about holds more than one of with its id and the tick they were counted in.
     private Set<MapId> held = Set.of();
     private int heldId;
     private int heldAt = -1;
@@ -111,8 +104,8 @@ public final class MapArt extends Module {
         framed = 0;
     }
 
-    // Zero unless the stack is a map the menu holds more than one of. AbstractContainerScreenMixin
-    // paints the slot with it. The menu is counted once a tick.
+    // Zero unless the menu holds more than one of the map. AbstractContainerScreenMixin paints the
+    // slot with it.
     public int duplicateColor(AbstractContainerMenu menu, ItemStack stack) {
         MapId id = isEnabled() && duplicates.isOn() ? stack.get(DataComponents.MAP_ID) : null;
         if (id == null) {
@@ -188,7 +181,6 @@ public final class MapArt extends Module {
         return frames.isOn() && markSaved.isOn();
     }
 
-    // A map nobody has drawn on yet has nothing worth keeping.
     private static boolean blank(byte[] colors) {
         for (byte color : colors) {
             if (color != 0) {

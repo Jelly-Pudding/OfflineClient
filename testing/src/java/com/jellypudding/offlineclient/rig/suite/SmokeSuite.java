@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 // Every module is switched on for a moment and off again in a flat world. First in creative with
 // empty hands and then in survival with a kit and two mobs beside the player. Then once more on a
@@ -32,10 +33,18 @@ public final class SmokeSuite implements Suite {
     private static final String LEFT_OUT = "Left out of blanket runs because ";
     private static final String COMMAND = "command";
     private static final int ON_TICKS = 10;
+    // Long enough for a module to get to work on the kit and the mobs and to say a line twice
+    // that it would go on saying.
+    private static final int WORK_TICKS = 100;
     private static final int OFF_TICKS = 2;
     // Two seconds on a real server. Most modules have done their first piece of work by then.
     private static final int SERVED_TICKS = 40;
     private static final int LONGEST_REPLY = 90;
+    private static final int MOST_LINES = 5;
+    private static final int MOST_OF_ONE_LINE = 2;
+    // Modules that do one piece of work and switch off. What they did to the blocks round the
+    // player says it.
+    private static final Set<String> WORK_SPEAKS = Set.of("SelfTrap", "Cocoon", "Burrow", "Kaboom");
     // Five times the pace of the game. Nothing in this suite measures time.
     private static final float HURRY = 5;
     private static final int SMALL_WIDTH = 480;
@@ -59,7 +68,6 @@ public final class SmokeSuite implements Suite {
         return reasons;
     }
 
-    // Modules a blanket run on a server leaves off as well.
     private static final Map<String, String> SERVER_MODULES =
         Map.of("Kaboom", "its own description says a Paper server kicks for it");
 
@@ -126,8 +134,6 @@ public final class SmokeSuite implements Suite {
         }
     }
 
-    // The kit and the mobs again with a second player four blocks off. A player the server
-    // threw out joins again before the next case.
     private static void onServer(Rig rig, List<Case> served, Duo[] server) {
         Duo duo = Duo.open(rig, PaperServer.Setup.plain());
         server[0] = duo;
@@ -209,18 +215,19 @@ public final class SmokeSuite implements Suite {
             if (outside != null) {
                 rig.skip(NAME, name, LEFT_OUT + outside);
             } else {
-                cases.add(Case.of(name, each -> switchOnAndOff(each, module, ON_TICKS)));
+                int onTicks = mode.equals(SURVIVAL) ? WORK_TICKS : ON_TICKS;
+                cases.add(Case.of(name, each -> switchOnAndOff(each, module, onTicks)));
             }
         }
         return cases;
     }
 
-    // Why a blanket run leaves a module off. Null when it takes part.
-    // Why a blanket run only asks for the help of a command. Null for a command it may type.
+    // Null for a command a blanket run may type.
     static String helpOnly(String command) {
         return HELP_ONLY_COMMANDS.get(command);
     }
 
+    // Null for a module that takes part.
     static String leftOut(String module, boolean onServer) {
         String reason = OUTSIDE_MODULES.get(module);
         if (reason == null && onServer) {
@@ -261,6 +268,22 @@ public final class SmokeSuite implements Suite {
         rig.expect(rig.ask(mc -> module.isEnabled()) == wasOn || !module.isTogglable(),
             module.getName() + " did not go back to how it was");
         Stage.expectAlive(rig);
+        if (module.isTogglable() && !wasOn && said.isEmpty()) {
+            rig.expect(took, module.getName() + " would not switch on and said nothing of why");
+            rig.expect(stayed || WORK_SPEAKS.contains(module.getName()),
+                module.getName() + " switched itself off and said nothing of why");
+        }
+        expectQuiet(rig, module, said);
+    }
+
+    // A player who only switched a module on did not ask for a chat full of it.
+    private static void expectQuiet(Rig rig, Module module, List<String> said) {
+        Map<String, Integer> times = new LinkedHashMap<>();
+        said.forEach(line -> times.merge(line, 1, Integer::sum));
+        times.forEach((line, count) -> rig.expect(count <= MOST_OF_ONE_LINE,
+            module.getName() + " said " + count + " times " + shortened(line)));
+        rig.expect(said.size() <= MOST_LINES, module.getName() + " wrote " + said.size() + " lines to chat such as "
+            + said.stream().distinct().limit(MOST_LINES).map(SmokeSuite::shortened).toList());
     }
 
     private static List<Case> commandCases(Rig rig, List<Command> commands) {

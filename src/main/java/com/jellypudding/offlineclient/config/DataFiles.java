@@ -38,26 +38,21 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-// Everything the client saves lives in the offlineclient folder of the game directory.
 public final class DataFiles {
 
     private static final String FOLDER = "offlineclient";
     private static final String JSON = ".json";
     private static final String TEMP = ".tmp";
-    // A file that cannot be read is kept beside the new one under this ending.
     private static final String BROKEN = ".broken";
-    // How often a refused swap is tried and the wait before each new go.
     private static final int SWAP_TRIES = 5;
     private static final long SWAP_WAIT_NANOS = 20_000_000;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Pattern UNSAFE = Pattern.compile("[^a-zA-Z0-9_.-]");
-    // How much of a key's hash tells two keys with the same safe name apart.
     private static final int KEY_HASH_DIGITS = 8;
     private static final DateTimeFormatter TIMESTAMP = new DateTimeFormatterBuilder()
         .append(DateTimeFormatter.ISO_LOCAL_DATE).appendLiteral(' ').append(DateTimeFormatter.ISO_LOCAL_TIME)
         .toFormatter();
 
-    // Fills the file it is handed.
     @FunctionalInterface
     public interface Contents {
         void writeTo(Path file) throws IOException;
@@ -66,7 +61,6 @@ public final class DataFiles {
     private DataFiles() {
     }
 
-    // The client folder itself or a path inside it.
     public static Path path(String... parts) {
         Path path = OfflineClient.MC.gameDirectory.toPath().resolve(FOLDER);
         for (String part : parts) {
@@ -79,9 +73,7 @@ public final class DataFiles {
         return folder.resolve(name + JSON);
     }
 
-    // The file a player names inside the folder. Null for a name no path can hold or one that ends at
-    // the folder itself such as an empty name. Null too for one that leads out of the folder by
-    // climbing above it or by naming a place elsewhere in full.
+    // Null for a name that leads out of the folder or ends at the folder itself.
     public static Path inside(Path folder, String name) {
         Path root = folder.toAbsolutePath().normalize();
         try {
@@ -92,14 +84,12 @@ public final class DataFiles {
         }
     }
 
-    // Anything a file name could not hold on every system becomes an underscore.
     public static String safeName(String name) {
         return UNSAFE.matcher(name).replaceAll("_");
     }
 
-    // The folder or file name for a server or world key. A key the safe name changed gets a
-    // short hash of itself as well. Two worlds whose names differ only in such signs then
-    // keep files of their own.
+    // A key the safe name changed gets a short hash of itself as well. Two worlds whose names
+    // differ only in such signs then keep files of their own.
     public static String keyName(String key) {
         String safe = safeName(key);
         if (safe.equals(key)) {
@@ -109,7 +99,6 @@ public final class DataFiles {
         return safe + "-" + hash.substring(0, KEY_HASH_DIGITS);
     }
 
-    // The names of the json files in a folder from A to Z. Empty when the folder is missing.
     public static List<String> jsonNames(Path folder) {
         if (!Files.isDirectory(folder)) {
             return List.of();
@@ -126,8 +115,7 @@ public final class DataFiles {
         }
     }
 
-    // Every entry of a saved list read on its own. An entry whose read throws or gives null is
-    // left out and the log says how many went. A value that is no list throws.
+    // An entry whose read throws or gives null is left out. A value that is no list throws.
     public static <T> List<T> entries(JsonElement list, Function<JsonElement, T> read, String what) {
         List<T> kept = new ArrayList<>();
         int broken = 0;
@@ -143,8 +131,6 @@ public final class DataFiles {
         return kept;
     }
 
-    // The same for the members of a saved object. Each is read with its name and kept under it
-    // in the order the file holds them. A value that is no object throws.
     public static <T> Map<String, T> members(JsonElement object, BiFunction<String, JsonElement, T> read,
                                              String what) {
         Map<String, T> kept = new LinkedHashMap<>();
@@ -161,7 +147,6 @@ public final class DataFiles {
         return kept;
     }
 
-    // Null for a read that throws.
     private static <T> T attempt(Supplier<T> read) {
         try {
             return read.get();
@@ -176,8 +161,6 @@ public final class DataFiles {
         }
     }
 
-    // Keeps a file that cannot be read under a name of its own for the player to mend. A new
-    // file then takes its place. False after logging why it could not be moved.
     public static boolean setAside(Path path) {
         Path aside = path.resolveSibling(path.getFileName() + BROKEN);
         try {
@@ -190,8 +173,7 @@ public final class DataFiles {
         return true;
     }
 
-    // Empty when the file is missing. A file that cannot be read or decoded is logged
-    // and comes back empty as well.
+    // Empty when the file is missing or cannot be read.
     public static <T> Optional<T> readJson(Path path, Function<JsonElement, T> decoder) {
         Optional<String> text = readText(path);
         if (text.isEmpty()) {
@@ -205,8 +187,6 @@ public final class DataFiles {
         }
     }
 
-    // The whole text of a file. Empty when the file is missing. A file that cannot be read is
-    // logged and comes back empty as well.
     public static Optional<String> readText(Path path) {
         if (!Files.exists(path)) {
             return Optional.empty();
@@ -219,8 +199,6 @@ public final class DataFiles {
         }
     }
 
-    // The same for at most that many characters from the start. The rest of a longer file is
-    // never read.
     public static Optional<String> readText(Path path, int most) {
         if (!Files.exists(path)) {
             return Optional.empty();
@@ -239,8 +217,7 @@ public final class DataFiles {
         }
     }
 
-    // The bytes of a file of at most that many. Null for a larger file and no more than one byte
-    // past the bound is read.
+    // Null for a larger file. No more than one byte past the bound is read.
     public static byte[] readAtMost(Path path, int most) throws IOException {
         try (InputStream in = Files.newInputStream(path)) {
             byte[] bytes = in.readNBytes(most + 1);
@@ -252,19 +229,15 @@ public final class DataFiles {
         return writeSafely(path, temp -> Files.writeString(temp, GSON.toJson(root)));
     }
 
-    // The date and time to the second. A line added to a text file starts with it.
     public static String timestamp() {
         return timestamp(System.currentTimeMillis());
     }
 
-    // The same for a moment in milliseconds.
     public static String timestamp(long millis) {
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
             .truncatedTo(ChronoUnit.SECONDS).format(TIMESTAMP);
     }
 
-    // Adds the lines to the end of a text file. The file and its folders are made when missing.
-    // False after logging why the lines could not be written.
     public static boolean appendLines(Path path, List<String> lines) {
         try {
             Files.createDirectories(path.getParent());
@@ -276,9 +249,8 @@ public final class DataFiles {
         }
     }
 
-    // Fills a file beside the target that then takes its place. A crash mid write cannot
-    // corrupt the saved file. One save at a time has the file beside the target to itself.
-    // False after logging why the file could not be written.
+    // Fills a file beside the target that then takes its place. A crash mid write cannot corrupt
+    // the saved file.
     public static synchronized boolean writeSafely(Path path, Contents contents) {
         Path temp = path.resolveSibling(path.getFileName() + TEMP);
         try {

@@ -143,7 +143,7 @@ public final class AutoWeapon extends Module {
         slots.restore();
     }
 
-    // Read by KillAura ahead of its hits. The limit is how far into the inventory to look.
+    // Read by KillAura ahead of its hits.
     public int bestSlot(LivingEntity target, int limit) {
         if (prefer.is(Prefer.SPEED)) {
             return WeaponUtil.fastestWeaponSlot(antiBreak.isOn(), limit);

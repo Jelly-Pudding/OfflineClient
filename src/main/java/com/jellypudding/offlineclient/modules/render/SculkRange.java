@@ -81,17 +81,13 @@ public final class SculkRange extends Module {
     private record Listener(BlockPos pos, Kind kind) {
     }
 
-    // One side of a block square on the floor.
     private record Edge(int x1, int z1, int x2, int z2) {
     }
 
     // A step sounds each time you cover this much ground.
     private static final double STRIDE = 1 / 0.6;
-    // Slower than this counts as standing still.
     private static final double MOVING = 1.0E-3;
-    // How far under the feet the floor is looked for.
     private static final double GROUND_PROBE = 1.0E-5;
-    // How far above the floor a ring is drawn.
     private static final double LIFT = 0.02;
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -118,11 +114,9 @@ public final class SculkRange extends Module {
     private final ChunkScanner<Listener> scanner = new ChunkScanner<>();
     private final Map<Kind, List<Edge>> rings = new EnumMap<>(Kind.class);
     private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
-    // What the rings were last built from.
     private List<Listener> ringSource;
     private int ringLevel;
     private Danger danger = Danger.NONE;
-    // A sensor would hear the next step. Sneaking silences that.
     private boolean heard;
 
     public SculkRange() {
@@ -189,8 +183,7 @@ public final class SculkRange extends Module {
         return state.is(Blocks.CALIBRATED_SCULK_SENSOR) ? Kind.CALIBRATED : Kind.SENSOR;
     }
 
-    // Weighs a step here and one stride further on. A mount steps for its rider and flight
-    // makes no steps.
+    // A mount steps for its rider and flight makes no steps.
     private void judge(List<Listener> all) {
         danger = Danger.NONE;
         heard = false;
@@ -216,7 +209,6 @@ public final class SculkRange extends Module {
         danger = trodden ? Danger.TRODDEN : worst;
     }
 
-    // The worst a step made here would wake by being heard.
     private Danger heardAt(Vec3 feet, BlockPos floor, List<Listener> all) {
         if (mc.level.getBlockState(floor).is(BlockTags.DAMPENS_VIBRATIONS)) {
             return Danger.NONE;
@@ -252,7 +244,6 @@ public final class SculkRange extends Module {
         return listener.distSqr(event) <= kind.radius * kind.radius;
     }
 
-    // Idle and not tuned away from steps.
     private boolean listening(BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof SculkSensorBlock) || !SculkSensorBlock.canActivate(state)) {
             return false;
@@ -283,12 +274,10 @@ public final class SculkRange extends Module {
         return false;
     }
 
-    // True when wool cuts every line the game tries between the two blocks.
     private boolean walledOff(BlockPos from, BlockPos to) {
         return VibrationSystem.Listener.isOccluded(mc.level, Vec3.atCenterOf(from), Vec3.atCenterOf(to));
     }
 
-    // The outline of every floor square at your height from which each kind would hear you.
     private void buildRings(List<Listener> all, int level) {
         rings.clear();
         for (Kind kind : Kind.values()) {
@@ -317,7 +306,6 @@ public final class SculkRange extends Module {
         }
     }
 
-    // The sides of the squares that face a square outside the set.
     private static List<Edge> outline(LongOpenHashSet cells) {
         List<Edge> edges = new ArrayList<>();
         for (LongIterator it = cells.iterator(); it.hasNext(); ) {
@@ -340,7 +328,6 @@ public final class SculkRange extends Module {
         return edges;
     }
 
-    // Green whilst calm and red once the warden is angry enough to hunt.
     private static int angerColor(Warden warden) {
         return ColorUtil.redToGreen(1 - (float) warden.getClientAngerLevel() / AngerLevel.ANGRY.getMinimumAnger());
     }

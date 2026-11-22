@@ -16,7 +16,6 @@ public final class ServerWatch {
         return true;
     }
 
-    // The next check counts as a change whatever server the client is on.
     public void forget() {
         seen = null;
     }

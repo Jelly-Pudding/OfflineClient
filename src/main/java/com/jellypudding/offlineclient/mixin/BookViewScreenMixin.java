@@ -12,8 +12,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// A Copy button beside any book that is read and pages that turn with the wheel. A book on a
-// lectern is read on this screen too.
 @Mixin(BookViewScreen.class)
 public abstract class BookViewScreenMixin extends Screen {
 
@@ -38,7 +36,6 @@ public abstract class BookViewScreenMixin extends Screen {
         }
     }
 
-    // The wheel towards you turns to the next page. Neither turn goes past an end of the book.
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (scrollY == 0 || Modules.dormant()) {

@@ -26,7 +26,7 @@ public final class ClickGuiModule extends Module {
 
     public enum Style { PANELS, WINDOW }
 
-    // How fast every rainbow turns by default and before this module is built.
+    // The default and what holds before this module is built.
     public static final double RAINBOW_SPEED = 1;
 
     private static final List<String> CATEGORIES =
@@ -76,7 +76,6 @@ public final class ClickGuiModule extends Module {
         "Colour of the version number next to it.", 232, 0.2f, 0.55f, false)
         .under(style, Style.WINDOW);
 
-    // The blue friends are drawn in by default and before this module is built.
     public static final float FRIEND_HUE = 220;
     public static final float FRIEND_SATURATION = 0.75f;
 
@@ -84,7 +83,6 @@ public final class ClickGuiModule extends Module {
         "Colour your friends are drawn in by every module that marks them.",
         FRIEND_HUE, FRIEND_SATURATION, 1f, false);
 
-    // The purple enemies are drawn in by default and before this module is built.
     public static final float ENEMY_HUE = 300;
     public static final float ENEMY_SATURATION = 0.75f;
 
@@ -150,7 +148,6 @@ public final class ClickGuiModule extends Module {
         mc.schedule(() -> mc.gui.setScreen(new ChatScreen(prefix, false)));
     }
 
-    // A share of the normal size. Every GUI screen draws through it.
     public float scale() {
         return scale.getFloat() / 100f;
     }
@@ -163,20 +160,18 @@ public final class ClickGuiModule extends Module {
         return smoothFont.isOn();
     }
 
-    // A hidden category has no panel and no row in the sidebar. With every one picked none is
-    // hidden because a GUI with nothing in it would offer no way back.
+    // With every category picked none is hidden because a GUI with nothing in it would offer no way
+    // back.
     public boolean showsCategory(Category category) {
         return !hiddenCategories.contains(category.getDisplayName())
             || hiddenCategories.getValue().containsAll(CATEGORIES);
     }
 
-    // A hidden module has no row under its category. The search and the favourites and the
-    // list of what is on still show it and nothing is ever out of reach.
+    // The search and the favourites and the list of what is on still show a hidden module.
     public boolean showsModule(Module module) {
         return !hiddenModules.contains(module.getName());
     }
 
-    // The modules of a category that are not hidden in the order the panels show them.
     public List<Module> shownIn(Category category) {
         List<Module> shown = OfflineClient.INSTANCE.getModuleManager().getByCategory(category);
         shown.removeIf(module -> !showsModule(module));
@@ -211,7 +206,6 @@ public final class ClickGuiModule extends Module {
         return resetMarks.isOn();
     }
 
-    // False for a module that is switched without a word.
     public boolean showsToggleMessages(Module module) {
         return toggleMessages.isOn() && !quietModules.contains(module.getName());
     }
@@ -233,12 +227,10 @@ public final class ClickGuiModule extends Module {
         return text.getColor();
     }
 
-    // How many times faster than normal every colour set to rainbow goes round the colour wheel.
     public double rainbowSpeed() {
         return rainbowSpeed.getValue();
     }
 
-    // A share from nought to one.
     public float opacity() {
         return opacity.getFloat() / 100f;
     }

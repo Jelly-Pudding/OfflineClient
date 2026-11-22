@@ -19,15 +19,13 @@ import net.minecraft.world.level.chunk.PalettedContainerRO;
 
 import java.util.Set;
 
-// Reads what a chunk from the server gives away about its age. Generation grows every
-// palette from an empty section. A save rebuilds each palette from the cells in order.
-// Only the game thread may call this and only as the chunk arrives. A resize later on
+// Generation grows every palette from an empty section. A save rebuilds each palette from the cells
+// in order. Only the game thread may call this and only as the chunk arrives. A resize later on
 // rebuilds the order.
 public final class ChunkOrigin {
 
     public enum Age { FRESH, OLD }
 
-    // A verdict and the index of the section that settled it.
     public record Finding(Age age, int section) {
     }
 
@@ -37,7 +35,6 @@ public final class ChunkOrigin {
     private static final int MAX_LISTED_BIOME_BITS = 3;
     // Biomes sit on a grid four cells wide inside a section.
     private static final int BIOME_CELLS = 4;
-    // One section holds sixteen cubed cells.
     private static final int SECTION_CELLS = SectionPos.SECTION_SIZE * SectionPos.SECTION_SIZE
         * SectionPos.SECTION_SIZE;
     // Without a lead from the lowest section this many sections must agree.

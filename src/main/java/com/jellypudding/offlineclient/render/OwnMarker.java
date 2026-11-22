@@ -20,16 +20,13 @@ import java.util.Map;
 // as it does in a minecart. On a map that sits off the grid none ever is.
 public final class OwnMarker {
 
-    // Where your marker sits in the map's list and the land the map covers in blocks.
     public record Found(int index, int centreX, int centreZ, int blocksAcross) {
 
-        // The map drawn this many pixels wide with its corner on the origin and north up.
         public MapView view(int size) {
             return new MapView(centreX, centreZ, blocksAcross / (double) size, 0, 0, 0, size, size);
         }
     }
 
-    // The middle of a map in blocks.
     private record Centre(int x, int z) {
     }
 
@@ -49,7 +46,6 @@ public final class OwnMarker {
     }
 
     private static final int NONE = -1;
-    // A map is this many of its own pixels across.
     private static final int MAP_PIXELS = 128;
     // Maps of one size tile the world edge to edge from a corner this many blocks north and west
     // of the origin.
@@ -107,7 +103,6 @@ public final class OwnMarker {
         return marker.type().value() == MapDecorationTypes.PLAYER.value();
     }
 
-    // The best fit of any player marker on the map. Null when none fits.
     private Fit fit(MapItemSavedData map, Vec3 at, int blocksPerPixel) {
         Fit best = null;
         int index = 0;
@@ -121,9 +116,8 @@ public final class OwnMarker {
         return best;
     }
 
-    // How one marker fits where you stood. The latest spot it sits on exactly or failing that
-    // the latest it fits at all. Null when it fits none. Only a map you stand on counts. A spot
-    // one whole map back fits the map next door just as well.
+    // Only a map you stand on counts. A spot one whole map back fits the map next door just as
+    // well.
     private Fit fitOf(MapDecoration marker, int index, Vec3 at, int blocksPerPixel) {
         Fit loose = null;
         for (int back = 0; back < TRAIL_TICKS; back++) {
@@ -161,7 +155,6 @@ public final class OwnMarker {
         return Math.abs(spot.x - centre.x()) <= edge && Math.abs(spot.z - centre.z()) <= edge;
     }
 
-    // The nearest spot a map this many blocks wide is ever centred on.
     private static int onGrid(double centre, int blocksAcross) {
         int first = blocksAcross / 2 - GRID_SHIFT;
         return (int) Math.round((centre - first) / blocksAcross) * blocksAcross + first;
@@ -180,8 +173,7 @@ public final class OwnMarker {
         return (byte) (int) (pixels * MARKER_STEPS + 0.5);
     }
 
-    // The player marker nearest you on a map whose centre is known. The server may have you
-    // where you were of late or as far ahead as you went.
+    // The server may have you where you were of late or as far ahead as you went.
     private int near(MapItemSavedData map, Centre centre, Vec3 at, int blocksPerPixel) {
         if (!onMap(at, centre, blocksPerPixel)) {
             return NONE;
@@ -204,7 +196,6 @@ public final class OwnMarker {
         return nearest;
     }
 
-    // How far the spots you stood on of late reach from this one.
     private double covered(Vec3 from) {
         double farthest = 0;
         for (int back = 1; back < TRAIL_TICKS; back++) {

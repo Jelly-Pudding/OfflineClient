@@ -11,7 +11,6 @@ public final class LogRules {
 
     // The client by any of its names but never the rig itself.
     private static final Pattern CLIENT = Pattern.compile("(?i)offlineclient(?![_.]rig)");
-    // A stack frame inside the client.
     private static final Pattern CLIENT_FRAME =
         Pattern.compile("\\tat (?:[\\w.]+//)?com\\.jellypudding\\.offlineclient\\.(?!rig\\.)");
     private static final Pattern CLIENT_RESOURCE = Pattern.compile("\\bofflineclient:[a-z0-9_./-]+");

@@ -15,17 +15,14 @@ public final class PacketBreaker {
     // Each break is a start and a stop. Every row that sets how many go a tick ends with this.
     public static final String PAPER_LIMIT = "Paper kicks a client that keeps up more than about twelve a tick.";
 
-    // Ticks before a block that should have gone at once is sent for again.
     private static final int RETRY_TICKS = 10;
 
-    // Ticks a slower block gets on top of its break time before it is sent for again.
     private static final int SLOW_GRACE_TICKS = 20;
 
     private final Cooldowns<BlockPos> sent = new Cooldowns<>();
     private BlockPos slow;
     private int slowUntil;
 
-    // The Blocks per tick row of a module with an Instant mode.
     public static NumberSetting blocksPerTick() {
         return new NumberSetting("Blocks per tick",
             "The most blocks Instant mode breaks in one tick. " + PAPER_LIMIT, 4, 1, 16, 1);
@@ -75,7 +72,6 @@ public final class PacketBreaker {
         return BreakTime.canInstantBreak(pos) || !movesTarget(pos);
     }
 
-    // True whilst a start here would take the server's target from a block someone still mines.
     private static boolean movesTarget(BlockPos pos) {
         return BreakSlots.busyElsewhere(pos) || BlockMiner.standsBy(pos);
     }
@@ -91,7 +87,6 @@ public final class PacketBreaker {
         }
     }
 
-    // The slower block being broken or null.
     public BlockPos slowBlock() {
         return slow;
     }

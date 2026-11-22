@@ -74,8 +74,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 // its pots on copper of its own with at most one sherd. Every other pot was made by a player.
 public final class PotFinder extends Module implements FindSource {
 
-    // What the server let slip about one pot. The share is how full the pot is out of one and
-    // stays below nought until an insert is heard.
+    // The share is how full the pot is out of one and stays below nought until an insert is heard.
     private static final class Contents {
 
         // Someone was seen or heard putting an item in.
@@ -88,10 +87,9 @@ public final class PotFinder extends Module implements FindSource {
         private int count;
         // The stack the server sent last. The same stack read again says nothing new.
         private ItemStack lastSent = ItemStack.EMPTY;
-        // Probe items the pot turned away or that got no answer.
         private final Set<Item> refused = new HashSet<>();
 
-        // Someone put an item in. The wobble carries no fill and reaches further than the sound.
+        // The wobble carries no fill and reaches further than the sound.
         private void sawInsert() {
             filled = true;
             holds = true;
@@ -141,13 +139,10 @@ public final class PotFinder extends Module implements FindSource {
             return holds;
         }
 
-        // Worth a probe whilst something is inside that no probe has named and room is left for one more.
         private boolean probeable() {
             return holds && item == null && share < 1;
         }
 
-        // True when a player has had a hand in a trial chamber pot. Someone put an item in or
-        // it holds what its table never gives or more of it.
         private boolean tampered(Map<Item, Integer> loot) {
             if (filled) {
                 return true;
@@ -159,7 +154,6 @@ public final class PotFinder extends Module implements FindSource {
             return most == null || count > most;
         }
 
-        // Such as holding 12 diamonds or about 40% full. Empty when nothing is known.
         private String words() {
             if (item != null) {
                 return " holding " + Tally.counted(count, ChatUtil.words(item));
@@ -178,14 +172,11 @@ public final class PotFinder extends Module implements FindSource {
         }
     }
 
-    // A probe the player can make now.
     private record Probe(BlockPos pot, Item item, int slot) {
     }
 
-    // The kinds of find. A filled pot is known to hold something.
     private static final String PLAIN = "pot";
     private static final String FILLED = "filled pot";
-    // What the words of a find start with.
     private static final String PLACED_POT = "placed pot";
     private static final String CHAMBER_POT = "trial chamber pot";
 
@@ -207,13 +198,11 @@ public final class PotFinder extends Module implements FindSource {
     private static final float INSERT_PITCH_RANGE = 0.5f;
     private static final float PERCENT = 100;
 
-    // Twice a second is quick enough for a pot that was just placed.
     private static final int SCAN_TICKS = 10;
-    // Far more pots than a session hears about in one dimension. It only bounds the memory.
+    // It only bounds the memory.
     private static final int MAX_KNOWN = 4096;
-    // How long a probe waits for the pot's reply. A second covers the round trip on a slow link.
+    // A second covers the round trip on a slow link.
     private static final int REPLY_TICKS = 20;
-    // A short pause between two probes.
     private static final int PROBE_GAP = 5;
 
     private static final int QUIET_SECONDS = 10;
@@ -245,16 +234,14 @@ public final class PotFinder extends Module implements FindSource {
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
     private final FindLines marks = new FindLines(finds, false);
 
-    // What each pot let slip in every dimension of the current server.
     private final Map<ResourceKey<Level>, Map<BlockPos, Contents>> known = new HashMap<>();
-    // Pot sounds and wobbles from the network thread handled on the next tick.
+    // Filled from the network thread and handled on the next tick.
     private final Queue<Packet<?>> heard = new ConcurrentLinkedQueue<>();
     private final ServerWatch server = new ServerWatch();
     private final WorldWatch world = new WorldWatch();
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private int scanWait;
     private int probeWait;
-    // The pot a probe waits on and the item it tried. Null whilst no probe is out.
     private BlockPos probed;
     private Item probeItem;
     private int replyWait;
@@ -420,8 +407,8 @@ public final class PotFinder extends Module implements FindSource {
         }
     }
 
-    // What the pot shows of its contents. A vanilla server sends what it holds and a comparator
-    // reading it lights up whilst anything is inside. Null when nothing is known.
+    // A vanilla server sends what a pot holds and a comparator reading it lights up whilst anything
+    // is inside.
     private Contents read(DecoratedPotBlockEntity pot, Map<BlockPos, Contents> here) {
         BlockPos pos = pot.getBlockPos();
         ItemStack sent = pot.getTheItem();
@@ -445,7 +432,6 @@ public final class PotFinder extends Module implements FindSource {
         return false;
     }
 
-    // The loot the trial chamber built the pot with or null for a pot a player made.
     private static Map<Item, Integer> chamberLoot(PotDecorations sherds, BlockState floor) {
         if (floor.is(CORRIDOR_FLOOR) && plain(sherds.left()) && plain(sherds.right()) && plain(sherds.front())
             && (plain(sherds.back()) || sherds.back().map(face -> CORRIDOR_SHERDS.contains(face.item().value()))
@@ -464,9 +450,8 @@ public final class PotFinder extends Module implements FindSource {
         return face.map(template -> template.item().value() == Items.BRICK).orElse(true);
     }
 
-    // A pot broken since it was found leaves the log. Only chunks the scan could read count. What
-    // a pot let slip is kept only whilst its chunk stays loaded. A pot broken and set down empty
-    // whilst you were away must not be probed on the strength of an older visit.
+    // What a pot let slip is kept only whilst its chunk stays loaded. A pot broken and set down
+    // empty whilst you were away must not be probed on the strength of an older visit.
     private void forgetGone(Set<Long> scanned, Set<BlockPos> pots, Map<BlockPos, Contents> here) {
         for (FindLog.Find find : List.copyOf(finds.here())) {
             if (scanned.contains(ChunkPos.pack(find.pos())) && !pots.contains(find.pos())) {
@@ -476,7 +461,6 @@ public final class PotFinder extends Module implements FindSource {
         here.keySet().removeIf(pos -> !pots.contains(pos));
     }
 
-    // Waits on the reply of the last probe or makes the next one.
     private void probeStep() {
         if (probed != null) {
             if (--replyWait <= 0) {
@@ -508,9 +492,8 @@ public final class PotFinder extends Module implements FindSource {
         loan.giveBack();
     }
 
-    // The nearest pot in reach known to hold something that a carried probe item has not been
-    // tried on. A hopper or a hopper minecart under a pot can empty it without a sound and the
-    // pot is left alone.
+    // A hopper or a hopper minecart under a pot can empty it without a sound and the pot is left
+    // alone.
     private Probe nextProbe() {
         Probe best = null;
         double bestDistance = Double.MAX_VALUE;

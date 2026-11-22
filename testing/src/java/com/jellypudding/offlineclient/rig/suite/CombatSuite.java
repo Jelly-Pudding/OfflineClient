@@ -184,7 +184,6 @@ public final class CombatSuite implements Suite {
         rig.note("The husk was dead after about " + took + " ticks");
     }
 
-    // The player looks north and the husk stands right there.
     private void triggerBot(Rig rig) {
         Props.hold(rig, 0, SWORD);
         Props.summon(rig, HUSK, home.north(2), GROWN_STILL);
@@ -251,7 +250,6 @@ public final class CombatSuite implements Suite {
                 && Props.holds(rig, "armor.head", "iron_helmet"));
     }
 
-    // The husk stands eight blocks east and the player looks north as it draws.
     private void bowAimbot(Rig rig) {
         Props.hold(rig, 0, "bow");
         Props.pack(rig, 0, "arrow 16");
@@ -386,7 +384,6 @@ public final class CombatSuite implements Suite {
         rig.expect(health == FULL_HEALTH, "The anvil cost " + (FULL_HEALTH - health) + " health");
     }
 
-    // An arrow flies along the line the player stands on.
     private void arrowDodge(Rig rig) {
         float hit = shotAt(rig);
         rig.world().command("effect give " + rig.world().player() + " instant_health 1 20 true");
@@ -428,7 +425,6 @@ public final class CombatSuite implements Suite {
         Props.summon(rig, HUSK, spot, GROWN_STILL);
     }
 
-    // The health left to a husk after one arrow from a full draw. Nought for a dead one.
     private int huskAfterArrow(Rig rig) {
         rig.world().attempt("kill @e[type=arrow]");
         freshHusk(rig, home.south(12));
@@ -547,8 +543,6 @@ public final class CombatSuite implements Suite {
         rig.expect(dealt <= STICK_HIT, "The sword came out against a mob with the swap set to players alone");
     }
 
-    // The health one click takes off a fresh husk with one item in hand and another further along
-    // the hotbar.
     private int hitHolding(Rig rig, String held, String other) {
         freshHusk(rig, home.north(2));
         Props.hold(rig, 0, held);
@@ -623,8 +617,6 @@ public final class CombatSuite implements Suite {
         return ate;
     }
 
-    // Waits for the kept teleport to land and makes sure the server has the player in the same
-    // place. Hands back the ticks it took.
     private int land(Rig rig, Vec3 ate, int limitTicks) {
         int took = rig.until("the kept teleport to land", limitTicks,
             mc -> mc.player.position().distanceTo(ate) > MOVED);
@@ -811,7 +803,6 @@ public final class CombatSuite implements Suite {
         rig.expect(worst <= OFF_RING, "Confuse did not keep its distance from the husk");
     }
 
-    // The way from a spot to the player in degrees.
     private static double bearing(Rig rig, Vec3 from) {
         return rig.ask(mc -> Math.toDegrees(Math.atan2(mc.player.getZ() - from.z, mc.player.getX() - from.x)));
     }
@@ -891,7 +882,6 @@ public final class CombatSuite implements Suite {
             + block + "\"}}}]");
     }
 
-    // Blast proof blocks under the feet and on all four sides.
     private void hole(Rig rig) {
         rig.world().setBlock(home.below(), OBSIDIAN);
         for (BlockPos side : List.of(home.north(), home.east(), home.south(), home.west())) {
@@ -899,7 +889,6 @@ public final class CombatSuite implements Suite {
         }
     }
 
-    // The piston stands two blocks north at head height and looks at the player.
     private void blockerPiston(Rig rig) {
         hole(rig);
         Props.hold(rig, 0, OBSIDIAN + " 16");

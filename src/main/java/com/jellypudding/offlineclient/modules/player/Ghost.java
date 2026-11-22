@@ -17,9 +17,8 @@ import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
-// Lets a dead player walk and look about until they respawn. GuiMixin keeps the death
-// screen shut and LivingEntityMixin frees the body. The server throws away whatever a
-// dead player does.
+// GuiMixin keeps the death screen shut and LivingEntityMixin frees the body. The server throws away
+// whatever a dead player does.
 public final class Ghost extends Module {
 
     private final KeybindSetting respawnKey = new KeybindSetting("Respawn key",
@@ -27,7 +26,6 @@ public final class Ghost extends Module {
     private final BoolSetting deathButton = new BoolSetting("Death screen button",
         "Adds a button to the death screen that turns this on when you die with it off.", true);
 
-    // The body the hint went to and the one a respawn was asked for. A respawn brings a new one.
     private final LifeWatch greeted = new LifeWatch();
     private final LifeWatch respawning = new LifeWatch();
 
@@ -54,7 +52,7 @@ public final class Ghost extends Module {
         return isEnabled() || deathButton.isOn();
     }
 
-    // True whilst you are dead and walking about. Read by the mixins that free the body.
+    // Read by the mixins that free the body.
     public boolean walking() {
         LocalPlayer player = mc.player;
         return isEnabled() && player != null && player.isDeadOrDying();
@@ -105,7 +103,6 @@ public final class Ghost extends Module {
         }
     }
 
-    // The server throws away every move a dead player sends.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (event.getPacket() instanceof ServerboundMovePlayerPacket && walking()) {

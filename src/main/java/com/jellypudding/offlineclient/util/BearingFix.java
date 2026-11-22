@@ -34,7 +34,6 @@ public record BearingFix(double x, double z, double radius) {
 
     private static final double FULL_TURN = 2 * Math.PI;
 
-    // The weighted least squares crossing with what it takes to judge it.
     private record Crossing(double x, double z, double weakest, double chiSquare, boolean lost,
                             boolean inFront) {
     }
@@ -136,19 +135,16 @@ public record BearingFix(double x, double z, double radius) {
         return high - low;
     }
 
-    // True when a fresh bearing cannot point at this spot. The thing has moved on.
     public boolean missedBy(Bearing bearing, Tolerance tolerance) {
         double ahead = bearing.ahead(x, z);
         return ahead < bearing.beyond()
             || Math.abs(bearing.offset(x, z)) > lostAt(bearing, ahead, tolerance) + radius;
     }
 
-    // How far a line may miss at that range and still point at the same thing.
     private static double lostAt(Bearing bearing, double range, Tolerance tolerance) {
         return tolerance.lost() + LOST_BLURS * Math.max(range, bearing.beyond()) * bearing.blur();
     }
 
-    // How far a line is expected to miss at that range.
     private static double missAt(Bearing bearing, double range, Tolerance tolerance) {
         return Math.hypot(tolerance.spot(), Math.max(range, bearing.beyond()) * bearing.blur());
     }

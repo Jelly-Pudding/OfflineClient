@@ -15,7 +15,6 @@ import java.util.UUID;
 public enum Ridden {
     INSTANCE;
 
-    // Far more mounts than anyone rides in one sitting.
     private static final int KEPT = 256;
 
     private static final Set<UUID> mounts = Collections.newSetFromMap(new BoundedMap<>(KEPT));

@@ -115,9 +115,7 @@ public final class NoFall extends Module {
     private boolean tracking;
     // True whilst the last movement packet claimed ground for a player in the air.
     private boolean claimed;
-    // The last position that left. Null until one has.
     private Vec3 sent;
-    // Whether the player glided on the last tick and whether a glide has just ended in the air.
     private boolean glided;
     private boolean wipe;
     // The fall a rising packet hid. The next position banks it on top of its own tick.
@@ -137,7 +135,6 @@ public final class NoFall extends Module {
     private boolean touchdown;
     private Vec3 hold;
     private boolean landingOwed;
-    // True when the mode was Airborne on the tick before.
     private boolean airborne;
 
     private final Lagback.Watcher lagback = new Lagback.Watcher();
@@ -266,7 +263,6 @@ public final class NoFall extends Module {
         return player != null && guarded(player) && !player.isFallFlying();
     }
 
-    // True whilst the player has a fall worth stopping at all.
     private boolean guarded(LocalPlayer player) {
         if (player.getAbilities().invulnerable || player.isPassenger()) {
             return false;
@@ -543,14 +539,11 @@ public final class NoFall extends Module {
         }
     }
 
-    // True whilst a fall is running that the module ought to be watching.
     private boolean falling() {
         return protecting() && !mc.player.onGround() && !mc.player.isInWater()
             && mc.player.getDeltaMovement().y < 0;
     }
 
-    // Any block from the hotbar goes under the feet once the fall is deep enough.
-    // The block lands where the feet are.
     private void airPlaceTick() {
         if (!falling() || descent <= airPlaceThreshold()) {
             airPlaceLoan.giveBack(switchBack.isOn());
@@ -567,7 +560,6 @@ public final class NoFall extends Module {
         BlockUtil.placeAny(below, true, true);
     }
 
-    // Before any damage or only once the fall would take every heart.
     private float airPlaceThreshold() {
         if (airPlaceWhen.is(AirPlaceWhen.BEFORE_DAMAGE)) {
             return DAMAGE_FALL;

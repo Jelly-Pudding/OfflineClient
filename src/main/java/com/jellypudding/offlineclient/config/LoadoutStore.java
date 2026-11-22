@@ -12,8 +12,6 @@ import net.minecraft.world.item.alchemy.PotionContents;
 import java.util.Map;
 import java.util.TreeMap;
 
-// Named inventory layouts saved to offlineclient/loadouts.json. Each one maps an
-// inventory index to the kind of item that belongs there.
 public final class LoadoutStore extends KeyedStore<LoadoutStore.Loadout> {
 
     public record Loadout(String name, Bind key, Map<Integer, String> slots) implements KeyedStore.Keyed<Loadout> {
@@ -41,8 +39,7 @@ public final class LoadoutStore extends KeyedStore<LoadoutStore.Loadout> {
         return instance;
     }
 
-    // What a slot is saved as. The item and for a potion or a tipped arrow the potion too.
-    // Null for an empty slot.
+    // The item and for a potion or a tipped arrow the potion too.
     public static String kindOf(ItemStack stack) {
         if (stack.isEmpty()) {
             return null;

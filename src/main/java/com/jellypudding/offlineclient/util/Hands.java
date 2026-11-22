@@ -24,9 +24,11 @@ public final class Hands {
         return player != null && (player.isDeadOrDying() || player.isSpectator());
     }
 
-    // True whilst a feeder eats or ShulkerPacker moves stacks. A change of slot would cut the meal
-    // and the packer counts on the stacks staying put. A module that works on through a fight asks this.
+    // True whilst a feeder eats or ShulkerPacker moves stacks. A change of slot ends a meal from
+    // the main hand and a Paper server ends a meal from either hand when a click on a block comes
+    // in. The packer counts on the stacks staying put. A module that works on through a fight asks
+    // this.
     public static boolean slotsTaken() {
-        return Modules.feeding(null) || Modules.packing();
+        return Feeding.busy(null) || Modules.packing();
     }
 }

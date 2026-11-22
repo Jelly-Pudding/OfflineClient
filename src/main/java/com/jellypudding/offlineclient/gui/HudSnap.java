@@ -6,22 +6,17 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.ArrayList;
 import java.util.List;
 
-// Where a piece moved in the HUD editor sticks and the guides drawn whilst it moves. A piece
-// lines up with the side of the screen it sits in and switches side at the thirds.
+// A piece lines up with the side of the screen it sits in and switches side at the thirds.
 final class HudSnap {
 
-    // How close an edge has to be before it sticks.
     static final int REACH = 4;
 
     private static final int THIRDS = 3;
-    // The thirds stay faint over anything. An edge that stuck is drawn in a brighter colour.
     private static final int THIRD_LINE = 0x40FFFFFF;
 
-    // The part of the moving box that lines up with a stop.
     private enum Part {
         START, MIDDLE, END;
 
-        // The column or row of the box its guide runs along.
         private int line(int start, int size) {
             return switch (this) {
                 case START -> start;
@@ -31,24 +26,19 @@ final class HudSnap {
         }
     }
 
-    // Where the moving box would start for its part to line up with something.
     private record Stop(int at, Part part) {
     }
 
-    // The part that stuck on each axis. Null where nothing did.
     private Part across;
     private Part down;
-    // Where the moving box came to rest. Null until it has moved.
     private Box landed;
 
-    // Each move starts with nothing stuck.
     void reset() {
         across = null;
         down = null;
         landed = null;
     }
 
-    // A left edge in reach of a stop jumps onto it.
     int stickAcross(int left, int width, int room, List<Box> others) {
         Stop stop = nearest(left, width, room, others, true);
         across = stop == null ? null : stop.part();
@@ -61,7 +51,6 @@ final class HudSnap {
         return stop == null ? top : stop.at();
     }
 
-    // Shift moves freely.
     void loose() {
         across = null;
         down = null;
@@ -78,7 +67,6 @@ final class HudSnap {
         landed = box;
     }
 
-    // Every line runs the full width or height of the screen.
     void draw(GuiGraphicsExtractor context, int width, int height, int stuckColour) {
         for (int third = 1; third < THIRDS; third++) {
             int x = width * third / THIRDS;
@@ -99,7 +87,6 @@ final class HudSnap {
         }
     }
 
-    // The screen edges and middle and the edges of the other pieces. Null when none is in reach.
     private static Stop nearest(int edge, int size, int room, List<Box> others, boolean horizontal) {
         List<Stop> stops = new ArrayList<>();
         stops.add(new Stop(0, Part.START));

@@ -38,7 +38,6 @@ import java.util.concurrent.ExecutorService;
 // wanted. All of it is let go once the server or its seed changes. Ask on the game thread.
 public final class SeedWorlds {
 
-    // The plain game makes these dimensions and no other.
     private static final Map<ResourceKey<Level>, ResourceKey<LevelStem>> STEMS = Map.of(
         Level.OVERWORLD, LevelStem.OVERWORLD, Level.NETHER, LevelStem.NETHER, Level.END, LevelStem.END);
 
@@ -47,7 +46,6 @@ public final class SeedWorlds {
 
     private static SeedWorlds instance;
 
-    // The worldgen registries of the plain game and the dimensions of its default world.
     private record Plain(RegistryAccess.Frozen registries, WorldDimensions dimensions) {
 
         // The steps WorldLoader takes before it opens a world. The tags of the game's fixed
@@ -70,7 +68,6 @@ public final class SeedWorlds {
 
     private final Map<ResourceKey<Level>, CompletableFuture<SeedWorld>> worlds = new HashMap<>();
     private CompletableFuture<Plain> plain;
-    // The place the kept worlds belong to. Null whilst nothing is kept.
     private String server;
     private long seed;
 
@@ -89,7 +86,6 @@ public final class SeedWorlds {
         return saved == null ? OptionalLong.empty() : OptionalLong.of(saved);
     }
 
-    // Whether the plain game has this dimension.
     public static boolean makes(ResourceKey<Level> dimension) {
         return STEMS.containsKey(dimension);
     }
@@ -99,9 +95,8 @@ public final class SeedWorlds {
         return WORKER;
     }
 
-    // The seeded world of a dimension once it is built. It holds null with no seed known and in a
-    // dimension the plain game does not make and when the game's data could not be read. The game
-    // log names the last of these.
+    // The future holds null with no seed known and in a dimension the plain game does not make and
+    // when the game's data could not be read.
     public static CompletableFuture<SeedWorld> of(ResourceKey<Level> dimension) {
         if (instance == null) {
             instance = new SeedWorlds();

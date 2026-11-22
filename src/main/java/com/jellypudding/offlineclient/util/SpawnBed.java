@@ -37,7 +37,6 @@ public enum SpawnBed {
     // Set on the network thread when the server says your spawn moved.
     private static volatile boolean spawnSet;
 
-    // True for either half of the bed that holds your spawn in this dimension.
     public static boolean isSpawnBed(BlockPos pos) {
         BlockPos bed = beds().get(ServerInfo.worldKey());
         if (bed == null || OfflineClient.MC.level == null) {

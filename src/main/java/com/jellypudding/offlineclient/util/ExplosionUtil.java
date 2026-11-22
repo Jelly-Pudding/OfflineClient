@@ -20,7 +20,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-// Works out what a blast would do before it happens.
 // The numbers mirror the vanilla explosion code exactly.
 public final class ExplosionUtil {
 
@@ -88,15 +87,13 @@ public final class ExplosionUtil {
         return reduce(raw, target);
     }
 
-    // True when the blast sees some of the target from inside its reach. Behind full cover it only
-    // grazes for the least damage any blast deals.
+    // Behind full cover a blast only grazes for the least damage any blast deals.
     public static boolean exposed(LivingEntity target, Vec3 source, float power) {
         return target.position().distanceTo(source) < power * 2
             && seenPercent(source, target.getBoundingBox(), target, NOTHING) > 0;
     }
 
-    // True when the blast deals no friend more than the limit. One that would kill a friend is
-    // refused whatever the limit.
+    // A blast that would kill a friend is refused whatever the limit.
     public static boolean friendsSafe(Vec3 source, float power, float maxFriendDamage, BlockPos... ignored) {
         double reach = power * 2;
         for (Player player : MC.level.players()) {
@@ -121,7 +118,6 @@ public final class ExplosionUtil {
             || blastDamage(MC.player, Vec3.atCenterOf(pos), RESPAWN_BLOCK_POWER, Vec3.ZERO, halvesOf(pos)) > 0;
     }
 
-    // Both halves of a bed. Any other block is only itself.
     public static BlockPos[] halvesOf(BlockPos pos) {
         BlockState state = MC.level.getBlockState(pos);
         if (!(state.getBlock() instanceof BedBlock)) {

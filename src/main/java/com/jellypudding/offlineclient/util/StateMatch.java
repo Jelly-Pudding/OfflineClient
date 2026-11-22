@@ -18,17 +18,14 @@ import java.util.List;
 public final class StateMatch {
 
     public enum Fit {
-        // The block is the one wanted the way it is wanted.
         RIGHT,
         // The right block with fewer of what it stacks such as one candle of three. Another
         // click with the same item adds to it.
         SHORT,
         // The right block bar a detail the neighbours can force such as the hinge of a door.
         NEAR,
-        // Another block or the right one facing the wrong way.
         WRONG;
 
-        // True for a block that needs neither breaking nor another click.
         public boolean settled() {
             return this == RIGHT || this == NEAR;
         }
@@ -53,8 +50,7 @@ public final class StateMatch {
     private StateMatch() {
     }
 
-    // How the block that stands compares with the wanted one. With strict off a right block
-    // facing the wrong way or holding too many still counts as right.
+    // With strict off a right block facing the wrong way or holding too many still counts as right.
     public static Fit fit(BlockState stands, BlockState wanted, boolean strict) {
         if (stands.getBlock() != wanted.getBlock()) {
             return Fit.WRONG;
@@ -96,15 +92,13 @@ public final class StateMatch {
         return false;
     }
 
-    // True for the half of a bed or a door or a tall plant that appears when the other half is
-    // placed. It is never clicked into place itself.
     public static boolean comesWithOtherHalf(BlockState wanted) {
         return wanted.getOptionalValue(BlockStateProperties.BED_PART).orElse(null) == BedPart.HEAD
             || wanted.getOptionalValue(BlockStateProperties.DOUBLE_BLOCK_HALF).orElse(null) == DoubleBlockHalf.UPPER;
     }
 
-    // The item that places the block. Null for a block nothing in the game places by hand
-    // such as fire or water or the head of a piston.
+    // Null for a block nothing in the game places by hand such as fire or water or the head of a
+    // piston.
     public static BlockItem itemFor(BlockState wanted) {
         Item item = wanted.getBlock().asItem();
         return item instanceof BlockItem blockItem ? blockItem : null;

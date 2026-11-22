@@ -5,11 +5,9 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.ChunkPos;
 
-// The colours the hunting modules gave chunks laid over the land of a map. A colour's alpha says
-// how strongly it covers. Game thread only.
+// A colour's alpha says how strongly it covers. Game thread only.
 public final class ChunkTints {
 
-    // A tint at full strength covers this share of the land under it.
     private static final float COVER = 0.5f;
 
     private Long2IntOpenHashMap colours = new Long2IntOpenHashMap();
@@ -27,7 +25,6 @@ public final class ChunkTints {
         return colours.isEmpty();
     }
 
-    // Takes the colours gathered afresh. Nothing moves when they are the same.
     public void set(Long2IntOpenHashMap fresh) {
         if (!fresh.equals(colours)) {
             colours = fresh;
@@ -36,7 +33,6 @@ public final class ChunkTints {
         }
     }
 
-    // A land colour with the tint of its chunk over it. Land never seen takes the tint alone.
     int over(int land, int chunkX, int chunkZ) {
         long chunk = ChunkPos.pack(chunkX, chunkZ);
         if (chunk != lastChunk) {

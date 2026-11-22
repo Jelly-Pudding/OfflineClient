@@ -66,7 +66,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// Every candidate spot is scored with the game's own explosion maths against every target.
 public final class CrystalAura extends Module implements Targeting {
 
     public enum Switch { NORMAL, SILENT, NONE }
@@ -79,22 +78,16 @@ public final class CrystalAura extends Module implements Targeting {
 
     public enum RenderMode { NORMAL, SMOOTH, FADING, GRADIENT, NONE }
 
-    // How far ahead of a moving target the damage is scored.
     private static final double LEAD_TICKS = 1;
 
-    // Ticks a placed spot stays on the list of our own crystals.
     private static final int OWN_MEMORY = 100;
 
-    // Ticks between attempts to pull crystals up from the backpack.
     private static final int REFILL_DELAY = 4;
 
-    // Ticks a hit crystal is treated as already gone before a retry.
     private static final int REMOVED_MEMORY = 3;
 
-    // Ticks that other combat modules stand aside for after a real action.
     private static final int BUSY_TICKS = 8;
 
-    // How far around a target a support block may be laid.
     private static final int SUPPORT_REACH = 3;
     private static final int SUPPORT_RISE = 2;
 
@@ -284,23 +277,17 @@ public final class CrystalAura extends Module implements Targeting {
     private long lastHitAt;
     private String status;
 
-    // True for the tick when some target is weak enough to ignore Min damage.
     private boolean finishing;
 
-    // The targets and every other entity worth looking at this tick.
     private final List<LivingEntity> targets = new ArrayList<>();
     private final List<Entity> entities = new ArrayList<>();
 
-    // Spots placed on until they are forgotten.
     private final Cooldowns<BlockPos> ownSpots = new Cooldowns<>();
 
-    // Crystals just hit until they count as still there.
     private final Cooldowns<Integer> removed = new Cooldowns<>();
 
-    // Hits landed on each crystal that refused to go.
     private final Map<Integer, Integer> attempts = new HashMap<>();
 
-    // What the box is drawn on and the damage it promised.
     private BlockPos drawn;
     private float drawnDamage;
     private int drawnTicks;
@@ -336,7 +323,6 @@ public final class CrystalAura extends Module implements Targeting {
         return target == null ? null : suffix(EntityUtil.displayNameOf(target), status);
     }
 
-    // The nearest of this tick's targets. Null whilst there is none.
     @Override
     public LivingEntity getFought() {
         return targets.isEmpty() ? null : targets.getFirst();
@@ -346,8 +332,7 @@ public final class CrystalAura extends Module implements Targeting {
         return getFought() != null;
     }
 
-    // True only for a short window after a real place or break.
-    // Other combat modules stand aside during that window.
+    // Other combat modules stand aside whilst this is true.
     public boolean isActing() {
         return busyTimer > 0;
     }
@@ -486,7 +471,6 @@ public final class CrystalAura extends Module implements Targeting {
             .describe(Pause.NONE, "Carries on regardless.");
     }
 
-    // True when the given half is held off by a use or a mine.
     private boolean paused(Pause half) {
         return halts(pauseOnUse.getValue(), half, mc.player.isUsingItem())
             || halts(pauseOnMine.getValue(), half, mc.gameMode.isDestroying());
@@ -545,7 +529,6 @@ public final class CrystalAura extends Module implements Targeting {
         }
     }
 
-    // True whilst a crystal that passes the damage checks is still standing.
     private boolean worthHitting() {
         return doBreak.isOn() && bestCrystal() != null;
     }
@@ -641,7 +624,6 @@ public final class CrystalAura extends Module implements Targeting {
         return true;
     }
 
-    // A crystal that spawns is hit before its first tick when the reach and damage allow.
     @Subscribe
     private void onEntityAdded(EntityAddedEvent event) {
         if (!fastBreak.isOn() || !doBreak.isOn() || breakTimer > 0 || !inGame()
@@ -730,8 +712,7 @@ public final class CrystalAura extends Module implements Targeting {
         return best;
     }
 
-    // The damage a crystal here deals to every target added up. Zero when no
-    // target on its own clears the minimum.
+    // Zero when no target on its own clears the minimum.
     private float scoreOf(Vec3 crystalPos) {
         return scoreOf(crystalPos, targets);
     }
@@ -752,18 +733,15 @@ public final class CrystalAura extends Module implements Targeting {
         return enough && worthTheTrade(crystalPos, hardest) ? total : 0;
     }
 
-    // The hardest hit on any one target weighed against what the same blast deals you.
     private boolean worthTheTrade(Vec3 crystalPos, float dealt) {
         float ratio = minRatio.getFloat();
         return ratio == 0 || dealt >= ratio * ExplosionUtil.crystalDamage(mc.player, crystalPos);
     }
 
-    // How far the target travels before the blast lands.
     private Vec3 lead(LivingEntity target) {
         return predict.isOn() ? EntityUtil.velocityOf(target).scale(LEAD_TICKS) : Vec3.ZERO;
     }
 
-    // True when the target is nearly dead or their armour is falling apart.
     private boolean finishing(LivingEntity target) {
         if (!finisher.isOn()) {
             return false;
@@ -791,8 +769,7 @@ public final class CrystalAura extends Module implements Targeting {
         return false;
     }
 
-    // Puts something in hand that still hurts whilst weakness takes the hit to nought.
-    // The server refuses the whole attack at nought and the crystal survives.
+    // The server refuses an attack that weakness takes to nought and the crystal survives.
     private boolean armWeakHand() {
         if (DamageUtil.hitDamage(mc.player, mc.player.getMainHandItem()) > 0) {
             return true;
@@ -809,7 +786,6 @@ public final class CrystalAura extends Module implements Targeting {
         return limits.allows(source, ExplosionUtil.CRYSTAL_POWER);
     }
 
-    // A placing turn only heeds the yaw steps when their mode takes in placing turns too.
     private float placeStep() {
         return yawStepsMode.is(YawSteps.ALL) ? yawSteps.getFloat() : RotationManager.NO_STEP;
     }
@@ -831,7 +807,6 @@ public final class CrystalAura extends Module implements Targeting {
         return false;
     }
 
-    // The hand holding a crystal. Switches the hotbar over when the mode allows.
     private InteractionHand crystalHand() {
         if (mc.player.getOffhandItem().is(Items.END_CRYSTAL)) {
             return InteractionHand.OFF_HAND;
@@ -888,7 +863,6 @@ public final class CrystalAura extends Module implements Targeting {
         }
     }
 
-    // Places an obsidian block on the best open spot for the next crystal.
     private void placeSupport() {
         // ShulkerPacker keeps count of the backpack and nothing is borrowed from it meanwhile.
         int slot = InventoryUtil.findSlot(Items.OBSIDIAN,
@@ -954,7 +928,6 @@ public final class CrystalAura extends Module implements Targeting {
         }
     }
 
-    // The spot the next crystal is heading for. Drawn until a placement replaces it.
     private void preview(BlockPos base, float damage) {
         if (drawnTicks == 0 || !base.equals(drawn)) {
             show(base, damage, 1);
@@ -1015,7 +988,6 @@ public final class CrystalAura extends Module implements Targeting {
         drawDamage(box);
     }
 
-    // The number is drawn on the screen over where the box top sits in the world.
     private void drawDamage(AABB box) {
         damageAt = showDamage.isOn() && drawnDamage > 0
             ? new Vec3((box.minX + box.maxX) / 2, box.maxY + 0.5, (box.minZ + box.maxZ) / 2) : null;

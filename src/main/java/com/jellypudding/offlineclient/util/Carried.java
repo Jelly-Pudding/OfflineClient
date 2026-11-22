@@ -8,18 +8,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-// What a living entity holds and wears put into words for chat and labels.
 public final class Carried {
 
-    // One piece and how it is carried such as holding Mace.
     public record Piece(String verb, String what) {
     }
 
     private Carried() {
     }
 
-    // A piece for each slot whose stack the namer puts into words. The namer hands back null
-    // for a stack that does not count.
+    // The namer hands back null for a stack that does not count.
     public static List<Piece> pieces(LivingEntity holder, Function<ItemStack, String> namer) {
         List<Piece> pieces = new ArrayList<>();
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {

@@ -13,11 +13,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
 
-// A list you walk with the arrow keys without opening a screen. Handy mid fight. The TabGUI
-// element of the HUD draws it whilst this is on.
+// The TabGUI element of the HUD draws the list whilst this is on.
 public final class TabGui extends Module {
 
-    // One line of the list in the colour it is written in.
     public record Row(String name, int colour) {
     }
 
@@ -46,8 +44,6 @@ public final class TabGui extends Module {
         Modules.tellHudOff(this);
     }
 
-    // The list as it stands. The row you are on takes the picked colour and in a category a
-    // module that is switched on takes the enabled colour.
     public List<Row> rows() {
         List<Row> rows = new ArrayList<>();
         if (open == null) {
@@ -66,7 +62,6 @@ public final class TabGui extends Module {
         return rows;
     }
 
-    // The row the cursor is on.
     public int cursor() {
         return row;
     }
@@ -76,8 +71,6 @@ public final class TabGui extends Module {
             : OfflineClient.INSTANCE.getModuleManager().getByCategory(open);
     }
 
-    // Up and down move the cursor. Right or enter opens a category or toggles a module. Left goes back.
-    // Nothing moves whilst the list is out of sight.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
         if (event.getAction() == InputConstants.RELEASE || mc.gui.screen() != null || !inSight()) {
@@ -97,8 +90,7 @@ public final class TabGui extends Module {
         }
     }
 
-    // The HUD draws the list whilst its piece is on. It goes when the game's own HUD is hidden and
-    // steps aside for the debug screen. Conceal only hides it and the keys keep working.
+    // Conceal only hides the list and the keys keep working.
     private boolean inSight() {
         HudModule hud = Modules.active(HudModule.class);
         return hud != null && !hud.overlayHidden() && !mc.gui.hud.isHidden()

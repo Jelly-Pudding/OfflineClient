@@ -30,17 +30,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Watches the players and creepers and lit TNT round you and hops you clear of the hit before it lands.
-// The server sends where another player is every second tick and their speed is worked out
-// from that. Fall distance is never sent.
+// The server sends where another player is every second tick and their speed is worked out from
+// that. Fall distance is never sent.
 public final class Evade extends Module {
 
-    // A threat and how far a spot would be from it.
     private interface Threat {
         double clearance(Vec3 centre);
     }
 
-    // A blow aimed at a point such as a falling mace or a creeper.
     private record Point(Vec3 at) implements Threat {
         @Override
         public double clearance(Vec3 centre) {
@@ -48,7 +45,6 @@ public final class Evade extends Module {
         }
     }
 
-    // A spear charge runs along the line the attacker looks down.
     private record Line(Vec3 eyes, Vec3 look) implements Threat {
         @Override
         public double clearance(Vec3 centre) {
@@ -58,34 +54,28 @@ public final class Evade extends Module {
         }
     }
 
-    // A hit taken and your health before it. The health lands a tick or two after the hit.
+    // The health lands a tick or two after the hit.
     private record Hit(Entity attacker, Vec3 from, float healthBefore, int tick) {
     }
 
-    // Blocks a tick downwards before a player counts as dropping onto you.
     private static final double MACE_FALL = 0.3;
 
     // Ticks ahead a blow is looked for. The hop itself goes on the next tick.
     private static final int LEAD_TICKS = 3;
 
-    // Degrees off a spear's line that still meet its point.
     private static final double SPEAR_CONE = 20;
 
     // A creeper blast hurts out to twice its radius. A charged one blasts twice as far.
     private static final double CREEPER_BLAST = 6;
 
-    // Lit TNT is left alone until its fuse is this short. A creeper swells for as long before it
-    // blows. The blast hurts out to twice its power.
+    // A creeper swells for as long before it blows. The TNT blast hurts out to twice its power.
     private static final int FUSE_WARNING = 30;
     private static final double TNT_BLAST = 2 * ExplosionUtil.TNT_POWER;
 
-    // Players and creepers further off are never a threat this tick.
     private static final double SCAN = 32;
 
-    // Ticks between two hops.
     private static final int HOP_GAP = 10;
 
-    // Ticks a hit is kept whilst its health lands and a hop finds a way.
     private static final int HIT_WAIT = 3;
 
     // The hop tries this many bearings round you and the same height first. The higher ones
@@ -93,7 +83,6 @@ public final class Evade extends Module {
     private static final int BEARINGS = 8;
     private static final double[] HEIGHTS = {0, 1, -1, 2, 3, 4};
 
-    // Ticks the reason for the last hop stays beside the name.
     private static final int SHOW_TICKS = 20;
 
     private final BoolSetting maces = new BoolSetting("Maces",
@@ -200,7 +189,7 @@ public final class Evade extends Module {
         shown = SHOW_TICKS;
     }
 
-    // Every threat this tick. Hands back a word for the first one or null when there is none.
+    // Hands back a word for the first threat or null when there is none.
     private String gather(List<Threat> threats) {
         String found = null;
         for (Player player : mc.level.players()) {
@@ -238,14 +227,11 @@ public final class Evade extends Module {
         return found == null ? struck : found;
     }
 
-    // Spectators and fake players and your own copies never threaten anyone. Friends only do
-    // whilst Ignore friends is off.
     private boolean counts(Player player) {
         return EntityUtil.isRealPlayer(player) && player.isAlive() && !player.isSpectator()
             && !(ignoreFriends.isOn() && EntityUtil.isFriend(player));
     }
 
-    // Adds what this player threatens. A word for it or null when they threaten nothing.
     private String threatOf(Player player, Vec3 velocity, List<Threat> threats) {
         ItemStack held = player.getMainHandItem();
         ItemStack used = player.getUseItem();
@@ -276,8 +262,7 @@ public final class Evade extends Module {
         return null;
     }
 
-    // True when the weapon reaches you now or will within a few ticks along the way the player
-    // moves. A spear cannot strike anything that sits too close.
+    // A spear cannot strike anything that sits too close.
     private boolean soonInReach(Player player, ItemStack held, Vec3 eyes, Vec3 velocity) {
         AttackRange range = player.getAttackRangeWith(held);
         double least = range.effectiveMinRange(player) - range.hitboxMargin();
@@ -292,8 +277,6 @@ public final class Evade extends Module {
         return false;
     }
 
-    // A hit that took at least the hearts set. The health lands a moment after the hit itself.
-    // The hit stays until a hop goes or it grows too old.
     private String bigHit(List<Threat> threats) {
         if (hit != null && ticks - hit.tick() > HIT_WAIT) {
             hit = null;
@@ -319,8 +302,6 @@ public final class Evade extends Module {
         return "big hit";
     }
 
-    // The clear spot a hop away that stands furthest from every threat. Null when nowhere is
-    // safer than where you stand.
     private Vec3 bestSpot(List<Threat> threats) {
         Vec3 from = mc.player.position();
         double half = mc.player.getBbHeight() / 2;
@@ -353,8 +334,6 @@ public final class Evade extends Module {
         return least;
     }
 
-    // Where a hop to the spot ends or null when it cannot go there. Solid ground drops it onto
-    // a floor that is safe to stand on. The end needs room out of lava and a clear way there.
     private Vec3 landing(Vec3 from, Vec3 spot) {
         Vec3 end = solidGround.isOn() ? SafeDrop.below(mc.player, spot) : spot;
         return end != null && Hop.safeAt(mc.player, end) && Hop.clearWay(mc.player, from, end) ? end : null;

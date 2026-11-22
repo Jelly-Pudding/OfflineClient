@@ -52,7 +52,6 @@ public final class RepostGate {
         return true;
     }
 
-    // The next place is news whatever it is.
     public void reset() {
         told = false;
     }

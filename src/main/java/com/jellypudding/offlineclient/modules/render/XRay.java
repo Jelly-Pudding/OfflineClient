@@ -51,7 +51,7 @@ public final class XRay extends MeshFilterModule {
         searchTags("ore", "wallhack");
     }
 
-    // Puts a block on the list or takes it off. True when it went on.
+    // True when the block went on the list.
     public boolean toggleBlock(Block block) {
         if (blocks.contains(block)) {
             blocks.remove(block);

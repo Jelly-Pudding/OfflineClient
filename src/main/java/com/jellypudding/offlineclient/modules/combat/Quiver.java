@@ -125,7 +125,6 @@ public final class Quiver extends Module {
         return isLauncher(mc.player.getMainHandItem()) && mc.options.keyUse.isDown();
     }
 
-    // Inventory index of the arrow that should be fired next.
     private int findWanted() {
         for (MobEffect effect : effects.resolved()) {
             int slot = InventoryUtil.findSlot(stack -> stack.is(Items.TIPPED_ARROW)
@@ -139,7 +138,6 @@ public final class Quiver extends Module {
         }
         return InventoryUtil.findSlot(Items.ARROW, InventoryUtil.WHOLE_INVENTORY);
     }
-
 
     private static String label(ItemStack stack) {
         if (!stack.is(Items.TIPPED_ARROW)) {

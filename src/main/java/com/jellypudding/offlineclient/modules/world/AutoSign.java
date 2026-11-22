@@ -69,25 +69,19 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// Writes your text on signs without the edit screen showing. Both sides and hanging signs can
-// have text of their own. It can also write the signs around you and sign each block you place.
 public final class AutoSign extends Module {
 
     public enum Source { TYPED, FIRST_SIGN, FILE, REMEMBERED }
 
     public enum Back { BLANK, SAME, OWN }
 
-    // What a sign gets once its writing is done. Each takes one click with the item.
     private enum Finish { DYE, GLOW, WAX }
 
-    // Where a sign is in its writing. Each time the server opens the editor it buys one side.
+    // Each time the server opens the editor it buys one side.
     private enum Step { WRITE, CLICK, OPENING, FINISH }
 
-    // Ticks to wait for the server to open a sign after a click before giving up on it.
     private static final int OPEN_TIMEOUT = 40;
-    // Ticks a sign is left alone after AutoSign worked on it. An editor it opens meanwhile is dropped.
     private static final int RETRY_TICKS = 100;
-    // Signs the server opened that can wait their turn behind the one being written.
     private static final int MAX_WAITING = 16;
 
     private static final List<SignTextSlot> SIDES = List.of(SignTextSlot.FRONT, SignTextSlot.BACK);
@@ -153,17 +147,14 @@ public final class AutoSign extends Module {
     private record Opened(BlockPos pos, SignTextSlot slot) {
     }
 
-    // A block you placed by hand. It gets a sign once the tick count reaches ready.
     private record Base(BlockPos clicked, Direction face, int ready) {
     }
 
-    // One sign being written. The sides still to write and what it gets after.
     private static final class Job {
 
         private final BlockPos pos;
         private final Deque<SignTextSlot> sides;
         private final Deque<Finish> finishes = new ArrayDeque<>();
-        // The part of the story this sign takes. Null for any other source.
         private SignStory.Chunk story;
         private Step step;
         private int waited;
@@ -322,8 +313,6 @@ public final class AutoSign extends Module {
         }
     }
 
-    // Clicks wait whilst a screen is open or the server's use budget is spent or something else
-    // has the hands.
     private boolean canClick() {
         return mc.gui.screen() == null && UseBudget.remaining() > 0 && !Hands.taken();
     }
@@ -339,7 +328,6 @@ public final class AutoSign extends Module {
         }
     }
 
-    // An editor the server opened for a sign you placed or clicked yourself.
     private void startWaiting() {
         Iterator<Map.Entry<BlockPos, SignTextSlot>> first = waiting.entrySet().iterator();
         Map.Entry<BlockPos, SignTextSlot> next = first.next();
@@ -399,7 +387,6 @@ public final class AutoSign extends Module {
         }
     }
 
-    // One opening buys one side. The sign is clicked again for the next one.
     private void reopen() {
         if (!canClick()) {
             return;
@@ -453,8 +440,6 @@ public final class AutoSign extends Module {
         }
     }
 
-    // The first dye on the list you carry anywhere. Null when you carry none or the writing
-    // already has its colour.
     private Item carriedDye(DyeColor current) {
         for (Item dye : dyes.resolved()) {
             if (mc.player.getOffhandItem().is(dye)
@@ -465,8 +450,6 @@ public final class AutoSign extends Module {
         return null;
     }
 
-    // Clicks the sign with the item. The offhand is used where it holds one and a stack
-    // anywhere else is borrowed into the hotbar for the click.
     private void useOn(BlockPos pos, Item item) {
         if (mc.player.getOffhandItem().is(item)) {
             click(pos, InteractionHand.OFF_HAND);
@@ -542,8 +525,7 @@ public final class AutoSign extends Module {
         return started;
     }
 
-    // An unwaxed sign in reach that the server lets you edit and that lacks your text. A click
-    // on a sign runs any command in its text and the aura keeps away from those.
+    // A click on a sign runs any command in its text and the aura keeps away from those.
     private boolean auraWants(BlockPos pos) {
         if (recent.contains(pos) || !(mc.level.getBlockEntity(pos) instanceof SignBlockEntity sign)) {
             return false;
@@ -600,8 +582,6 @@ public final class AutoSign extends Module {
         slots.restoreIfMine();
     }
 
-    // The face of the block the sign goes on. A standing sign sits on top and a hanging one
-    // underneath and either falls back to the side facing you. Null when none is free.
     private Direction signFace(BlockPos block, boolean hanging) {
         Direction face = hanging ? Direction.DOWN : Direction.UP;
         if (BlockUtil.blockFits(block.relative(face))) {
@@ -611,13 +591,11 @@ public final class AutoSign extends Module {
         return BlockUtil.blockFits(block.relative(side)) ? side : null;
     }
 
-    // A hotbar slot with a sign of the kind asked for that is not skipped. Minus one when none.
     private int signSlot(boolean hanging) {
         return InventoryUtil.hotbarSlot(stack -> isSign(stack.getItem())
             && (stack.getItem() instanceof HangingSignItem) == hanging && !skipSigns.contains(stack.getItem()));
     }
 
-    // Standing and wall signs and both kinds of hanging sign place a sign block.
     private static boolean isSign(Item item) {
         return item instanceof BlockItem block && block.getBlock() instanceof SignBlock;
     }
@@ -628,7 +606,6 @@ public final class AutoSign extends Module {
         return item instanceof BlockItem && !isSign(item);
     }
 
-    // The sides whose wanted lines differ from what the sign shows.
     private List<SignTextSlot> sidesToWrite(SignBlockEntity sign) {
         List<SignTextSlot> sides = new ArrayList<>();
         for (SignTextSlot side : SIDES) {
@@ -655,14 +632,12 @@ public final class AutoSign extends Module {
         return true;
     }
 
-    // True whilst ColourCodes makes the codes in a sign line real on its way out.
     private static boolean coloured() {
         ColourCodes codes = Modules.active(ColourCodes.class);
         return codes != null && codes.coloursSigns();
     }
 
-    // The four lines one side should show cut to what fits on the sign like the edit screen
-    // cuts them. Null when that side is left as it is.
+    // Null when that side is left as it is.
     private List<String> linesFor(SignBlockEntity sign, SignTextSlot side) {
         List<String> wanted = wantedLines(sign, side);
         if (wanted == null) {
@@ -682,7 +657,6 @@ public final class AutoSign extends Module {
         return lines;
     }
 
-    // The lines of one side with the live words filled in. A back that repeats the front reads it.
     private List<String> wantedLines(SignBlockEntity sign, SignTextSlot side) {
         if (source.is(Source.REMEMBERED)) {
             SignReader reader = Modules.get(SignReader.class);

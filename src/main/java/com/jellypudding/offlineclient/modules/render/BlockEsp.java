@@ -60,7 +60,6 @@ public final class BlockEsp extends Module {
         }
     }
 
-    // A property of a listed block and the values of it that show. Each is written name=value.
     private record Constraint(Property<?> property, Set<String> shown) {
 
         boolean admits(BlockState state) {
@@ -87,7 +86,6 @@ public final class BlockEsp extends Module {
         }
     }
 
-    // Hand tuned colours for the usual targets. Ores take the colour of their kind.
     private static final Map<Block, Integer> PRESET_COLORS = Map.ofEntries(
         Map.entry(Blocks.SPAWNER, 0xFFC050FF),
         Map.entry(Blocks.TRIAL_SPAWNER, 0xFFC050FF),
@@ -125,7 +123,7 @@ public final class BlockEsp extends Module {
         .under(caves);
     private final BoxStyle caveStyle = new BoxStyle("Cave", BoxStyle.Shape.SIDES, 200).under(caves);
 
-    // The look of every block that has one. Kept after a block leaves the list.
+    // Kept after a block leaves the list.
     private final Map<Block, BlockLook> looks = new LinkedHashMap<>();
 
     // One saved entry. The rows are rebuilt from it after the config has loaded.
@@ -165,7 +163,6 @@ public final class BlockEsp extends Module {
 
     // Read from the scanner thread and replaced whole.
     private volatile Search search = Search.NOTHING;
-    // The heights the current scans read. A new band scans everything again.
     private HeightBand.Rows scannedRows;
 
     private final ChunkScanner<Target> scanner = new ChunkScanner<>();
@@ -174,16 +171,13 @@ public final class BlockEsp extends Module {
     private final NearestCut<Target> drawn = new NearestCut<>(BlockEsp::distanceSqr);
     // Cave air has a scan and a limit of its own and never pushes a listed block out.
     private final CaveSurface caveSurface = new CaveSurface();
-    // Whether the cave surface scanned at the last tick.
     private boolean cavesShown;
 
-    // Where every drawn block stands and which run of touching blocks it belongs to.
     private final Long2ObjectOpenHashMap<Block> blockAt = new Long2ObjectOpenHashMap<>();
     private final Long2IntOpenHashMap groupOf = new Long2IntOpenHashMap();
     private final List<Vec3> groupCenters = new ArrayList<>();
     // The drawn blocks that fill their whole space. Only these join with their neighbours.
     private final Long2ObjectOpenHashMap<Block> fullAt = new Long2ObjectOpenHashMap<>();
-    // The box of every drawn block whose shape is smaller than its space.
     private final Long2ObjectOpenHashMap<AABB> fitted = new Long2ObjectOpenHashMap<>();
 
     public BlockEsp() {
@@ -248,8 +242,7 @@ public final class BlockEsp extends Module {
         return looks.computeIfAbsent(block, BlockLook::new);
     }
 
-    // True if what the scanner looks for changed. Cave air on the list is left to Caves whilst
-    // that is on.
+    // Cave air on the list is left to Caves whilst that is on.
     private boolean snapshot() {
         Set<Block> listed = new HashSet<>(blocks.resolved());
         if (caves.isOn()) {
@@ -332,8 +325,7 @@ public final class BlockEsp extends Module {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    // Blocks of one kind that touch even at a corner count as one find. Each block's box is
-    // worked out here from its own shape.
+    // Blocks of one kind that touch even at a corner count as one find.
     private void regroup(List<Target> targets) {
         blockAt.clear();
         groupOf.clear();
@@ -413,7 +405,6 @@ public final class BlockEsp extends Module {
             BoxStyle style = own ? look.style() : defaultStyle;
             long at = key(target.x(), target.y(), target.z());
             AABB fit = fitted.get(at);
-            // A block that fills its space joins its neighbours of the same kind into one shape.
             AABB box = fit != null ? fit : cell(target);
             int hidden = fit != null ? 0 : DrawBatch.sharedSides(fullAt, at, target.block());
             if (own || !automatic.isOn()) {
@@ -443,7 +434,6 @@ public final class BlockEsp extends Module {
         return automatic.isOn() ? autoColor(block) : defaultTracerColor.getColor();
     }
 
-    // Every value of every property of the block written name=value.
     private static List<String> stateNames(Block block) {
         List<String> names = new ArrayList<>();
         for (Property<?> property : block.getStateDefinition().getProperties()) {
@@ -452,8 +442,6 @@ public final class BlockEsp extends Module {
         return names;
     }
 
-    // The look of one block. Its own rows show whilst the toggle is ticked. The states it shows in
-    // can be picked whatever its look.
     private final class BlockLook {
 
         private final Block block;
@@ -486,7 +474,6 @@ public final class BlockEsp extends Module {
             return own.isOn();
         }
 
-        // A look with nothing of its own and no picked states is not saved.
         private boolean isKept() {
             return own.isOn() || !states.getValue().isEmpty();
         }
@@ -503,7 +490,6 @@ public final class BlockEsp extends Module {
             return tracerColor.getColor();
         }
 
-        // The picks grouped by property. A pick that names no property of the block is dropped.
         private List<Constraint> constraints() {
             Map<String, Set<String>> picked = new LinkedHashMap<>();
             for (String pick : states.getValue()) {
@@ -563,7 +549,6 @@ public final class BlockEsp extends Module {
         }
     }
 
-    // A block id such as deepslate_diamond_ore reads as a sentence case name.
     private static String sentence(String id) {
         return ChatUtil.capitalised(id.replace('_', ' '));
     }

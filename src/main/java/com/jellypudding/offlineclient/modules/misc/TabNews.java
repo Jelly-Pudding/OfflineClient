@@ -41,8 +41,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 
-// What the tab list tells Notifier about the players on the server. Joins and leaves with the
-// friends among them and the join alarm and players who vanish or change their game mode.
+// What the tab list tells Notifier about the players on the server.
 final class TabNews {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -54,19 +53,16 @@ final class TabNews {
         BOTH
     }
 
-    // What the tab list says about one player. The mode is null until the server sends one.
+    // The mode is null until the server sends one.
     private record TabEntry(String name, GameType mode, Component tabName, boolean listed) {
     }
 
-    // A line the server wrote and the tick it came on.
     private record Seen(int tick, String text) {
     }
 
-    // A tab change still waiting for its join or leave line.
     private record Unannounced(Presence change, int deadline) {
     }
 
-    // How many tab changes one way came with a line and how many without.
     private static final class ChangeCounts {
 
         private int announced;
@@ -87,21 +83,17 @@ final class TabNews {
     // Paper send that list along with the login but not in the same order.
     private static final long JOIN_BURST_MILLIS = 2000;
 
-    // How far apart in ticks a join or leave line and its tab change may arrive. Servers
-    // send both in one tick and some plugins a little later.
+    // Servers send a join or leave line and its tab change in one tick and some plugins a little
+    // later.
     private static final int ANNOUNCE_WINDOW = 40;
 
-    // Server lines kept for a tab change that arrives after its line.
     private static final int MAX_SERVER_LINES = 64;
 
-    // Announced changes seen before a silent one counts as a vanish.
     private static final int ANNOUNCED_TO_TRUST = 2;
 
     // A join is worth several rings to wake a player who stepped away.
     private static final int JOIN_RINGS = 5;
 
-    // Minutes before the same player sets the join alarm off again. A player who drops out and
-    // reconnects is not news twice.
     private static final int JOIN_QUIET_MINUTES = 5;
 
     private final EnumSetting<JoinsLeaves> joinsLeaves = new EnumSetting<>("Joins and leaves",
@@ -135,7 +127,6 @@ final class TabNews {
         .under(gameModes);
 
     private final Notifier notifier;
-    // Where the netty thread hands its work to the game thread.
     private final Queue<Pending> queue;
     private final Deque<String> joinLeaveQueue = new ArrayDeque<>();
     // The tab list as the packets told it. The netty thread must not read the real one.
@@ -155,7 +146,6 @@ final class TabNews {
         this.queue = queue;
     }
 
-    // Joins and leaves with the friends among them and the join alarm.
     Setting<?>[] joinRows() {
         List<Setting<?>> rows = new ArrayList<>(List.of(joinsLeaves, notificationDelay, simpleNotifications,
             friendJoins));
@@ -163,7 +153,6 @@ final class TabNews {
         return rows.toArray(Setting<?>[]::new);
     }
 
-    // Players who leave the list without a word or change their game mode.
     Setting<?>[] listRows() {
         return new Setting<?>[] {vanish, gameModes, watchStaff};
     }
@@ -291,7 +280,6 @@ final class TabNews {
         return joinsLeaves.is(half) || joinsLeaves.is(JoinsLeaves.BOTH);
     }
 
-    // The friends already on are named once the list that came with this join is complete.
     void onRejoin() {
         rollCallDue = true;
     }
@@ -302,8 +290,6 @@ final class TabNews {
         rollCall();
     }
 
-    // The line goes out whilst that half is reported. A player joining the tab list also
-    // sounds the join alarm and a friend joining is told on its own.
     void onJoinLeave(JoinLeave change) {
         boolean joinLine = wants(JoinsLeaves.JOINS);
         if (change.joined() ? joinLine : wants(JoinsLeaves.LEAVES)) {
@@ -320,7 +306,6 @@ final class TabNews {
         }
     }
 
-    // Names the friends already on once the list that came with a join is complete.
     private void rollCall() {
         if (!rollCallDue || System.currentTimeMillis() < burstUntil) {
             return;
@@ -366,7 +351,6 @@ final class TabNews {
         return "§f" + name + (joined ? " §7joined." : " §7left.");
     }
 
-    // Watch staff takes anyone who turns to creative or spectator for staff.
     void reportMode(ModeChange change) {
         if (!gameModes.isOn() || isSelf(change.name()) || notifier.skip(change.name())) {
             return;
@@ -411,7 +395,6 @@ final class TabNews {
         unannounced.add(new Unannounced(change, notifier.clock() + ANNOUNCE_WINDOW));
     }
 
-    // A change still without its line once the window closes came without one.
     private void expireUnannounced() {
         Iterator<Unannounced> it = unannounced.iterator();
         while (it.hasNext()) {
@@ -436,7 +419,6 @@ final class TabNews {
         return change.shown() ? joins : leaves;
     }
 
-    // The line names the player by account or by the name the tab list shows.
     private static boolean names(String text, Presence change) {
         if (ChatUtil.wholeWordIndex(text, change.name(), 0) != -1) {
             return true;

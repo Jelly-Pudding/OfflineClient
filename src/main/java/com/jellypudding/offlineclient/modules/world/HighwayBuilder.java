@@ -69,22 +69,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Builds a highway along one line doing the nearest job each tick. Liquid is plugged first and
-// clearing goes before filling. Unsupported blocks go into the air. The line can climb or drop
-// like stairs.
+// The nearest job is done each tick. Liquid is plugged first and clearing goes before filling.
+// Unsupported blocks go into the air.
 public final class HighwayBuilder extends Module {
 
-    // Finished depths that must lie ahead before the module walks on.
     private static final int LEAD = 2;
 
-    // How far ahead of the player the work reaches and how far behind it is checked.
     private static final int AHEAD = 6;
     private static final int BEHIND = 2;
 
-    // Ticks of no progress before the module gives up walking on its own. Ten seconds.
     private static final int IDLE_LIMIT = 200;
 
-    // A walking pace in blocks per tick whilst the view is left free.
     private static final double WALK_SPEED = 0.13;
 
     // A lane is picked only when it reaches with this to spare. The lane pull stops this short
@@ -104,7 +99,6 @@ public final class HighwayBuilder extends Module {
     // A torch on a railing only stands on it.
     private static final List<Direction> STAND_ONLY = List.of(Direction.DOWN);
 
-    // The run ends once you stand this close to the last depth with nothing left to do.
     private static final double END_SLACK = 0.3;
 
     // An axis or a diagonal nearer than this is the one you stand on and not the next.
@@ -124,7 +118,6 @@ public final class HighwayBuilder extends Module {
     public enum Slope {
         FLAT(0), UP(1), DOWN(-1);
 
-        // Blocks the floor changes by for each block forward.
         private final int rise;
 
         Slope(int rise) {
@@ -145,7 +138,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // A block the line cannot reach and the lane that reaches it.
     private record Step(BlockPos block, double lane) {
     }
 
@@ -296,9 +288,7 @@ public final class HighwayBuilder extends Module {
     private double bestTravelled;
 
     private Status status = Status.NONE;
-    // The block the walk last waited on. Named when the module gives up.
     private BlockPos waitingOn;
-    // True whilst the player is held on another lane to reach a block.
     private boolean stepping;
 
     private BlockPos mineTarget;
@@ -309,7 +299,6 @@ public final class HighwayBuilder extends Module {
     private int blocksBroken;
     private int blocksPlaced;
 
-    // True for a tick in which a block was wanted and none was in the hotbar.
     private boolean outOfBlocks;
 
     // Blocks nothing on the highway reaches that the walk went past. Each one still undone
@@ -323,22 +312,17 @@ public final class HighwayBuilder extends Module {
 
     // The deepest depth this run has broken or placed at. Bends only go past it.
     private int frontier;
-    // The slope the plan follows and the floor its last bend set out from.
     private Slope planned = Slope.FLAT;
     private int slopeFrom;
     private boolean toldDiagonal;
 
-    // The block the hand was on last tick. Used only to count what really broke.
     private BlockPos wasMining;
 
     // Second blocks taken down with packets whilst the hand works the first.
     private final PacketBreaker spares = new PacketBreaker();
 
-    // The choice of Stop at the crossing was worked out for. Null before the first look of a run.
     private StopAt crossingFor;
-    // How far along the line the next axis or diagonal lies. Infinite when none lies ahead.
     private double crossing;
-    // Where the run ends by itself as of the last tick. Infinite whilst it has no end.
     private double runEnd = Double.POSITIVE_INFINITY;
     private long startedAt;
 
@@ -348,7 +332,6 @@ public final class HighwayBuilder extends Module {
     private final HeldKey bowDraw = new HeldKey(options -> options.keyUse);
     private boolean toldNoArrows;
 
-    // Every block of the shell around the player this tick.
     private final List<BlockPos> stretch = new ArrayList<>();
 
     public HighwayBuilder() {
@@ -434,7 +417,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // What the run did.
     private String totals() {
         String left = leftUndone > 0 ? "§7 and left §f" + leftUndone + "§7 it could not reach" : "";
         double seconds = (System.currentTimeMillis() - startedAt) / 1000.0;
@@ -454,7 +436,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // A run starts level at your feet.
     private void lockAxis() {
         walker.lock(diagonal.isOn());
         plan.reset(walker.floorY());
@@ -574,9 +555,8 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // How far along the line the highway ends by itself. Infinite whilst it has no end. The next
-    // axis or diagonal is looked for once when the run starts and again when Stop at changes. A
-    // crossing reached must not give way to the one after it.
+    // The next axis or diagonal is looked for once when the run starts and again when Stop at
+    // changes. A crossing reached must not give way to the one after it.
     private double endDepth(double here) {
         StopAt choice = stopAt.getValue();
         if (choice != crossingFor) {
@@ -666,8 +646,7 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // Bends the plan when Slope changes. A slope levels out at the level height or where it
-    // cannot go on. A diagonal line stays level because its rounded depths would make jagged steps.
+    // A diagonal line stays level because its rounded depths would make jagged steps.
     private void followSlope(double here) {
         if (walker.isDiagonal()) {
             if (!slope.is(Slope.FLAT) && !toldDiagonal) {
@@ -705,7 +684,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // The first depth a bend can still change. Everything nearer has been dug or built.
     private int nextBend(double here) {
         return Math.max(frontier, (int) Math.round(here)) + BEND_LEAD;
     }
@@ -716,7 +694,6 @@ public final class HighwayBuilder extends Module {
         planned = to;
     }
 
-    // Why the slope ends before this depth. Null whilst it goes on.
     private String slopeEnd(int depth) {
         if (reachedLevel(depth)) {
             return "at §f" + plan.floorAt(depth - 1);
@@ -742,8 +719,6 @@ public final class HighwayBuilder extends Module {
         return null;
     }
 
-    // True once the floor before this depth has come to the level height. A slope that set out
-    // from beyond it never levels there.
     private boolean reachedLevel(int depth) {
         if (!levelOut.isOn()) {
             return false;
@@ -753,13 +728,10 @@ public final class HighwayBuilder extends Module {
         return planned == Slope.UP ? slopeFrom <= goal && last >= goal : slopeFrom >= goal && last <= goal;
     }
 
-    // The planned floor where you stand.
     private int floorHere(double here) {
         return plan.floorAt((int) Math.round(here));
     }
 
-    // Every block of the tunnel and its shell between two depths along the line. The box
-    // around the player is sieved by distance along and across it.
     private void gatherStretch(double from, double to) {
         stretch.clear();
         int span = AHEAD + width.getInt() + 2;
@@ -787,8 +759,7 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // Does the nearest job in reach across the stretch. Liquid goes first then clearing wins
-    // over filling. True when the tick was spent.
+    // True when the tick was spent.
     private boolean work() {
         if (fillLiquids.isOn()) {
             BlockPos plug = nearest(this::isLiquid);
@@ -820,7 +791,6 @@ public final class HighwayBuilder extends Module {
         return BlockUtil.reaches(pos, reach.getValue());
     }
 
-    // A block was broken or placed. The idle count starts again and bends stay past it.
     private void worked(BlockPos pos) {
         idleTicks = 0;
         frontier = Math.max(frontier, walker.depthOf(pos));
@@ -851,7 +821,6 @@ public final class HighwayBuilder extends Module {
         return true;
     }
 
-    // Sends the pair for a run of one hit blocks in the same tick.
     private boolean packetMine() {
         int sent = 0;
         for (BlockPos pos : stretch) {
@@ -894,15 +863,12 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // The block in reach that passes the test with the nearest middle.
     private BlockPos nearest(Predicate<BlockPos> wanted) {
         return BlockUtil.nearestOf(stretch, pos -> reaches(pos) && wanted.test(pos));
     }
 
     private enum Part { TUNNEL, FLOOR, WALL, ABOVE_WALL, CEILING, SIDE, OUTSIDE }
 
-    // Which part of the highway a block belongs to by where its middle falls. The floor and the
-    // top follow the plan at the block's depth.
     private Part partOf(BlockPos pos) {
         int depth = walker.depthOf(pos);
         int floorY = plan.floorAt(depth);
@@ -940,8 +906,7 @@ public final class HighwayBuilder extends Module {
         return y == topY && sides.is(Sides.WALLS) ? Part.CEILING : Part.OUTSIDE;
     }
 
-    // Anything in the tunnel or a shell block off the list when that shell is replaced. A block
-    // NoInteract keeps standing for the lava behind it is left like one that cannot be dug.
+    // A block NoInteract keeps standing for the lava behind it is left like one that cannot be dug.
     private boolean needsClearing(BlockPos pos) {
         if (!BlockUtil.diggable(pos) || BlockUtil.isStandingOn(pos)
             || keep.contains(BlockUtil.state(pos).getBlock()) || BlockMiner.kept(pos)) {
@@ -979,7 +944,6 @@ public final class HighwayBuilder extends Module {
         };
     }
 
-    // Liquid anywhere in the shell or beside the tunnel is plugged whatever part it sits in.
     private boolean isLiquid(BlockPos pos) {
         if (mc.level.getFluidState(pos).isEmpty() || BlockUtil.intersectsPlayer(pos)) {
             return false;
@@ -987,18 +951,15 @@ public final class HighwayBuilder extends Module {
         return BlockUtil.isReplaceable(pos) && partOf(pos) != Part.OUTSIDE;
     }
 
-    // A block still has to go in here.
     private boolean needsBlock(BlockPos pos) {
         return needsFilling(pos) || (fillLiquids.isOn() && isLiquid(pos));
     }
 
-    // A block of the build still to come out or go in. Liquid is plugged whenever it comes in
-    // reach but never holds the walk.
+    // Liquid is plugged whenever it comes in reach but never holds the walk.
     private boolean pending(BlockPos pos) {
         return needsClearing(pos) || needsFilling(pos);
     }
 
-    // Places up to the round size at the target and around it.
     private boolean placeRound(BlockPos first) {
         if (sincePlace < placeDelay.getInt()) {
             sincePlace++;
@@ -1024,7 +985,6 @@ public final class HighwayBuilder extends Module {
         return true;
     }
 
-    // A block goes against a neighbour in reach if there is one and into the air if there is not.
     private boolean place(BlockPos target) {
         int slot = BlockUtil.findBlockSlot(this::allowed);
         if (slot == -1) {
@@ -1047,7 +1007,6 @@ public final class HighwayBuilder extends Module {
         return true;
     }
 
-    // The torch never sits above the top of the tunnel.
     private int torchUp() {
         return Math.min(torchHeight.getInt(), height.getInt() - 1);
     }
@@ -1073,7 +1032,6 @@ public final class HighwayBuilder extends Module {
         return BlockUtil.isReplaceable(pos) && !BlockUtil.intersectsPlayer(pos) && torchSupport(pos) != null;
     }
 
-    // A solid block the build keeps. Below first and then the sides. A railing torch only stands.
     private Direction torchSupport(BlockPos pos) {
         List<Direction> tries = sides.is(Sides.RAILINGS) ? STAND_ONLY : BlockUtil.BELOW_THEN_SIDES;
         for (Direction side : tries) {
@@ -1104,7 +1062,6 @@ public final class HighwayBuilder extends Module {
         return placed;
     }
 
-    // Jumps and paves underfoot after a fall. The line keeps its planned height.
     private boolean levelUp(double here) {
         if (!reLevel.isOn()) {
             return false;
@@ -1195,8 +1152,6 @@ public final class HighwayBuilder extends Module {
         RotationManager.requestExact(RotationManager.yawTo(at), pitch, RotationPriority.ATTACK);
     }
 
-    // Nothing in reach was left to do. Steps aside for a block the line cannot reach and
-    // otherwise walks on once nothing just ahead holds the walk.
     private void moveOn(double here) {
         Step step = stepToReach.isOn() ? findStep(here) : null;
         stepping = step != null;
@@ -1237,9 +1192,8 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // The block the walk waits for. Null once it may go on. A job in reach just ahead that did
-    // not get done holds it. A block beside or behind you that nothing reaches holds it whilst
-    // Skip unreachable is off and is passed by otherwise.
+    // A job in reach just ahead that did not get done holds the walk. A block beside or behind you
+    // that nothing reaches holds it whilst Skip unreachable is off and is passed by otherwise.
     private BlockPos holdFor(double here) {
         BlockPos outOfReach = null;
         for (BlockPos pos : stretch) {
@@ -1266,8 +1220,6 @@ public final class HighwayBuilder extends Module {
         return outOfReach;
     }
 
-    // The nearest block the line cannot reach that a lane of the floor reaches. Null when there
-    // is none. A block still out of reach once you stand on its lane is left to the walk.
     private Step findStep(double here) {
         // A fill is only worth a step with a block to put in it.
         boolean canFill = BlockUtil.findBlockSlot(this::allowed) != -1;
@@ -1291,8 +1243,6 @@ public final class HighwayBuilder extends Module {
         return null;
     }
 
-    // A job out of reach that walking along the line will not bring in reach. It lies beside or
-    // behind you or the line passes too far from it.
     private boolean stranded(BlockPos pos, double here, boolean canFill) {
         double along = walker.alongOf(pos);
         if (along < here - BEHIND || along > here + LEAD || behindStart(pos) || reaches(pos)
@@ -1312,8 +1262,6 @@ public final class HighwayBuilder extends Module {
         return walker.depthOf(pos) < 0;
     }
 
-    // The first lane from yours outwards on the block's side that brings it in reach. Null once a
-    // lane cannot be stood on or the edge of the floor is passed.
     private Step stepFor(BlockPos pos, double here) {
         double home = homeLane();
         double side = Math.signum(walker.acrossOf(pos) - home);
@@ -1334,13 +1282,10 @@ public final class HighwayBuilder extends Module {
         return null;
     }
 
-    // The middle of the next lane past this one on a side.
     private static double nextLane(double lane, double side) {
         return side > 0 ? Math.floor(lane) + 1 : Math.ceil(lane) - 1;
     }
 
-    // A block the walk passed by is counted once it drops out of the stretch still undone.
-    // Chat names the first of each run.
     private void countPassed(double here) {
         Iterator<BlockPos> passed = passedBy.iterator();
         while (passed.hasNext()) {
@@ -1361,7 +1306,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // A step up just ahead needs a jump. Walking into it from the ground starts one.
     private void jumpStep(double here) {
         int depth = (int) Math.round(here);
         if (mc.player.onGround() && mc.player.horizontalCollision
@@ -1396,7 +1340,6 @@ public final class HighwayBuilder extends Module {
         turnOff(reason);
     }
 
-    // The highway came to the end Stop at set for it.
     private void finish() {
         tell("reached the end you set.");
         turnOff("It reached the end you set.");
@@ -1438,8 +1381,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // A frame round the tunnel from just behind the player to the end of the reach. Each depth
-    // draws its own floor and top and a step closes off where either changes.
     private void drawStretch(DrawBatch batch) {
         int color = ColorUtil.withAlpha(outlineColor.getColor(), 255);
         int here = (int) Math.floor(walker.travelled());
@@ -1470,7 +1411,6 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // The outline of the tunnel across the line at a point along it.
     private void ring(DrawBatch batch, double along, double bottom, double top, int color) {
         double left = leftLane() - 0.5;
         double right = rightLane() + 0.5;

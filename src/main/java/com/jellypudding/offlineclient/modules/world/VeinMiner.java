@@ -31,7 +31,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-// Mining an ore mines every connected ore of the same kind too.
 // Deepslate and stone variants count as one vein.
 public final class VeinMiner extends Module {
 
@@ -179,7 +178,7 @@ public final class VeinMiner extends Module {
         }
     }
 
-    // Flood fills from the origin. Corners count as touching.
+    // Corners count as touching.
     private void build(BlockPos origin, BlockState state) {
         vein.clear();
         veinFamily = BlockUtil.family(state.getBlock());

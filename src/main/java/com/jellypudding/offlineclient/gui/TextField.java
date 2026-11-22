@@ -7,8 +7,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.util.Mth;
 
-// One line of editable text with a caret and a selection. Every text box in the
-// client uses it and gets the same editing and clipboard keys.
 public final class TextField {
 
     @FunctionalInterface
@@ -16,10 +14,8 @@ public final class TextField {
         boolean accepts(char c);
     }
 
-    // Anything printable.
     public static final Filter ANY = c -> c >= ' ' && c != 127;
 
-    // Digits and the pieces of a decimal number.
     public static final Filter NUMBER = c -> (c >= '0' && c <= '9') || c == '.' || c == '-';
 
     private static final long BLINK_MS = 500;
@@ -28,14 +24,12 @@ public final class TextField {
 
     private int caret;
 
-    // The fixed end of the selection. Equal to the caret means nothing is selected.
+    // Equal to the caret means nothing is selected.
     private int anchor;
 
-    // Index of the leftmost drawn character. Keeps a long value scrolled to the caret.
     private int firstVisible;
 
-    // Pixels from the start of the text to each index. Measuring a substring for every
-    // character on every frame is what makes a long value crawl.
+    // Measuring a substring for every character on every frame is what makes a long value crawl.
     private int[] widths = {0};
     private String measured = "";
     private Font measuredIn;
@@ -77,7 +71,6 @@ public final class TextField {
         return Math.max(caret, anchor);
     }
 
-    // True when the key belonged to this field.
     public boolean keyPressed(KeyEvent event, Filter filter) {
         return clipboard(event, filter) || navigate(event) || erase(event);
     }
@@ -98,7 +91,6 @@ public final class TextField {
         return true;
     }
 
-    // Shift extends the selection and control moves a word at a time.
     private boolean navigate(KeyEvent event) {
         boolean shift = event.hasShiftDown();
         boolean word = event.hasControlDown();
@@ -201,7 +193,6 @@ public final class TextField {
         }
     }
 
-    // Skips the run of spaces then the word before it.
     private int wordLeft() {
         int i = caret;
         while (i > 0 && buffer.charAt(i - 1) == ' ') {
@@ -224,7 +215,6 @@ public final class TextField {
         return i;
     }
 
-    // Puts the caret where the pointer is. Shift keeps the far end of the selection.
     public void click(Font font, int x, int room, double mouseX, boolean extend) {
         ensureVisible(font, room);
         int target = (int) Math.round(mouseX - x);
@@ -247,8 +237,6 @@ public final class TextField {
         return width(firstVisible, lastFitting(firstVisible, room));
     }
 
-    // Draws the visible run of text with the selection behind it and the
-    // caret on top.
     public void render(GuiGraphicsExtractor context, Font font, int x, int y, int room,
                        int color, boolean focused) {
         ensureVisible(font, room);
@@ -275,7 +263,6 @@ public final class TextField {
         }
     }
 
-    // Scrolls the window to keep the caret inside it and waste no room on the right.
     private void ensureVisible(Font font, int room) {
         measure(font);
         firstVisible = Math.clamp(firstVisible, 0, buffer.length());
@@ -290,7 +277,6 @@ public final class TextField {
         }
     }
 
-    // The index one past the last character that still fits in the room given.
     private int lastFitting(int from, int room) {
         int end = from;
         while (end < buffer.length() && width(from, end + 1) <= room) {
@@ -299,7 +285,6 @@ public final class TextField {
         return end;
     }
 
-    // Pixels between two indexes of the text.
     private int width(int from, int to) {
         return widths[to] - widths[from];
     }
@@ -314,9 +299,8 @@ public final class TextField {
         widths = letterEdges(font, text);
     }
 
-    // Where each character of a text starts and the last one ends. A letter of a smooth font
-    // is not a whole pixel wide. Adding up the widths of single letters would drift away
-    // from the text drawn in one piece.
+    // A letter of a smooth font is not a whole pixel wide. Adding up the widths of single letters
+    // would drift away from the text drawn in one piece.
     private static int[] letterEdges(Font font, String text) {
         int[] edges = new int[text.length() + 1];
         float edge = 0;

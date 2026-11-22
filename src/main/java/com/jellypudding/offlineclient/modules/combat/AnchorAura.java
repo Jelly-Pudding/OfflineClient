@@ -53,7 +53,6 @@ public final class AnchorAura extends RespawnBlockAura {
         return stack.is(Items.RESPAWN_ANCHOR);
     }
 
-    // Charges the best anchor in reach or sets it off once it is charged.
     @Override
     protected boolean detonateBest(LivingEntity target) {
         BlockPos best = bestAnchor(target);
@@ -128,7 +127,6 @@ public final class AnchorAura extends RespawnBlockAura {
         return bestSpot(target, gone) != null;
     }
 
-    // Where an anchor would hurt the target most. The block named as gone counts as mined out.
     private BlockPos bestSpot(LivingEntity target, BlockPos gone) {
         BlockPos best = null;
         float bestDamage = 0;

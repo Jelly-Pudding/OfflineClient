@@ -23,19 +23,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-// The map printing stations and how far each one has got. A station belongs to one dimension of
-// one server. It knows the north west corner of its map square at the height the picture lies
-// and the blocks it works with and the file under way. Kept in offlineclient/map_stations.json
-// and outlasting a disconnect and a restart.
 public final class MapStations {
 
-    // What the printer is busy with for the file under way.
     public enum Stage { BUILD, MAP, LOCK, STORE, CLEAR }
 
-    // A block of the station with one job. The chests of materials are any number.
     public enum Role { TABLE, MAPS, FINISHED, DUMP, RESET, CHESTS }
 
-    // A map id that stands for none.
     public static final int NO_MAP = -1;
 
     // Bounds on what a damaged or hand made file can make the client hold.
@@ -45,7 +38,6 @@ public final class MapStations {
     // Every cell of a picture written as bits takes this many letters at most. Four letters hold three bytes.
     private static final int CELL_LETTERS = ((MapPicture.MOST_CELLS + Byte.SIZE - 1) / Byte.SIZE + 2) / 3 * 4;
 
-    // A chest of materials with every kind it was seen holding whilst it stayed marked.
     public record Chest(BlockPos pos, Set<Item> items) {
 
         public Chest {
@@ -83,12 +75,10 @@ public final class MapStations {
             this.corner = corner.immutable();
         }
 
-        // The north west corner of the map square at the height the picture lies.
         public BlockPos corner() {
             return corner;
         }
 
-        // Null for a role nothing was marked for. The chests have a list of their own.
         public BlockPos block(Role role) {
             return switch (role) {
                 case TABLE -> table;
@@ -117,7 +107,6 @@ public final class MapStations {
             return List.copyOf(chests);
         }
 
-        // The chest marked at the spot. Null when none is.
         public Chest chestAt(BlockPos pos) {
             for (Chest chest : chests) {
                 if (chest.pos().equals(pos)) {
@@ -127,7 +116,6 @@ public final class MapStations {
             return null;
         }
 
-        // True when any marked chest was seen holding the item.
         public boolean anyChestHolds(Item item) {
             for (Chest chest : chests) {
                 if (chest.holds(item)) {
@@ -137,8 +125,7 @@ public final class MapStations {
             return false;
         }
 
-        // Adds a chest or adds the kinds a marked one holds to those it was seen with. A chest
-        // emptied of a kind stays known for it. True when something was learnt.
+        // A chest emptied of a kind stays known for it.
         public boolean seen(BlockPos pos, Set<Item> items) {
             Chest known = chestAt(pos);
             if (known != null && known.items().containsAll(items)) {
@@ -158,7 +145,6 @@ public final class MapStations {
             return chests.removeIf(chest -> chest.pos().equals(pos));
         }
 
-        // True once every block it needs has been marked and the marking was ended.
         public boolean marked() {
             return marked;
         }
@@ -167,12 +153,10 @@ public final class MapStations {
             this.marked = marked;
         }
 
-        // True for the station the printer was last switched on for. It carries on only there.
         public boolean working() {
             return working;
         }
 
-        // The file under way. Null between files.
         public String file() {
             return file;
         }
@@ -181,8 +165,7 @@ public final class MapStations {
             return stage;
         }
 
-        // True once the picture of the file under way was laid on the square. A file that was
-        // laid is never passed over for another because part of it may stand.
+        // A file that was laid is never passed over for another because part of it may stand.
         public boolean laid() {
             return laid;
         }
@@ -191,7 +174,6 @@ public final class MapStations {
             laid = true;
         }
 
-        // The cells of the picture last seen right by row from the north and then by column.
         // A cell out of view keeps what was seen there.
         public BitSet right() {
             return right;
@@ -205,13 +187,10 @@ public final class MapStations {
             return locked;
         }
 
-        // The maps carried as the locked copy was taken from the cartography table. Empty
-        // whilst no copy was taken.
         public Set<Integer> mapsBefore() {
             return mapsBefore;
         }
 
-        // Starts a file at its first stage.
         public void begin(String fileName) {
             file = fileName;
             stage = Stage.BUILD;
@@ -239,7 +218,6 @@ public final class MapStations {
             mapsBefore = Set.copyOf(ids);
         }
 
-        // The file is done with and the next one starts from scratch.
         public void end() {
             begin(null);
         }
@@ -262,7 +240,6 @@ public final class MapStations {
         return instance;
     }
 
-    // The station of the world you are in. Null when it has none.
     public static Station here() {
         String world = ServerInfo.worldKey();
         for (Station station : get().stations) {
@@ -273,8 +250,6 @@ public final class MapStations {
         return null;
     }
 
-    // A new station for the world you are in. It takes the place of the one there was and the
-    // printer works for it.
     public static Station fresh(BlockPos corner) {
         String world = ServerInfo.worldKey();
         MapStations store = get();
@@ -285,7 +260,6 @@ public final class MapStations {
         return station;
     }
 
-    // The station of the world you are in becomes the one the printer works for.
     public static void workHere() {
         String world = ServerInfo.worldKey();
         for (Station station : get().stations) {
@@ -343,13 +317,11 @@ public final class MapStations {
         return role.name().toLowerCase(Locale.ROOT);
     }
 
-    // A station that cannot be read is left out and the others stay up to the bound.
     private static List<Station> decode(JsonElement root) {
         List<Station> decoded = DataFiles.entries(root, MapStations::station, "map stations");
         return decoded.size() > MOST_STATIONS ? decoded.subList(0, MOST_STATIONS) : decoded;
     }
 
-    // Null for a station without its world or its corner.
     private static Station station(JsonElement element) {
         if (!(element instanceof JsonObject saved)) {
             return null;
@@ -419,7 +391,6 @@ public final class MapStations {
         return ids;
     }
 
-    // The cells written as bytes. Text longer than every cell of a picture takes is no such list.
     private static BitSet cells(String text) {
         if (text == null || text.length() > CELL_LETTERS) {
             return new BitSet();

@@ -6,29 +6,24 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 
-// A one line box to type into. A click lands the caret where it falls and a drag
-// selects. The cross at the right end clears the text and lets go of the keys.
 public final class SearchField {
 
     public static final int HEIGHT = 14;
     private static final int INDENT = GuiTheme.PAD;
     private static final int CLEAR_ZONE = 12;
-    // A press this close past the last letter still counts as on the text.
     private static final int TEXT_SLACK = 4;
 
-    // What a click landed on. Space is the part of the box the text does not reach.
+    // Space is the part of the box the text does not reach.
     public enum Click { MISSED, CLEARED, TEXT, SPACE }
 
     private final TextField text = new TextField();
     private final String placeholder;
-    // Told whenever the text changes however it changed.
     private final Runnable onChange;
     // A sticky field keeps the keys whatever is clicked.
     private final boolean sticky;
     private boolean focused;
     private boolean selecting;
 
-    // Where the box and its text last drew and in what font. Clicks are measured against these.
     private Font font = OfflineClient.MC.font;
     private int boxX;
     private int boxY;
@@ -47,7 +42,6 @@ public final class SearchField {
         focused = sticky;
     }
 
-    // For a screen with nothing else to type into.
     public static SearchField sticky(String placeholder, Runnable onChange) {
         return new SearchField(placeholder, onChange, true);
     }
@@ -87,7 +81,6 @@ public final class SearchField {
         }
     }
 
-    // A tally such as a match count sits left of the cross when given.
     public void render(GuiGraphicsExtractor context, Font font, int x, int y, int w,
                        int mouseX, int mouseY, String tally) {
         this.font = font;
@@ -131,7 +124,6 @@ public final class SearchField {
             boxX + boxWidth - GuiTheme.PAD - CLEAR_ZONE, boxY, CLEAR_ZONE, HEIGHT);
     }
 
-    // A click anywhere else lets go of the keys.
     public Click click(double mx, double my) {
         if (!over(mx, my)) {
             setFocused(false);
@@ -149,7 +141,6 @@ public final class SearchField {
         return onText ? Click.TEXT : Click.SPACE;
     }
 
-    // Stretches the selection from the press to the pointer.
     public void drag(double mx) {
         if (selecting) {
             text.click(font, textX, room, mx, true);

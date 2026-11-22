@@ -19,8 +19,6 @@ import net.minecraft.client.gui.screens.Screen;
 
 import java.util.Locale;
 
-// Turns the camera whilst a chest or inventory is open. Hold mode leaves the
-// pointer free for clicking. InvWalk covers walking about.
 public final class GUIMove extends Module {
 
     public enum Mode { HOLD_KEY, ALWAYS, ARROWS_ONLY }

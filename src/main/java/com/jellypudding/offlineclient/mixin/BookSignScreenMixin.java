@@ -13,7 +13,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// A book signed by hand leaves its title behind. The next book offers it beside the title box.
 @Mixin(BookSignScreen.class)
 public abstract class BookSignScreenMixin extends Screen {
 

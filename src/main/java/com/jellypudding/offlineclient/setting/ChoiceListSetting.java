@@ -13,8 +13,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-// An ordered list of names picked from whatever the supplier offers at the
-// time. A name picked earlier stays even after the offer stops holding it.
+// A name picked earlier stays even after the offer stops holding it.
 public final class ChoiceListSetting extends Setting<Set<String>> implements PickList<String> {
 
     private final Supplier<Collection<String>> options;
@@ -39,7 +38,6 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
         return this;
     }
 
-    // Saves one form of each entry and shows another such as a song's title for its file.
     public ChoiceListSetting labelled(Function<String, String> label) {
         this.label = label;
         return this;

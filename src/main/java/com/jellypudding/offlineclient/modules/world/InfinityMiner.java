@@ -46,10 +46,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Mines for as long as the pickaxe lasts. When it wears down the bot swaps to
-// ore that drops experience and lets Mending heal it before going back. A full bag is made
-// lighter first by throwing away and crafting and packing. Only when none of that makes
-// room does the bot do what When done says.
+// A worn pickaxe swaps the target to ore that drops experience and Mending heals it. A full bag is
+// made lighter by throwing away and crafting and packing before the bot does what When done says.
 public final class InfinityMiner extends Module {
 
     public enum WhenDone { STOP, WALK_HOME, LOG_OUT, WALK_HOME_AND_LOG_OUT }
@@ -61,7 +59,6 @@ public final class InfinityMiner extends Module {
 
     private static final int SCAN_TICKS = 40;
 
-    // A storage block such as a block of diamond takes nine of its item.
     private static final int BLOCK_OF = 9;
 
     private static final int STACK = 64;
@@ -141,14 +138,10 @@ public final class InfinityMiner extends Module {
     private int scanTimer;
     // What has been tried on the bag since it last had room. Each way gets one go.
     private final Set<Relief> tried = EnumSet.noneOf(Relief.class);
-    // The way under way. Null whilst the bot mines.
     private Relief easing;
-    // What nine of a target item craft into as the recipe book had it when the bag last filled.
     private Set<Item> blocks = Set.of();
-    // The target items carried a tick ago and how many have come in since the bot was switched on.
     private int carried;
     private int mined;
-    // Why the bot is done. Said again at the end of the walk home.
     private String doneWhy = "";
 
     public InfinityMiner() {
@@ -271,8 +264,6 @@ public final class InfinityMiner extends Module {
             .tick(this::wanted, walk ? this::scan : () -> miner.nearestInReach(this::wanted), rotate.isOn(), walk);
     }
 
-    // A worn pickaxe swaps the target to experience ore until it is healthy again. The block
-    // it was on then fails the test and is let go.
     private void updateRepairing() {
         ItemStack pick = mc.player.getMainHandItem();
         double left = ItemUtil.durabilityPercent(pick);
@@ -285,7 +276,6 @@ public final class InfinityMiner extends Module {
         }
     }
 
-    // Ore of the kind wanted just now inside the heights and the distance from the start.
     private boolean wanted(BlockPos pos) {
         Block block = BlockUtil.state(pos).getBlock();
         return (repairing ? repairBlocks : targetBlocks).contains(block) && inBand(pos.getY()) && nearHome(pos);
@@ -300,7 +290,6 @@ public final class InfinityMiner extends Module {
         return limit <= 0 || home == null || home.distSqr(pos) <= limit * limit;
     }
 
-    // The nearest wanted ore in range. A scan is not cheap and only runs now and then.
     private BlockPos scan() {
         if (scanTimer-- > 0) {
             return null;
@@ -350,7 +339,6 @@ public final class InfinityMiner extends Module {
         carried = now;
     }
 
-    // Starts the next way to make room that has not had its go. With every way spent the bot is done.
     private void makeRoom() {
         miner.stop();
         slots.restoreIfMine();
@@ -365,7 +353,6 @@ public final class InfinityMiner extends Module {
         }
     }
 
-    // One tick of the way under way. The bot goes back to its ore once it is through.
     private void ease() {
         boolean busy = switch (easing) {
             case THROW -> throwOne();
@@ -379,7 +366,6 @@ public final class InfinityMiner extends Module {
         }
     }
 
-    // Throws one listed stack a tick. False once none is left.
     private boolean throwOne() {
         int slot = InventoryUtil.findSlot(stack -> !stack.isEmpty() && throwAway.contains(stack.getItem())
             && !Modules.keepsFromThrow(stack), InventoryUtil.WHOLE_INVENTORY);
@@ -391,7 +377,6 @@ public final class InfinityMiner extends Module {
         return crafter != null && crafter.craftOnly(this::makesRoom);
     }
 
-    // The target item a recipe takes nine of and nothing else. Null for any other recipe.
     private Item nineOf(Recipes.Craft craft) {
         if (craft.ingredients().size() != BLOCK_OF || targetItems.contains(craft.result().getItem())) {
             return null;
@@ -409,9 +394,8 @@ public final class InfinityMiner extends Module {
         return nineOf(craft) != null;
     }
 
-    // A block recipe whose crafting frees a slot. The blocks and the few items left over take
-    // a slot each. A lone stack would fill two slots in place of one and leave no room for a
-    // table the bot put down to come back.
+    // The blocks and the few items left over take a slot each. A lone stack would fill two slots in
+    // place of one and leave no room for a table the bot put down to come back.
     private boolean makesRoom(Recipes.Craft craft) {
         Item item = nineOf(craft);
         if (item == null) {
@@ -460,8 +444,6 @@ public final class InfinityMiner extends Module {
         return targetItems.contains(stack.getItem()) || blocks.contains(stack.getItem());
     }
 
-    // Moves one stack of what was mined into the open ender chest a tick. False once no more
-    // goes in.
     private boolean putAway(AbstractContainerMenu menu) {
         List<Integer> theirs = MenuClicks.containerSlots(menu);
         for (int slot : MenuClicks.inventorySlots(menu)) {

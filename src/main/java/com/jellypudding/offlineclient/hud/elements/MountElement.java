@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.hud.elements;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
-import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
@@ -17,11 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// The figures of what you ride worked out the way Nametags works them out above every mount.
 public final class MountElement extends RowsElement {
 
-    // A fast horse that has lost a few hearts stands in whilst the editor is open and you ride
-    // nothing. Each figure carries roughly where it sits against wild horses.
     private static final List<Mounts.Figure> SAMPLE = List.of(new Mounts.Figure(Mounts.Measure.HEALTH, "30", 1),
         new Mounts.Figure(Mounts.Measure.SPEED, "12.0 m/s", 0.73f),
         new Mounts.Figure(Mounts.Measure.JUMP, "4.1 m", 0.71f));
@@ -48,12 +44,6 @@ public final class MountElement extends RowsElement {
         add(health, speed, jump, strength, color, placeholder, placeholderColor);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !rows(ClientFonts.hud()).isEmpty();
-    }
-
-    // What you ride whilst it is a mount. Null otherwise.
     private static LivingEntity mount() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null && player.getVehicle() instanceof LivingEntity ridden && Mounts.isMount(ridden)) {
@@ -74,7 +64,6 @@ public final class MountElement extends RowsElement {
         return editing() ? rowsOf(font, SAMPLE, SAMPLE_HEALTH, SAMPLE_HEALTH_SHARE) : List.of();
     }
 
-    // The figures whose switches are on with the mount's health now and its share of the most.
     private List<TextRow> rowsOf(Font font, List<Mounts.Figure> figures, float healthNow, float healthShare) {
         List<TextRow> rows = new ArrayList<>(figures.size());
         for (Mounts.Figure figure : figures) {
@@ -103,8 +92,6 @@ public final class MountElement extends RowsElement {
         };
     }
 
-    // Health now in the colour of how hurt the mount is and the most it can have in the
-    // colour of how that compares with wild horses. A rainbow name colour runs down the rows.
     private TextRow rowOf(Font font, Mounts.Figure figure, float healthNow, float healthShare, int row) {
         String label = labelOf(figure.measure()) + " ";
         int name = color.rowColor(row);

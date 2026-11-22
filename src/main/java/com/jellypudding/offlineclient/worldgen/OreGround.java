@@ -21,7 +21,6 @@ import java.util.Set;
 // of a large vein stood there already and no ore feature can replace it.
 public final class OreGround implements OreSimulation.Ground {
 
-    // The finished world as the client holds it.
     @FunctionalInterface
     public interface Seen {
         BlockState block(int x, int y, int z);
@@ -65,7 +64,6 @@ public final class OreGround implements OreSimulation.Ground {
     private final BiomeResolver biomes;
     private final OreTables.Table table;
     private final OreVeins veins;
-    // One above the highest blocking block of each column once worked out.
     private final Long2IntOpenHashMap floors = new Long2IntOpenHashMap();
 
     public OreGround(Seen seen, BiomeResolver biomes, OreTables.Table table, OreVeins veins) {

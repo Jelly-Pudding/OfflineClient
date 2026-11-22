@@ -54,7 +54,6 @@ public final class ChunkWindow {
             SectionPos.blockToSectionCoord(centre.getZ()), radius);
     }
 
-    // The chunk at the given chunk coordinates and every chunk within the radius of it.
     public static ChunkWindow capture(int chunkX, int chunkZ, int radius) {
         ClientLevel level = OfflineClient.MC.level;
         int side = radius * 2 + 1;
@@ -70,7 +69,6 @@ public final class ChunkWindow {
         return new ChunkWindow(null, chunks, originX, originZ, side, level.getMinY(), level.getMaxY());
     }
 
-    // True once every chunk of a captured window has arrived.
     public boolean complete() {
         for (LevelChunk chunk : chunks) {
             if (chunk == null) {

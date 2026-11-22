@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ClientLines;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
@@ -29,8 +30,6 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.IntStream;
 
-// One word throws a whole part of what you carry and an item name throws that item. Whatever
-// NoInteract keeps from being thrown stays behind. Armour that cannot come off stays as well.
 public final class DropCommand extends Command {
 
     private static final String ALL = "all";
@@ -43,30 +42,24 @@ public final class DropCommand extends Command {
     private static final String SLOW = "slow";
     private static final List<String> WORDS = List.of(ALL, OFFHAND, HOTBAR, INVENTORY, EVERYTHING, ARMOUR, STOP);
 
-    // Ticks from one throw of a slow drop to the next.
     private static final int SLOW_GAP = 5;
 
     // Paper drops a player who throws over twenty single items with the throw key in one of its
     // ticks. A held key manages about two a tick and a macro may ask for no more.
     private static final int SINGLES_A_TICK = 2;
 
-    // Network slots of the survival inventory. A named item leaves the backpack before the
-    // hotbar and the offhand last.
     private static final List<Integer> ARMOUR_SLOTS = range(InventoryUtil.ARMOR_START, InventoryUtil.MAIN_START);
     private static final List<Integer> BACKPACK_SLOTS = range(InventoryUtil.MAIN_START, InventoryUtil.HOTBAR_START);
     private static final List<Integer> HOTBAR_SLOTS = range(InventoryUtil.HOTBAR_START, InventoryUtil.OFFHAND_SLOT);
     private static final List<Integer> OFFHAND_SLOTS = List.of(InventoryUtil.OFFHAND_SLOT);
 
-    // That many of the stack in a slot. The item is checked again as the throw comes up.
     private record Throw(int slot, Item item, int count) {
     }
 
-    // What a drop is going to throw and what it leaves behind.
     private static final class Plan {
 
         private final List<Throw> stacks = new ArrayList<>();
         private int items;
-        // Stacks NoInteract keeps and armour that cannot come off.
         private int kept;
         private int stuck;
     }
@@ -112,13 +105,10 @@ public final class DropCommand extends Command {
         }
     }
 
-    // Throws one of what the main hand holds or the whole stack. Null once thrown and otherwise
-    // why it was not.
     static String throwHeld(LocalPlayer player, boolean whole) {
         if (player.getMainHandItem().isEmpty()) {
             return "Your hand is empty.";
         }
-        // The throw is refused further down without a word.
         if (Modules.keepsFromThrow(player.getMainHandItem())) {
             return "NoInteract keeps what you hold from being thrown.";
         }
@@ -196,7 +186,6 @@ public final class DropCommand extends Command {
             + OfflineClient.INSTANCE.getCommandManager().getPrefix() + "drop " + STOP + "§7 ends it." + left);
     }
 
-    // Null for a word that names no part of what you carry.
     private static List<Integer> slotsOf(String word) {
         return switch (word) {
             case OFFHAND -> OFFHAND_SLOTS;
@@ -208,7 +197,6 @@ public final class DropCommand extends Command {
         };
     }
 
-    // A null item takes every stack in the slots. A named one stops once the count is met.
     private static Plan plan(LocalPlayer player, List<Integer> slots, Item item, int count) {
         Plan plan = new Plan();
         for (int slot : slots) {
@@ -229,7 +217,6 @@ public final class DropCommand extends Command {
         return plan;
     }
 
-    // What stays behind in a sentence of its own. Empty when everything asked for goes.
     private static String left(Plan plan) {
         String left = "";
         if (plan.kept > 0) {
@@ -241,7 +228,6 @@ public final class DropCommand extends Command {
         return left;
     }
 
-    // A stack that changed since the plan was made is left alone.
     private static void make(Throw planned) {
         LocalPlayer player = OfflineClient.MC.player;
         ItemStack stack = player.inventoryMenu.getSlot(planned.slot()).getItem();
@@ -287,8 +273,6 @@ public final class DropCommand extends Command {
         return all;
     }
 
-    // Throws one stack of the plan at a time. It waits whilst a container is open or the cursor
-    // holds something or a feeder eats and gives up when the player it was planned for is gone.
     private static final class SlowDrop {
 
         private final LocalPlayer player;
@@ -311,7 +295,7 @@ public final class DropCommand extends Command {
                 ClientLines.inChat(() -> ChatUtil.error("The slow drop stopped because ShulkerPacker is moving your stacks."));
                 return;
             }
-            if (wait-- > 0 || !InventoryUtil.cursorFree() || Modules.feeding(null)) {
+            if (wait-- > 0 || !InventoryUtil.cursorFree() || Feeding.busy(null)) {
                 return;
             }
             make(left.poll());
@@ -323,7 +307,6 @@ public final class DropCommand extends Command {
         }
     }
 
-    // The words and then whatever you carry. Slow comes last.
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
         if (index > 1) {

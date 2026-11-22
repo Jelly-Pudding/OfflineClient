@@ -36,10 +36,8 @@ public final class ChatUtil {
 
     private static final long LONGEST_IN_SECONDS = 90;
     private static final double SECONDS_PER_MINUTE = 60;
-    // Under two days the time since reads in hours.
     private static final long LONGEST_IN_HOURS = TimeUnit.DAYS.toHours(2);
 
-    // A noun starting with one of these takes an rather than a.
     private static final String VOWELS = "AEIOU";
 
     // About a screen of chat. Longer text is best shown folded behind a click that copies it.
@@ -58,24 +56,19 @@ public final class ChatUtil {
         message("§c" + message);
     }
 
-    // A label and its value on one line such as Ping 40 ms.
     public static void row(String label, String value) {
         row(label, value, null);
     }
 
-    // The same with a link after the value. A null link leaves it out.
     public static void row(String label, String value, Component link) {
         MutableComponent line = Component.literal("§7" + label + " §b" + value);
         component(link == null ? line : line.append(" ").append(link));
     }
 
-    // A value that brings its own colours such as a server's MOTD.
     public static void row(String label, Component value) {
         component(Component.literal("§7" + label + " §r").append(value));
     }
 
-    // Takes the newest line the test accepts out of the last few in chat and hands back
-    // its text. Null when none of them matched.
     public static String removeRecent(ChatComponent chat, int depth, Predicate<String> text) {
         List<GuiMessage> all = chat.allMessages;
         for (int i = 0; i < Math.min(depth, all.size()); i++) {
@@ -89,7 +82,6 @@ public final class ChatUtil {
         return null;
     }
 
-    // Coordinates that walk there with the goto command when clicked.
     public static Component walkLink(BlockPos pos) {
         String spot = BlockUtil.text(pos);
         return commandLink("§f" + spot, "goto " + spot, "Click to walk there");
@@ -101,7 +93,7 @@ public final class ChatUtil {
         return dimension.equals(ServerInfo.dimension()) ? walkLink(pos) : Component.literal("§f" + BlockUtil.text(pos));
     }
 
-    // Text that runs one of our own commands when clicked. The command is written without the prefix.
+    // The command is written without the prefix.
     public static Component commandLink(String shown, String command, String hover) {
         String typed = OfflineClient.INSTANCE.getCommandManager().offer(command);
         return Component.literal(shown).withStyle(style -> style
@@ -109,20 +101,18 @@ public final class ChatUtil {
             .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover))));
     }
 
-    // Text that types one of our own commands into the chat box when clicked. The player finishes
-    // it and sends it. The command is written without the prefix.
+    // The command is written without the prefix.
     public static MutableComponent typeLink(MutableComponent shown, String command) {
         String typed = OfflineClient.INSTANCE.getCommandManager().getPrefix() + command;
         return shown.withStyle(style -> style.withClickEvent(new ClickEvent.SuggestCommand(typed)));
     }
 
-    // A line about a reset with a link after it that takes the reset back.
     public static void undoable(String line, Defaults.Change change) {
         component(Component.literal(line + " ").append(
             commandLink("§8[§7undo§8]", "reset undo " + change.id(), "Click to undo")));
     }
 
-    // What an undo did. Null stands for nothing left to undo.
+    // Null stands for nothing left to undo.
     public static void undone(Defaults.Undone undone) {
         if (undone == null) {
             message("§7There is no reset to undo.");
@@ -135,14 +125,12 @@ public final class ChatUtil {
         }
     }
 
-    // Clicking the shown text copies the other text.
     public static MutableComponent copyOnClick(MutableComponent shown, String copied) {
         return shown.withStyle(style -> style.withClickEvent(new ClickEvent.CopyToClipboard(copied))
             .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to copy"))));
     }
 
-    // The start of a text up to that many characters. Each part keeps its own style. Reading stops
-    // at the limit however long the text is.
+    // Each part keeps its own style. Reading stops at the limit however long the text is.
     public static MutableComponent head(Component text, int characters) {
         MutableComponent head = Component.empty();
         int[] left = {characters};
@@ -155,12 +143,10 @@ public final class ChatUtil {
         return head;
     }
 
-    // A saved file named from the game folder. Clicking it opens the folder that holds it.
     public static Component fileLink(Path file) {
         return pathLink(file, file.getParent());
     }
 
-    // A folder named from the game folder. Clicking it opens that folder.
     public static Component folderLink(Path folder) {
         return pathLink(folder, folder);
     }
@@ -222,7 +208,6 @@ public final class ChatUtil {
         return Tally.counted((int) TimeUnit.HOURS.toDays(hours), "day") + " ago";
     }
 
-    // The noun with a or an before it such as an Enderman or a Zombie.
     public static String withArticle(String noun) {
         if (noun.isEmpty()) {
             return noun;
@@ -230,7 +215,6 @@ public final class ChatUtil {
         return (VOWELS.indexOf(Character.toUpperCase(noun.charAt(0))) >= 0 ? "an " : "a ") + noun;
     }
 
-    // The words with a capital first letter such as A zombie.
     public static String capitalised(String words) {
         return words.isEmpty() ? words : Character.toUpperCase(words.charAt(0)) + words.substring(1);
     }
@@ -266,12 +250,10 @@ public final class ChatUtil {
         message(toggledText(module.getName(), module.isEnabled()));
     }
 
-    // What the client says when a module of this name is switched on or off.
     public static String toggledText(String name, boolean on) {
         return from(name, "is now " + (on ? "§aenabled" : "§cdisabled") + "§7.");
     }
 
-    // A line in the voice of a module. Its name comes first in aqua and the words follow in grey.
     public static String from(String who, String words) {
         return "§b" + who + " §7" + words;
     }
@@ -297,7 +279,6 @@ public final class ChatUtil {
         return -1;
     }
 
-    // True for a letter or a digit or an underscore. Anything else ends a word.
     public static boolean isNameChar(char c) {
         return Character.isLetterOrDigit(c) || c == '_';
     }
@@ -320,7 +301,6 @@ public final class ChatUtil {
         }
     }
 
-    // A line the way the client writes it with its tag in front.
     public static Component tagged(Component component) {
         return Component.literal(PREFIX).append(component);
     }

@@ -13,6 +13,8 @@ import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Feeding;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -94,8 +96,6 @@ public abstract class MinecraftMixin {
         }
     }
 
-    // Fires once per game tick even in menus. Modules that need a loaded
-    // world use TickEvent instead.
     @Inject(method = "tick()V", at = @At("TAIL"))
     private void onTick(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(ClientTickEvent.INSTANCE);
@@ -161,7 +161,7 @@ public abstract class MinecraftMixin {
         Minecraft mc = OfflineClient.MC;
         HitResult real = mc.hitResult;
         if (real == null || real.getType() == HitResult.Type.MISS
-            || !(Modules.feeding(null) || offlineclient$clicksAsAir(real))) {
+            || !(Feeding.busy(null) || offlineclient$clicksAsAir(real))) {
             original.call();
             return;
         }
@@ -184,7 +184,9 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "startUseItem()V", at = @At("HEAD"), cancellable = true)
     private void onStartUseItem(CallbackInfo ci) {
-        if (OfflineClient.INSTANCE.getEventBus().post(new RightClickEvent(offlineclient$blank)).isCancelled()) {
+        boolean byModule = InputUtil.usesForItself();
+        if (OfflineClient.INSTANCE.getEventBus().post(new RightClickEvent(offlineclient$blank, byModule))
+            .isCancelled()) {
             ci.cancel();
         }
     }

@@ -19,12 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// How long lava takes to stop flowing. With nothing typed it reports a running cast or
-// follows the lava over the world from the block you look at. Heights give a staircase
-// that drops a block for every block across. The flow slows with the server.
 public final class FlowTimeCommand extends Command {
 
-    // Below this rate the server is slow enough to mention.
     private static final float SLOW_TPS = 19.5f;
 
     public FlowTimeCommand() {
@@ -67,8 +63,6 @@ public final class FlowTimeCommand extends Command {
         return index == 1 ? CommandManager.filter(current, List.of("last")) : List.of();
     }
 
-    // A running cast first. Then the flow from the top of the block you look at and
-    // otherwise stairs from your feet down.
     private void here() {
         LavaCast cast = Modules.active(LavaCast.class);
         LavaCast.Progress progress = cast == null ? null : cast.progress();
@@ -113,7 +107,6 @@ public final class FlowTimeCommand extends Command {
             + "§7 and is " + progress.doing() + "." + began + flow);
     }
 
-    // Sea level for stairs that start above it and the bottom of the world below it.
     private static int bottomFor(int top) {
         ClientLevel level = OfflineClient.MC.level;
         return top > level.getSeaLevel() ? level.getSeaLevel() : level.getMinY();

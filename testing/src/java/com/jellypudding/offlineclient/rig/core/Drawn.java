@@ -49,7 +49,6 @@ public record Drawn(boolean isText, String text, Box box, Box clip, int colour) 
         return colour >>> ALPHA_SHIFT & ALPHA_MASK;
     }
 
-    // The part that can be seen.
     public Box shown() {
         return clip == null ? box : box.cut(clip);
     }

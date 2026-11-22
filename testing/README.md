@@ -20,7 +20,7 @@ The rig starts the real game with the client in it and plays it the way a player
 ./gradlew rig -Prig.control=true            a control run
 ```
 
-A full run takes a little over four hours. Most suites take a few minutes and Together an hour and a half. The game runs in `build/run/clientGameTest` and that folder is emptied before every run. Your own `.minecraft` is never touched. The window stays small and never takes the keyboard or the mouse. Sound is off and no name outside this machine resolves.
+A full run takes about three hours and forty minutes. Most suites take a few minutes and Together an hour. The game runs in `build/run/clientGameTest` and that folder is emptied before every run. Your own `.minecraft` is never touched. The window stays small and never takes the keyboard or the mouse. Sound is off and no name outside this machine resolves.
 
 Results land in a folder under `build/rig`. It is named after the moment the run began such as `2026-11-14_15-03-06` unless you name it with `-Prig.name`. The file `build/rig/latest.txt` holds the path of the last one.
 
@@ -40,7 +40,7 @@ A case can pass for the wrong reason. A control run finds those. It plays the su
 
 Some cases prove what a module leaves alone such as a bed where beds are safe. A module that is off leaves it alone as well. A suite names those with `holdsBack` and a control run leaves them out. Each needs a case beside it that proves the same module at work.
 
-A control run takes about an hour.
+A control run takes a little over an hour.
 
 ## A real server and a second player
 
@@ -63,8 +63,8 @@ The single player server never checks the moves of its own host. A trick done wi
 
 | Suite | What it proves |
 | --- | --- |
-| Boot | The game reaches the title screen. Every mixin applied. The log holds no fault of the client. |
-| Smoke | Every module switches on and off in creative and in survival and again on the server beside a second player. Every command runs. Nothing throws or logs a fault and the server kicks nobody. |
+| Boot | The game reaches the title screen. Every mixin applied. The log holds no fault of the client. The game has heard what a server changed before a case looks at it. |
+| Smoke | Every module switches on and off in creative and in survival and again on the server beside a second player. Every command runs. Nothing throws or logs a fault and the server kicks nobody. A module that will not switch on says why and none fills the chat. |
 | Settings | Every module goes on and every setting is put through its values. A switch is flipped and a choice takes each option and a number goes to both ends of its slider. The switches and choices go round again on the server. Then every setting is changed and saved and loaded and must come back as saved. |
 | Screens | The HUD and the click GUI and each tab and the HUD editor are drawn at GUI scales 2 and 4. No text leaves its box or lies over another. |
 | Scenarios | One case for each thing a player reported. It plays what the player did and checks what the world shows. |
@@ -76,7 +76,7 @@ The single player server never checks the moves of its own host. A trick done wi
 | Stations | The modules that work a screen for you such as a crafting table or an anvil or a villager. The server counts the goods. Both grounds. |
 | Builders | The modules that build or dig by themselves such as a staircase or a highway or a wither. Both grounds. |
 | Hunting | Each finder gets the trace it looks for built on the stage and must count it. NewChunks plays on grown land and OreProbe on a server that hides its ores. |
-| Together | What happens once more than one module is on. Each module alone is switched on and off and must leave every option and key and what the server believes of you as it found them. Two modules that cannot run at once must switch each other off. Each category and then every module at once runs on both grounds with no fault and no kick and nothing left behind. KillAura and Nuker and Scaffold and AutoTotem and AutoArmor and Flight are each played beside every other module in turn and must go on working. Modules that share a hand or a slot or a cooldown or the same keys are played together on both grounds for what a player would expect of them. Every module at once is taken through a death and a trip to the Nether and every game mode and leaving and joining again. A dead player and a spectator may send no hit and no use and no dig. Each module is tried for that in a crowd and alone. Crowds of eight picked by a fixed seed run on both grounds. The time a frame takes with everything on is held against the time with nothing on and each render module is timed alone. No crowd may send the server more packets than a server puts up with. |
+| Together | What happens once more than one module is on. Each module alone is switched on and off and must leave every option and key and what the server believes of you as it found them. Two modules that cannot run at once must switch each other off. Each category and then every module at once runs on both grounds with no fault and no kick and nothing left behind. KillAura and Nuker and Scaffold and AutoTotem and AutoArmor and Flight and AutoEat are each played beside every other module in turn and must go on working. On the server each of them plays beside forty modules that a fixed seed picks. Modules that share a hand or a slot or a cooldown or the same keys are played together on both grounds for what a player would expect of them. Every module at once is taken through a death and a trip to the Nether and every game mode and leaving and joining again. A dead player and a spectator may send no hit and no use and no dig. Each module is tried for that in a crowd and alone. Crowds of eight picked by a fixed seed run on both grounds. The time a frame takes with everything on is held against the time with nothing on and each render module is timed alone. No crowd may send the server more packets than a server puts up with. |
 | Modes | A module is played through every option of the choice that decides how it does its work such as each mode of Flight or each order of Nuker. Every option has to do what the others do. Both grounds. |
 | Render | A still scene is pictured before a module goes on and whilst it is on and after it went off. The module must change the picture and leave nothing behind. A module that only draws once something happens has a case of its own. |
 | Goto | The goto command walks built courses and the game's own land with and without Speed and Step. Every walk arrives and none is slower than the plain walk. |
@@ -99,10 +99,11 @@ private void speed(Rig rig) {
 }
 ```
 
-- `rig.world()` runs server commands and asks the server what it holds.
+- `rig.world()` runs server commands and asks the server what it holds. A server sends what it changed a tick later. The rig waits for the game to hear of it before a case next looks at the game or presses a key.
 - `rig.client()` switches modules and changes settings and types the client's own commands.
 - `rig.controls()` is the keyboard and the mouse. Mouse buttons use the game's numbers. Left is 1 and right is 3.
 - `rig.until` waits for something and fails with what it waited for. `rig.expect` fails with what was seen. `rig.note` adds a measured value to the result.
+- The blanket suites hurry the game to several times its pace. A module that keeps time by the clock is then out of step with the ticks. A case that proves such a module plays at the plain pace.
 - `rig.frames().capture(name)` takes a picture and returns every text and box drawn in it.
 - A case of the Server suite also gets a `Duo`. `duo.server()` asks the probe what the server saw and `duo.partner()` gives the second player orders.
 

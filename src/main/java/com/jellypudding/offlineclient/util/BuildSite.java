@@ -28,14 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// A build standing at a spot in a world. It answers what the build wants in any block of that
-// world and how what stands there compares. It keeps count of the clicks made on each cell and
-// looks the whole build over a slice a tick to know how far along it is. Nothing here minds how
-// big the build is or where the player stands. A caller may hand it a memory of the cells seen
-// done. A cell out of view that was last seen done then counts as done.
+// A build standing at a spot in a world. It keeps count of the clicks made on each cell and looks
+// the whole build over a slice a tick. A caller may hand it a memory of the cells seen done and a
+// cell out of view that was last seen done then counts as done.
 public final class BuildSite {
 
-    // How a cell of the world stands to the build.
     public enum State {
         // The build has no say here or the cell is filtered out or cannot be judged or placed by hand.
         OUTSIDE,
@@ -48,7 +45,6 @@ public final class BuildSite {
         SPARE
     }
 
-    // Why a block that could go down has to wait.
     public enum Wait {
         NONE,
         // Sand or gravel with nothing under it would fall.
@@ -57,19 +53,17 @@ public final class BuildSite {
         BODY
     }
 
-    // What the caller prints and how hard it looks at what stands.
     public record Rules(Predicate<Block> prints, boolean standIns, boolean strict, int attempts) {
     }
 
-    // How far along the build was at the last full look over it. Skipped cells ran out of
-    // attempts and unknown ones lie in chunks that are not loaded and are not remembered done.
+    // Skipped cells ran out of attempts and unknown ones lie in chunks that are not loaded and are
+    // not remembered done.
     public record Census(int done, int missing, int wrong, int spare, int skipped, int unknown) {
 
         public int total() {
             return done + missing + wrong + skipped;
         }
 
-        // Whole percent of the wanted blocks that stand.
         public int percent() {
             return total() == 0 ? 0 : done * 100 / total();
         }
@@ -90,14 +84,10 @@ public final class BuildSite {
 
     // A golem or a wither is no wider than this from its head and no deeper.
     private static final int HEAD_REACH = 2;
-    // Cells of the build looked over a tick to know how far along it is.
     private static final int COUNT_CELLS = 8192;
 
-    // Ticks after its last click before a cell that ran out of attempts gets fresh ones.
     private static final int FORGIVE_TICKS = 1200;
-    // Ticks between sweeps of the clicks that are long past.
     private static final int SWEEP_TICKS = 200;
-    // Ticks a head that went on is watched for. A server that lags answers late.
     private static final int HEAD_WATCH_TICKS = 100;
 
     // The tick of the last click on a cell and how many it has had with nothing to show for them.
@@ -106,8 +96,6 @@ public final class BuildSite {
     private record Clicks(int at, int count, boolean judged, boolean broke) {
     }
 
-    // A head that went onto a whole body with the tick it was clicked and every cell of the
-    // build round it that held a block at that moment.
     private record Head(long cell, int at, long[] stood) {
     }
 
@@ -126,7 +114,6 @@ public final class BuildSite {
     // such memory.
     private final BitSet seenDone;
 
-    // The clicks made on each cell that have yet to prove themselves.
     private final Long2ObjectOpenHashMap<Clicks> clicks = new Long2ObjectOpenHashMap<>();
     private final List<Head> heads = new ArrayList<>();
     // Cells a golem or a wither took with it. The build has no more say in them.
@@ -135,7 +122,6 @@ public final class BuildSite {
     private int answerTicks;
     private int landed;
 
-    // The look over the whole build a slice a tick.
     private int cursor;
     private int done;
     private int missing;
@@ -149,8 +135,6 @@ public final class BuildSite {
         this(level, blueprint, frame, null);
     }
 
-    // The memory holds the cells last seen done by their place in the blueprint. The site keeps
-    // it up to date with every cell it judges.
     public BuildSite(Level level, Blueprint blueprint, BuildFrame frame, BitSet seenDone) {
         this.level = level;
         this.blueprint = blueprint;
@@ -181,12 +165,10 @@ public final class BuildSite {
         return frame;
     }
 
-    // The blocks of the world the build covers.
     public BoundingBox box() {
         return box;
     }
 
-    // True when the block may end up in a cell of the build. A cell names it or takes any block.
     public boolean mayHold(Block block) {
         for (BlockState want : wanted) {
             if (want == null || want.is(block)) {
@@ -196,9 +178,8 @@ public final class BuildSite {
         return false;
     }
 
-    // Once a tick before anything else is asked. The answer ticks say how long a click waits
-    // for the server. Clicks whose answer is in are judged and the heads that went on are looked
-    // at. A golem that walked off is built again only when the caller asks for it.
+    // Once a tick before anything else is asked. The answer ticks say how long a click waits for
+    // the server. A golem that walked off is built again only when the caller asks for it.
     public void tick(Rules rules, int answerTicks, boolean again) {
         this.answerTicks = answerTicks;
         if (++ticks % SWEEP_TICKS == 0) {
@@ -208,7 +189,6 @@ public final class BuildSite {
         judgeClicks(rules);
     }
 
-    // How many clicks have put the wanted block in place for good.
     public int landed() {
         return landed;
     }
@@ -284,15 +264,12 @@ public final class BuildSite {
         }
     }
 
-    // The plain block that passes for one nobody carries. Null when the block has none.
     public static BlockState standIn(BlockState state) {
         Block plain = state.getBlock() instanceof InfestedBlock infested ? infested.getHostBlock()
             : STAND_INS.get(state.getBlock());
         return plain == null ? null : plain.withPropertiesOf(state);
     }
 
-    // The palette index of the cell a block of the world belongs to. Blueprint.NO_SAY where
-    // the build has no say.
     private int kindAt(BlockPos pos) {
         if (!box.isInside(pos) || !retired.isEmpty() && retired.contains(pos.asLong())) {
             return Blueprint.NO_SAY;
@@ -301,15 +278,11 @@ public final class BuildSite {
         return cell == Blueprint.NO_CELL ? Blueprint.NO_SAY : blueprint.indexOf(cell);
     }
 
-    // The place in the blueprint of the cell a block of the world belongs to. Blueprint.NO_CELL
-    // outside the box.
     private int cellAt(BlockPos pos) {
         return blueprint.cellAt(frame.localX(pos.getX(), pos.getZ()), frame.localY(pos.getY()),
             frame.localZ(pos.getX(), pos.getZ()));
     }
 
-    // True for a cell last seen done. A cell out of view keeps what was seen there. Always false
-    // for a site that keeps no memory.
     public boolean remembered(BlockPos pos) {
         if (seenDone == null) {
             return false;
@@ -318,13 +291,11 @@ public final class BuildSite {
         return cell != Blueprint.NO_CELL && seenDone.get(cell);
     }
 
-    // The state the build wants in a block of the world turned the way the build stands. Null
-    // where it takes any block. Only for a cell the build has a say in.
+    // Null where the build takes any block. Only for a cell the build has a say in.
     public BlockState wantedAt(BlockPos pos) {
         return wanted[kindAt(pos)];
     }
 
-    // How one block of the world stands to the build. Outside where the build has no say.
     public State stateAt(BlockPos pos, Rules rules) {
         int kind = kindAt(pos);
         return kind == Blueprint.NO_SAY ? State.OUTSIDE : judge(pos, kind, rules);
@@ -344,7 +315,6 @@ public final class BuildSite {
         return state;
     }
 
-    // How the block standing in a cell compares with what the build wants there.
     private State compare(BlockState stands, int kind, Rules rules) {
         BlockState want = wanted[kind];
         if (want == null) {
@@ -377,8 +347,6 @@ public final class BuildSite {
             ? StateMatch.fit(stands, standIn[kind], rules.strict()) : fit;
     }
 
-    // Every cell of the build within the range of a point with how it stands. Cells the build
-    // has no say in are left out.
     public void forEachWithin(Vec3 centre, double range, Rules rules, CellVisitor visitor) {
         int reach = (int) Math.ceil(range);
         BlockPos middle = BlockPos.containing(centre);
@@ -424,8 +392,7 @@ public final class BuildSite {
         return block instanceof WitherSkullBlock || block instanceof WitherWallSkullBlock;
     }
 
-    // True for a head the build sets on the block a golem or a wither is made of. Every such
-    // shape of the game has its head right on top of a body block.
+    // Every golem and wither shape of the game has its head right on top of a body block.
     private boolean headsBody(BlockPos pos, Block head) {
         if (!isHead(head)) {
             return false;
@@ -500,7 +467,6 @@ public final class BuildSite {
         clicks.put(cell, new Clicks(ticks, before == null ? 1 : before.count() + 1, false, broke));
     }
 
-    // True whilst the answer to the last click on the cell may still be on its way.
     public boolean settling(BlockPos pos) {
         Clicks made = clicks.get(pos.asLong());
         return made != null && settling(made);
@@ -526,7 +492,6 @@ public final class BuildSite {
         return made.count() >= rules.attempts();
     }
 
-    // True when the block the build wants stands in the cell even if it is short of something.
     private boolean tookHold(BlockPos pos, Rules rules) {
         int kind = kindAt(pos);
         if (kind == Blueprint.NO_SAY) {
@@ -536,12 +501,10 @@ public final class BuildSite {
         return wanted[kind] == null ? !stands.canBeReplaced() : fit(stands, kind, rules) != StateMatch.Fit.WRONG;
     }
 
-    // Forgets every click. A cell that ran out of attempts gets fresh ones.
     public void forgetClicks() {
         clicks.clear();
     }
 
-    // True whilst any click is still waiting for its answer.
     public boolean anySettling() {
         for (Clicks made : clicks.values()) {
             if (settling(made)) {
@@ -551,7 +514,6 @@ public final class BuildSite {
         return false;
     }
 
-    // Looks over the next cells of the build. Once a tick. A full round gives a fresh census.
     public void count(Rules rules) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int end = Math.min(blueprint.cellCount(), cursor + COUNT_CELLS);

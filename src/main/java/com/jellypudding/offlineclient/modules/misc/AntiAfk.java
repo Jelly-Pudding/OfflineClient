@@ -32,13 +32,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class AntiAfk extends Module {
 
-    // Ticks between each change of strafe direction.
     private static final int STRAFE_TICKS = 20;
 
-    // How close a plain walk gets before it counts as there.
     private static final double WALK_ARRIVED = 0.5;
 
-    // How many blocks past its range a walk may take you before home moves to where you stand.
     // A path round a wall or a push from a hit stays inside it.
     private static final int HOME_SLACK = 4;
 
@@ -103,7 +100,6 @@ public final class AntiAfk extends Module {
     private final HeldKey right = new HeldKey(options -> options.keyRight);
     private float spinYaw;
     private int messageTimer;
-    // A message the server would not take yet. It goes out before the next is picked.
     private String waiting;
 
     private final PathFinder finder = new PathFinder();
@@ -112,11 +108,9 @@ public final class AntiAfk extends Module {
     private final WorldWatch world = new WorldWatch();
     private BlockPos home;
     private int waitTicks;
-    // Where the plain walk is heading or null whilst it rests.
     private Vec3 walkTarget;
     private final HeldKey forward = new HeldKey(options -> options.keyUp);
     private final HeldKey jumpKey = new HeldKey(options -> options.keyJump);
-    // True from the pick of an AI goal until the walk there ends.
     private boolean pathing;
     private boolean surfacing;
     // Creative flight as it was on enable. A wander must not drop a flying player.
@@ -172,7 +166,6 @@ public final class AntiAfk extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        // The dead cannot stir. It rests and carries on once you are back.
         if (mc.player.isDeadOrDying()) {
             letGoOfKeys();
             return;
@@ -194,7 +187,6 @@ public final class AntiAfk extends Module {
         tickMessages();
     }
 
-    // Either walk waits between goals. The wait is the same for both.
     private void tickWander() {
         reanchorIfMoved();
         if (useAi.isOn()) {
@@ -204,8 +196,7 @@ public final class AntiAfk extends Module {
         }
     }
 
-    // A teleport or a new world leaves home behind. The walks then centre on where you stand
-    // and never head back. Each axis is checked alone since the goals fill a square.
+    // Each axis is checked alone since the goals fill a square.
     private void reanchorIfMoved() {
         boolean newWorld = world.changed();
         BlockPos at = mc.player.blockPosition();
@@ -218,8 +209,6 @@ public final class AntiAfk extends Module {
         stopWander();
     }
 
-    // Walks to a random spot round home.
-    // Falling and diving are off. A wander cannot end somewhere nasty.
     private void tickPathWander() {
         stopPlainWalk();
         if (surface()) {
@@ -257,7 +246,6 @@ public final class AntiAfk extends Module {
             .search(PathFinder.standingAt(mc.player), new PathGoal.Around(spot, 2));
     }
 
-    // Under water the wander holds jump until the head is out. Jesus keeps you up anyway.
     private boolean surface() {
         if (mc.player.isUnderWater() && !Modules.enabled(Jesus.class)) {
             walker.releaseKeys();
@@ -276,7 +264,6 @@ public final class AntiAfk extends Module {
         }
     }
 
-    // Turns to a random spot and holds forward until it is reached.
     private void tickPlainWalk() {
         stopPathWander();
         if (turn.is(Turn.SPIN_VIEW)) {
@@ -324,7 +311,6 @@ public final class AntiAfk extends Module {
         stopPlainWalk();
     }
 
-    // Ticks to rest before the next walk. The spread keeps the rhythm uneven.
     private int nextWait() {
         double spread = waitSpread.getValue();
         double seconds = waitTime.getValue()
@@ -332,12 +318,10 @@ public final class AntiAfk extends Module {
         return (int) Math.round(Math.max(0, seconds) * SharedConstants.TICKS_PER_SECOND);
     }
 
-    // True whilst a walk of either kind is driving the movement keys.
     private boolean wandering() {
         return walkTarget != null || pathing || surfacing;
     }
 
-    // Holds the crouch for the set ticks then waits a random moment before the next.
     private void tickSneak() {
         if (!sneak.isOn() || wandering()) {
             crouch.letGo();
@@ -415,7 +399,6 @@ public final class AntiAfk extends Module {
         }
     }
 
-    // Fires once every interval on average.
     private boolean chance() {
         return ThreadLocalRandom.current().nextInt(interval.getInt() * SharedConstants.TICKS_PER_SECOND) == 0;
     }

@@ -7,14 +7,12 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-// A number with a slider in the GUI. The slider covers the useful range
-// but typed values can go past it up to any hard min and max.
+// The slider covers the useful range but typed values can go past it up to any hard min and max.
 public final class NumberSetting extends Setting<Double> {
 
     // Values closer than this count as the same. A size stepped in the HUD editor lands a
     // hair away from the round number it means.
     private static final double SAME = 1e-9;
-    // A typed value is written to at least this many places whatever the step.
     private static final int TYPED_PLACES = 4;
 
     private final double sliderMin;
@@ -25,7 +23,6 @@ public final class NumberSetting extends Setting<Double> {
     private double hardMin;
     private double hardMax = Double.POSITIVE_INFINITY;
 
-    // Set whilst a slider drag is running.
     private double activeSliderMax = -1;
 
     // The highest value typed this session. The slider keeps covering it after the value drops.
@@ -100,13 +97,11 @@ public final class NumberSetting extends Setting<Double> {
         }
     }
 
-    // Moves by whole slider steps and rounds to them. The hard limits still hold.
     public void nudge(int steps) {
         double moved = BigDecimal.valueOf(value + steps * step).setScale(decimals, RoundingMode.HALF_UP).doubleValue();
         setValue(moved);
     }
 
-    // A typed value above the normal range stretches the slider.
     private double sliderTop() {
         if (activeSliderMax > 0) {
             return activeSliderMax;
@@ -123,7 +118,6 @@ public final class NumberSetting extends Setting<Double> {
         activeSliderMax = -1;
     }
 
-    // Snaps to the step and stays inside the slider range.
     public void setFromSlider(double fraction) {
         double top = sliderTop();
         double raw = sliderMin + (top - sliderMin) * Math.clamp(fraction, 0, 1);
@@ -153,7 +147,6 @@ public final class NumberSetting extends Setting<Double> {
         return format(defaultValue);
     }
 
-    // A number the way this setting writes its value but without the suffix.
     public String write(double number) {
         return ChatUtil.decimal(number, Math.max(decimals, TYPED_PLACES));
     }

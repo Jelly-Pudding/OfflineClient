@@ -18,8 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Moves the held slot along the hotbar or to a random slot on a timer or after each block you
-// place. Builders mix blocks with it and it also works as a troll.
 public final class AutoSwitch extends Module {
 
     public enum When { TIMER, PLACED }
@@ -46,7 +44,6 @@ public final class AutoSwitch extends Module {
         () -> InventoryUtil.HOTBAR_NAMES, InventoryUtil.HOTBAR_NAMES);
 
     private int timer;
-    // A block went down and the hand moves on at the next tick.
     private boolean placed;
 
     public AutoSwitch() {
@@ -70,7 +67,6 @@ public final class AutoSwitch extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         boolean due = when.is(When.TIMER) ? ++timer >= delay.getInt() : placed;
-        // A slot that is due moves once the hands are free.
         if (!due || Hands.taken()) {
             return;
         }
@@ -88,7 +84,6 @@ public final class AutoSwitch extends Module {
         }
     }
 
-    // The picked slots in hotbar order. Only those that hold a block whilst switching after placements.
     private List<Integer> takingPart() {
         List<Integer> open = new ArrayList<>();
         for (int slot = 0; slot < InventoryUtil.HOTBAR_SIZE; slot++) {
@@ -100,7 +95,6 @@ public final class AutoSwitch extends Module {
         return open;
     }
 
-    // The first open slot to the right of the held one wrapping round. Minus one when there is none.
     private static int nextAlong(List<Integer> open, int held) {
         for (int slot : open) {
             if (slot > held) {

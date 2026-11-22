@@ -42,9 +42,8 @@ public final class ItemHighlight extends Module {
     private static final int MOST_VERDICTS = 2048;
     // Look inside reads this many levels down such as the items of a bundle in a shulker box.
     private static final int NESTING = 2;
-    // Letters of an item read for the search. A server can send far longer names and lore.
+    // A server can send far longer names and lore.
     private static final int MOST_TEXT = 4096;
-    // The sign between two searches on the one line.
     private static final String SEARCH_BREAK = ",";
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
@@ -71,8 +70,8 @@ public final class ItemHighlight extends Module {
     private final BoolSetting hotbar = new BoolSetting("Hotbar",
         "Also paints the hotbar whilst you play with no inventory open.", true);
 
-    // What a stack was judged as and the bundle contents it was judged with. The server sends a
-    // new stack for every change but a bundle fills in place as you click items into it.
+    // The server sends a new stack for every change but a bundle fills in place as you click items
+    // into it.
     private record Verdict(boolean picked, BundleContents bundle) {
     }
 
@@ -85,7 +84,6 @@ public final class ItemHighlight extends Module {
     // own and each stack is its own key.
     private final Map<ItemStack, Verdict> verdicts = new BoundedMap<>(MOST_VERDICTS, true);
     private Rules rules;
-    // The searches in lower case as the rules have them.
     private List<String> searches = List.of();
 
     public ItemHighlight() {
@@ -111,12 +109,10 @@ public final class ItemHighlight extends Module {
         }
     }
 
-    // Zero when the hotbar is not painted or the stack is not one to pick out.
     public int hotbarColorFor(ItemStack stack) {
         return hotbar.isOn() ? colorFor(stack) : 0;
     }
 
-    // Zero when the stack is not one to pick out.
     public int colorFor(ItemStack stack) {
         if (!isEnabled() || stack.isEmpty() || !picked(stack)) {
             return 0;
@@ -124,7 +120,6 @@ public final class ItemHighlight extends Module {
         return ColorUtil.fade(color.getColor(), strength.getFloat() / 100f);
     }
 
-    // The list answers at once. Every other rule reads the item and its answer is kept.
     private boolean picked(ItemStack stack) {
         if (items.contains(stack.getItem())) {
             return true;
@@ -196,8 +191,6 @@ public final class ItemHighlight extends Module {
         return searches.stream().anyMatch(text::contains);
     }
 
-    // Everything about the item a player could read in lower case. The name it shows and the
-    // name of its kind and its id and lore and enchantments and for a book its title and author.
     private static String textOf(ItemStack stack) {
         StringBuilder text = new StringBuilder();
         add(text, stack.getHoverName());
@@ -218,7 +211,6 @@ public final class ItemHighlight extends Module {
         return text.toString().toLowerCase(Locale.ROOT);
     }
 
-    // Reads no more of a part than the text still has room for.
     private static void add(StringBuilder text, Component part) {
         int room = MOST_TEXT - text.length();
         if (room > 0) {

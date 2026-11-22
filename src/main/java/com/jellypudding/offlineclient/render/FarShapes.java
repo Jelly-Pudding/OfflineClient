@@ -24,7 +24,6 @@ public final class FarShapes {
     private static final int RING_POINTS = 48;
     private static final double BEAM = 64;
 
-    // Lines that already gave a place draw this faint.
     private static final float SETTLED_LINES = 0.4f;
 
     private FarShapes() {
@@ -53,15 +52,12 @@ public final class FarShapes {
         batch.line(pullIn(from), pullIn(to), color, true);
     }
 
-    // A bearing drawn out to the horizon a hair above the ground it starts on.
     public static void ray(DrawBatch batch, Bearing bearing, double ground, int color) {
         double y = ground + RAY_LIFT;
         line(batch, bearing.along(0, y), bearing.along(HORIZON, y), color);
     }
 
-    // The bearings that find a place and the place they find. The lines fade once the place
-    // is known. An exact block gets a box with a beam above it and a place known only roughly
-    // gets its estimate. The block is null until it is known.
+    // The block is null until it is known.
     public static void crossing(DrawBatch batch, List<Bearing> lines, BearingFix place, BlockPos block,
                                 double ground, int color) {
         int lineColor = place == null ? color : ColorUtil.fade(color, SETTLED_LINES);
@@ -77,9 +73,6 @@ public final class FarShapes {
         }
     }
 
-    // A spot known only roughly. A line runs through it from the bottom of the world to
-    // the top and a ring of its radius sits level with your eyes where it reads best
-    // against the horizon.
     public static void estimate(DrawBatch batch, double x, double z, double radius, int color) {
         ClientLevel level = OfflineClient.MC.level;
         if (level == null) {

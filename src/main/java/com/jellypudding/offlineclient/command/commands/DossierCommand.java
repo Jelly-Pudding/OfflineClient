@@ -14,12 +14,9 @@ import net.minecraft.network.chat.MutableComponent;
 import java.util.ArrayList;
 import java.util.List;
 
-// The records Dossier keeps of every player on this server. The bare name toggles the module
-// like any other.
 public final class DossierCommand extends Command {
 
     private static final String OPEN = "open";
-    // How many of the newest lines of the log a record in chat shows.
     private static final int LOG_LINES = 5;
 
     public DossierCommand() {

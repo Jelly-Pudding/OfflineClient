@@ -48,10 +48,8 @@ public final class NoInteract extends Module {
 
     public enum Hand { NONE, MAIN_HAND, OFF_HAND, BOTH }
 
-    // Which clicks a protected kind of entity is spared.
     public enum Protect { NONE, HIT, USE, BOTH }
 
-    // What a right click with a protected item is kept off.
     public enum Target { BLOCKS, ENTITIES, BOTH }
 
     private static final int LAVA_QUIET_TICKS = 200;
@@ -127,7 +125,6 @@ public final class NoInteract extends Module {
         "Holding this key lets a protected item be thrown.", KeybindSetting.UNBOUND)
         .under(noDrop, () -> noDrop.size() > 0);
 
-    // The player clock when the last line about lava went out.
     private int lavaToldAt = -LAVA_QUIET_TICKS;
 
     public NoInteract() {
@@ -139,8 +136,6 @@ public final class NoInteract extends Module {
         searchTags("no click", "protect", "anti bed", "anti drop", "no throw", "anti interact", "pearl through");
     }
 
-    // Diamond and netherite tools and weapons and other gear that is hard to replace. Every
-    // shulker box joins them whatever its colour.
     private static List<Item> keptByDefault() {
         List<Item> kept = new ArrayList<>(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_PICKAXE,
             Items.DIAMOND_AXE, Items.DIAMOND_SHOVEL, Items.DIAMOND_HOE, Items.DIAMOND_SPEAR,
@@ -166,7 +161,6 @@ public final class NoInteract extends Module {
         }
     }
 
-    // True when no hand may right click what the crosshair rests on.
     private boolean dropsWholeClick(HitResult target) {
         if (target instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
             return blocksUse(hit.getBlockPos());
@@ -185,7 +179,6 @@ public final class NoInteract extends Module {
         return !keptFromUse(mc.player.getMainHandItem(), onBlock) && !keptFromUse(mc.player.getOffhandItem(), onBlock);
     }
 
-    // True when no right click may land on the block whatever the hands hold.
     public boolean blocksUse(BlockPos pos) {
         if (!isEnabled() || !inGame()) {
             return false;
@@ -204,7 +197,6 @@ public final class NoInteract extends Module {
         return block instanceof RespawnAnchorBlock && anchorDetonates(state);
     }
 
-    // True when the click sets the anchor off rather than charging it or setting a spawn.
     private boolean anchorDetonates(BlockState state) {
         if (!ExplosionUtil.anchorsExplodeHere()) {
             return false;
@@ -266,8 +258,6 @@ public final class NoInteract extends Module {
         return useAnyway.isOn() ? InteractionResult.PASS : InteractionResult.CONSUME;
     }
 
-    // True when the stack may not right click a block or an entity. A shulker box counts for what
-    // it holds whilst Inside shulker boxes is on.
     private boolean keptFromUse(ItemStack stack, boolean onBlock) {
         if (useItems.size() == 0 || stack.isEmpty() || useItemsOn.is(onBlock ? Target.ENTITIES : Target.BLOCKS)) {
             return false;
@@ -288,13 +278,10 @@ public final class NoInteract extends Module {
         return false;
     }
 
-    // True when the stack may not be thrown away. Holding the throw key lets it go.
     public boolean keeps(ItemStack stack) {
         return isEnabled() && !stack.isEmpty() && noDrop.contains(stack.getItem()) && !throwKey.isHeld();
     }
 
-    // True for a menu click that would throw a protected item out of a slot or drop it off the
-    // cursor outside the window.
     public boolean refusesThrow(AbstractContainerMenu menu, int slot, ContainerInput kind) {
         if (kind == ContainerInput.THROW) {
             return slot >= 0 && slot < menu.slots.size() && keeps(menu.getSlot(slot).getItem());
@@ -356,7 +343,6 @@ public final class NoInteract extends Module {
             || protects(entity, Protect.USE);
     }
 
-    // True when one of the kinds the entity belongs to is spared this click.
     private boolean protects(Entity entity, Protect click) {
         if (entity instanceof Player player && EntityUtil.isFriend(player)
             && spared(friends, click)) {

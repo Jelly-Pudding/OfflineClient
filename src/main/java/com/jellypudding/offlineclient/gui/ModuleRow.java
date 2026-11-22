@@ -10,19 +10,15 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// One module entry inside a panel.
 public final class ModuleRow {
 
-    // The chevron hit area on the right of a row.
     private static final int ARROW_ZONE = 14;
-    // The star sits beside it and shows whilst starred or hovered.
     private static final int STAR_ZONE = 12;
 
     private final Module module;
     private final SettingWidget.Host host;
     private boolean expanded;
 
-    // Position and size assigned by the panel each frame.
     private int x;
     private int y;
     private int width = GuiTheme.PANEL_WIDTH;
@@ -62,8 +58,6 @@ public final class ModuleRow {
         return total;
     }
 
-    // Lays out a scrolled column of rows and draws the ones inside the view. A slider
-    // being dragged still gets the real pointer position.
     public static void renderAll(GuiGraphicsExtractor context, List<ModuleRow> rows, int x, int viewTop,
                                  int view, int width, int offset, int mouseX, int mouseY) {
         boolean inView = SettingWidget.isOver(mouseX, mouseY, x, viewTop, width, view);
@@ -161,8 +155,7 @@ public final class ModuleRow {
         hoverFade = hovered ? Math.min(1f, hoverFade + step) : Math.max(0f, hoverFade - step);
     }
 
-    // The click rules both ClickGUI styles share. A left click on the star marks a
-    // favourite. A module with no toggle opens its settings on any click.
+    // A module with no toggle opens its settings on any click.
     static void clickModule(Module module, int button, boolean onStar, boolean onArrow,
                             Runnable openSettings) {
         if (InputUtil.isLeft(button) && onStar) {
@@ -172,8 +165,6 @@ public final class ModuleRow {
         }
     }
 
-    // Every row with a switch and a settings arrow. A left click flips the switch
-    // and a right click or the arrow opens the settings.
     static void clickRow(int button, boolean onArrow, Runnable flip, Runnable openSettings) {
         if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && onArrow)) {
             openSettings.run();

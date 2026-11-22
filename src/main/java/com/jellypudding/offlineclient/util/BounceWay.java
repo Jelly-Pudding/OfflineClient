@@ -15,16 +15,13 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Keeps a bounce along a highway going. A block in the way is walked round with the pathfinder
-// to the first spot past it on the line of the bounce. A nether portal built across the way is
-// stopped short of and walked round when that is asked. No walk ever steps through a portal.
+// A block in the way is walked round with the pathfinder to the first spot past it on the line of
+// the bounce. No walk ever steps through a portal.
 public final class BounceWay {
 
     public enum Portals { IGNORE, STOP, GO_ROUND }
 
-    // What the bounce may do this tick.
     public enum State {
-        // Bounce on.
         CLEAR,
         // Let go and come to a halt on the ground.
         BRAKING,
@@ -57,7 +54,6 @@ public final class BounceWay {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Pushing on for this long without a block of headway means something is in the way.
     private static final int STUCK_TICKS = 20;
     // A portal block whose middle lies this near the line and from a block under the feet to two
     // over the head can touch a player who keeps to the line on any heading. Half a player and
@@ -69,13 +65,9 @@ public final class BounceWay {
     // shuts. The portal is acted on from that far out.
     private static final int STOP_TICKS = 8;
     private static final double STOP_ROOM = 4;
-    // Moving slower than this counts as standing.
     private static final double STILL = 0.05;
-    // The spot past what blocks the way is looked for this far along the line.
     private static final int PAST_REACH = 16;
     private static final int SEARCHES = 8;
-    // Portals are looked for this many chunks round where a walk round starts. The walk keeps
-    // within a few blocks of the line.
     private static final int PORTAL_VIEW = 2;
     // The heading has to turn this far for a stop to lift.
     private static final float TURNED = 45;
@@ -87,10 +79,8 @@ public final class BounceWay {
     private State state = State.CLEAR;
     private BlockPos goal;
     private int searches;
-    // Where the bounce last made a block of headway and the ticks since.
     private Vec3 headway;
     private int stuckTicks;
-    // Why the bounce stands and the heading and the place it stopped at.
     private String stoppedFor;
     private float stoppedYaw;
     private Vec3 stoppedAt;
@@ -102,12 +92,11 @@ public final class BounceWay {
         return state == State.STOPPED ? stoppedFor : null;
     }
 
-    // A chunk the server changed is read again for portals.
     public void onPacket(Packet<?> packet) {
         portals.markChanged(packet);
     }
 
-    // Lets go of a walk round or a stop. The portals already found are kept.
+    // The portals already found are kept.
     public void release() {
         finder.cancel();
         walker.stop();
@@ -118,14 +107,13 @@ public final class BounceWay {
         portal = null;
     }
 
-    // Lets go of a walk round whilst the bounce stands aside. A stop short of a portal stays.
+    // A stop short of a portal stays.
     public void standAside() {
         if (state == State.WALKING || state == State.BRAKING) {
             release();
         }
     }
 
-    // Starts over with no portals known.
     public void reset() {
         release();
         portals.reset();
@@ -207,8 +195,6 @@ public final class BounceWay {
         walker.tick(finder.liveRules());
     }
 
-    // Standing still short of what blocks the way. A walk round starts towards the first spot
-    // past it on the line or the bounce stops there.
     private void settle(LocalPlayer player, Vec3 way, float yaw) {
         double past = portal != null ? along(player, way, Vec3.atCenterOf(portal)) + 1 : firstBlocked(player, way);
         if (!walkRound) {
@@ -229,7 +215,6 @@ public final class BounceWay {
         state = State.WALKING;
     }
 
-    // The walk round searches again a few times before the bounce stops.
     private void retry(String why) {
         walker.stop();
         if (++searches < SEARCHES && searchRound(MC.player)) {
@@ -254,7 +239,6 @@ public final class BounceWay {
         ChatUtil.error("ElytraFly stopped bouncing as " + why + ".");
     }
 
-    // The nearest portal in the lane ahead once it is too near to bounce on. Null whilst none is.
     private BlockPos portalAhead(LocalPlayer player, Vec3 way) {
         double reach = STOP_ROOM + player.getDeltaMovement().horizontalDistance() * STOP_TICKS;
         int feet = player.getBlockY();
@@ -273,7 +257,6 @@ public final class BounceWay {
         return nearest;
     }
 
-    // True once pushing on has made no block of headway for a while.
     private boolean blocked(LocalPlayer player) {
         Vec3 here = player.position();
         if (headway == null || here.distanceTo(headway) >= 1) {
@@ -288,8 +271,7 @@ public final class BounceWay {
         return (point.x - player.getX()) * way.x + (point.z - player.getZ()) * way.z;
     }
 
-    // Blocks along the line to the first spot you cannot stand in. Minus one when the line is
-    // clear as far as it is read.
+    // Minus one when the line is clear as far as it is read.
     private static double firstBlocked(LocalPlayer player, Vec3 way) {
         for (int step = 1; step <= PAST_REACH; step++) {
             if (!canStand(spotOnLine(player, way, step))) {
@@ -299,8 +281,7 @@ public final class BounceWay {
         return -1;
     }
 
-    // The first spot on the line past the given distance where you can stand. A step up or down
-    // still counts. Null when there is none within reach.
+    // A step up or down still counts.
     private static BlockPos spotPast(LocalPlayer player, Vec3 way, double from) {
         for (int step = (int) Math.ceil(from); step <= from + PAST_REACH; step++) {
             BlockPos spot = spotOnLine(player, way, step);
@@ -318,7 +299,6 @@ public final class BounceWay {
             player.getZ() + way.z * distance);
     }
 
-    // Room for the feet and the head with nothing that hurts or teleports and a floor below.
     private static boolean canStand(BlockPos feet) {
         return passable(feet) && passable(feet.above()) && BlockUtil.isSolid(feet.below());
     }

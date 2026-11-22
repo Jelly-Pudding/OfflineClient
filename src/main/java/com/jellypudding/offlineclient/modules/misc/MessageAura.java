@@ -27,14 +27,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Whispers one line to other players. A whisper the server would count as spam waits for
-// the next tick. A player who leaves before their turn is passed over.
 public final class MessageAura extends Module {
 
     public enum Reach { IN_VIEW, EVERYONE, RANDOM }
 
-    // Names remembered. One player is only messaged once a session. As many players at most
-    // wait their turn.
     private static final int MAX_TRACKED = 512;
 
     private final EnumSetting<Reach> reach = new EnumSetting<>("Reach",
@@ -57,10 +53,8 @@ public final class MessageAura extends Module {
     private final Deque<String> queue = new ArrayDeque<>();
     private final LinkedHashSet<String> told = new LinkedHashSet<>();
     private final JoinWatch joins = new JoinWatch();
-    // The reach the queue was last filled for. Null until the first tick in a world.
     private Reach filledFor;
     private int timer;
-    // Players whispered to since the queue was filled.
     private int whispered;
 
     public MessageAura() {
@@ -161,7 +155,6 @@ public final class MessageAura extends Module {
         return true;
     }
 
-    // The first waiting player who is still on the tab list. Those who left are passed over.
     private String nextOnline() {
         while (!queue.isEmpty() && ChatSender.listedName(queue.peekFirst()) == null) {
             queue.pollFirst();
@@ -174,7 +167,6 @@ public final class MessageAura extends Module {
         return others.isEmpty() ? null : others.get(ThreadLocalRandom.current().nextInt(others.size()));
     }
 
-    // The other players on the tab list without the friends left alone.
     private List<String> others() {
         List<String> names = ServerInfo.othersOnline();
         if (ignoreFriends.isOn()) {

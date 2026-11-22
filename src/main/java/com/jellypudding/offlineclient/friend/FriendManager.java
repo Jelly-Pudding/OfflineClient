@@ -4,9 +4,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 
-// Friends are never targeted by combat modules. Enemies are picked out wherever players are
-// coloured and some alerts listen for them alone. A name sits on one list at most and both
-// match whatever the case. The config saves the two lists side by side.
+// A name sits on one list at most and both match whatever the case.
 public final class FriendManager {
 
     private final Set<String> friends = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -18,7 +16,6 @@ public final class FriendManager {
         return friends.contains(name);
     }
 
-    // A new friend stops being an enemy.
     public boolean add(String name) {
         if (!friends.add(name)) {
             return false;
@@ -43,7 +40,6 @@ public final class FriendManager {
         return enemies.contains(name);
     }
 
-    // A new enemy stops being a friend.
     public boolean addEnemy(String name) {
         if (!enemies.add(name)) {
             return false;

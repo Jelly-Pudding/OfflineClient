@@ -27,14 +27,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// Works an open smithing table one piece after another. It upgrades diamond gear to netherite
-// or puts a trim on armour. Only the server knows the smithing recipes. The result shows up
-// once it has answered.
+// Only the server knows the smithing recipes. The result shows up once it has answered.
 public final class AutoSmith extends StationModule<SmithingMenu> {
 
     public enum Mode { UPGRADE, TRIM }
 
-    // Each pattern with the template that carries it. None leaves an armour slot alone.
     public enum Pattern {
         NONE(null, null),
         SENTRY(TrimPatterns.SENTRY, Items.SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE),
@@ -65,7 +62,6 @@ public final class AutoSmith extends StationModule<SmithingMenu> {
         }
     }
 
-    // Each trim material with the item that gives it.
     public enum Material {
         QUARTZ(TrimMaterials.QUARTZ, Items.QUARTZ),
         IRON(TrimMaterials.IRON, Items.IRON_INGOT),
@@ -88,16 +84,12 @@ public final class AutoSmith extends StationModule<SmithingMenu> {
         }
     }
 
-    // What one piece of work at the table takes. Each test says what belongs in its slot and
-    // each line what to tell the player when that part runs out.
     private record Job(Predicate<ItemStack> base, Predicate<ItemStack> template, Predicate<ItemStack> addition,
                        String noBase, String noTemplate, String noAddition, String verb) {
     }
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
-    // What each armour slot is called in a row name.
     private static final Map<EquipmentSlot, String> PIECES = Map.of(
         EquipmentSlot.HEAD, "Helmet", EquipmentSlot.CHEST, "Chestplate",
         EquipmentSlot.LEGS, "Leggings", EquipmentSlot.FEET, "Boots");
@@ -194,8 +186,6 @@ public final class AutoSmith extends StationModule<SmithingMenu> {
         }
     }
 
-    // The trim for the piece on the table or else for the next one you carry. Null once the
-    // module has said why it stopped.
     private Job trimJob(SmithingMenu menu) {
         if (patterns.values().stream().allMatch(pattern -> pattern.is(Pattern.NONE))) {
             disable("Pick a pattern for at least one armour slot first.");
@@ -220,8 +210,7 @@ public final class AutoSmith extends StationModule<SmithingMenu> {
             "Out of " + EnumSetting.label(material).toLowerCase(Locale.ROOT) + " for the trim.", "trim");
     }
 
-    // Armour whose slot has a pattern picked and that carries no trim. With Replace trims any
-    // other trim than the picked one counts too. The server refuses the same trim twice.
+    // The server refuses the same trim twice.
     private boolean wantsTrim(ItemStack stack) {
         EquipmentSlot slot = stack.is(ItemTags.TRIMMABLE_ARMOR) ? ItemUtil.equipSlot(stack) : null;
         EnumSetting<Pattern> pattern = slot == null ? null : patterns.get(slot);
@@ -236,14 +225,12 @@ public final class AutoSmith extends StationModule<SmithingMenu> {
             && trim.material().is(materials.get(slot).getValue().key));
     }
 
-    // Moves out anything that does not belong in the slot. False once the module has stopped.
     private boolean clearForeign(SmithingMenu menu, int slot, Predicate<ItemStack> belongs) {
         ItemStack stack = menu.getSlot(slot).getItem();
         return stack.isEmpty() || belongs.test(stack) || moveOut(menu, slot, "to empty the smithing table.");
     }
 
-    // True when the slot holds its part or the inventory has one to give. Nothing moves
-    // until all three parts are there.
+    // Nothing moves until all three parts are there.
     private boolean ready(SmithingMenu menu, int slot, Predicate<ItemStack> fits, String missing) {
         if (menu.getSlot(slot).hasItem() || MenuClicks.firstInventorySlot(menu, fits) != -1) {
             return true;

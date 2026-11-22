@@ -33,7 +33,6 @@ public final class Flight extends Module {
     public enum Mode { CREATIVE, DIRECT, TELEPORT }
     public enum AntiKick { DIP, PACKET, OFF }
 
-    // How much one wheel notch changes the speed and the teleport step.
     private static final double SCROLL_STEP = 0.1;
     private static final double SCROLL_BLOCKS = 0.5;
 
@@ -46,16 +45,13 @@ public final class Flight extends Module {
     // one straight away and the first step is one.
     private static final double WIPE_RISE = 0.02;
 
-    // A step that meets something is cut back this much at a time.
     private static final double STEP_BACK = 0.25;
 
-    // A snapped step runs along the compass line this many degrees apart.
     private static final float AXIS_DEGREES = 90;
 
     // Runs after the modules that rewrite the ground flag of the client's own packet.
     private static final int AFTER_REWRITES = -50;
 
-    // A step is compared with the packet that should carry it this closely.
     private static final double SAME_SPOT = 1.0E-7;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -122,12 +118,10 @@ public final class Flight extends Module {
 
     // Where this tick's teleport step began. Fillers go out ahead of a long one.
     private Vec3 stepFrom;
-    // This tick's step drops and whether the client's own packet carried it.
     private boolean stepDrops;
     private boolean stepSent;
     // The server may hold a fall that the next step has to wipe first.
     private boolean fallOwed;
-    // Ticks the keys have been held for the ramp.
     private int movingTicks;
 
     public Flight() {
@@ -181,12 +175,10 @@ public final class Flight extends Module {
         stepDrops = false;
     }
 
-    // The modes that fly with momentum rather than in steps.
     private boolean flowing() {
         return !mode.is(Mode.TELEPORT);
     }
 
-    // What the wheel and the suffix show. The teleport step or the horizontal speed.
     private NumberSetting pace() {
         return flowing() ? horizontalSpeed : step;
     }
@@ -220,9 +212,8 @@ public final class Flight extends Module {
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
         Timer.override(TIMER_KEY, moving && flowing() ? timer.getFloat() : 1f);
 
-        // The server counts nobody it lets fly. A step that rises has to know of a dip before
-        // it is taken.
-        boolean counted = !mc.player.isCreative() && !mc.player.isSpectator();
+        // A step that rises has to know of a dip before it is taken.
+        boolean counted = HoverDip.counted();
         boolean dips = counted && (antiKick.is(AntiKick.DIP) || antiKick.is(AntiKick.PACKET) && !tellsOfDips());
         if (dips) {
             dip.plan(antiKickInterval.getInt(), antiKick.is(AntiKick.DIP) ? dipTicks.getInt() : 1,
@@ -321,8 +312,6 @@ public final class Flight extends Module {
         return best;
     }
 
-    // The furthest spot along the way up to the length that lands clear of lava. A swept
-    // way has to be open the whole length as well.
     private Vec3 furthest(Vec3 from, Vec3 way, double length, boolean swept) {
         for (double reach = swept ? openReach(from, way, length) : length; reach > 0; reach -= STEP_BACK) {
             Vec3 to = from.add(way.scale(reach));
@@ -396,7 +385,6 @@ public final class Flight extends Module {
         toldHeight = height;
     }
 
-    // The client's own packet of this tick carries the real height back.
     private void endPacketDip() {
         if (!Double.isNaN(toldHeight)) {
             toldHeight = Double.NaN;
@@ -425,7 +413,6 @@ public final class Flight extends Module {
         restoreHeight(event, packet);
     }
 
-    // The client's own packet with this tick's step and not another module's.
     private boolean carriesStep(ServerboundMovePlayerPacket packet) {
         Vec3 sent = new Vec3(packet.getX(0), packet.getY(0), packet.getZ(0));
         return packet.hasPosition() && sent.distanceToSqr(mc.player.position()) < SAME_SPOT;

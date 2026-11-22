@@ -8,13 +8,9 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-// The friends from A to Z and then the enemies. A click on a name moves it to the other
-// list and a name typed with the word enemy after it goes on the enemies.
 final class FriendsTab implements TabView.Source {
 
-    // The word that puts a typed name on the enemies.
     private static final String ENEMY = "enemy";
-    // The names of the two players the game itself ships with.
     private static final String FRIEND_EXAMPLE = "Steve";
     private static final String ENEMY_EXAMPLE = "Alex";
 
@@ -53,7 +49,6 @@ final class FriendsTab implements TabView.Source {
         return "type a name to add a friend";
     }
 
-    // Only shown whilst both lists are empty.
     @Override
     public List<TabView.Hint> hints(String query) {
         FriendManager lists = OfflineClient.INSTANCE.getFriendManager();
@@ -97,7 +92,6 @@ final class FriendsTab implements TabView.Source {
         }
     }
 
-    // True for a name typed with the word enemy after it.
     private static boolean asEnemy(String text) {
         String[] words = text.trim().split("\\s+");
         return words.length > 1 && words[1].equalsIgnoreCase(ENEMY);

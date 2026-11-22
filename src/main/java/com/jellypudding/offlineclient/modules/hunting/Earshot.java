@@ -44,14 +44,12 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
-// Marks the sounds the server sends. A sound packet reaches 16 blocks and a louder one
-// sixteen times its volume. A goat horn carries 256 that way. Block breaks and mining and
-// workstations arrive as level events and reach 64 blocks as explosions do. Paper keeps
-// these ranges and only holds back a player hidden from you.
+// A sound packet reaches 16 blocks and a louder one sixteen times its volume. A goat horn carries
+// 256 that way. Block breaks and mining and workstations arrive as level events and reach 64 blocks
+// as explosions do. Paper keeps these ranges and only holds back a player hidden from you.
 public final class Earshot extends Module {
 
-    // A spot where picked sounds were heard. A new sound close by moves it and starts its fade
-    // again. It keeps the name of the first sound or mining would flick between hit and break.
+    // It keeps the name of the first sound or mining would flick between hit and break.
     private static final class Mark {
 
         private Vec3 at;
@@ -65,7 +63,7 @@ public final class Earshot extends Module {
         }
     }
 
-    // A sound this close to a mark belongs to the same spot. A tunnel stays one mark.
+    // A tunnel stays one mark.
     private static final double MERGE_DISTANCE = 4;
 
     private static final int MAX_MARKS = 64;
@@ -74,7 +72,6 @@ public final class Earshot extends Module {
 
     private static final double LABEL_LIFT = 0.6;
 
-    // One sound posts at most once in this many seconds. The spots heard in between are counted.
     private static final int QUIET_SECONDS = 5;
 
     private final RegistryListSetting<SoundEvent> sounds = new RegistryListSetting<>("Sounds",
@@ -190,7 +187,6 @@ public final class Earshot extends Module {
         }
     }
 
-    // The sound the game plays for a level event. Null for one that plays none worth a mark.
     private SoundEvent levelSound(ClientboundLevelEventPacket packet) {
         BlockPos pos = packet.getPos();
         int data = packet.getData();
@@ -258,7 +254,6 @@ public final class Earshot extends Module {
         return sounds.contains(BuiltInRegistries.SOUND_EVENT.getValue(sound.location()));
     }
 
-    // The subtitle the game shows for the sound or its name when it has none.
     private static String nameOf(SoundEvent sound) {
         WeighedSoundEvents events = mc.getSoundManager().getSoundEvent(sound.location());
         Component subtitle = events == null ? null : events.getSubtitle();
@@ -269,7 +264,6 @@ public final class Earshot extends Module {
         return Math.round(markTime.getValue() * TimeUnit.SECONDS.toMillis(1));
     }
 
-    // Full strength when heard and nothing once the mark time has passed.
     private float strength(Mark mark, long now) {
         return (float) Math.clamp(1 - (now - mark.heard) / (double) lifeMillis(), 0, 1);
     }

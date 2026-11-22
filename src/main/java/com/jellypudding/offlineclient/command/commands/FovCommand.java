@@ -9,7 +9,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import java.util.List;
 import java.util.OptionalInt;
 
-// The vanilla slider stops at a hundred and ten. This does not.
 public final class FovCommand extends Command {
 
     private static final int DEFAULT_FOV = 70;

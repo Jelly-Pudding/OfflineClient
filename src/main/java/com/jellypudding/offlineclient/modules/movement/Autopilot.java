@@ -63,8 +63,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-// Flies a route one stop at a time. Flight or ElytraFly does the moving whilst this turns
-// your view towards the next stop and holds the keys.
+// Flight or ElytraFly does the moving whilst this turns your view towards the next stop and holds
+// the keys.
 public final class Autopilot extends Module {
 
     public enum Route { POINT, WAYPOINTS, GRID, AREA, SPIRAL, TRAIL }
@@ -73,13 +73,12 @@ public final class Autopilot extends Module {
 
     public enum Ending { HOVER, LAND, LEAVE }
 
-    // What the autopilot does this tick. Standing is a stop on the way that flies on after it.
+    // Standing is a stop on the way that flies on after it.
     private enum Phase { FLYING, HOLDING, LANDING, STANDING }
 
-    // How the leg towards one stop is going. It stays ARRIVED or FAILED until the next leg.
     private enum Leg { IDLE, FLYING, ARRIVED, FAILED }
 
-    // A place on the route. Only a waypoint has a name.
+    // Only a waypoint has a name.
     record Stop(String name, double x, double z) {
 
         static Stop at(Vec3 spot) {
@@ -89,56 +88,34 @@ public final class Autopilot extends Module {
 
     private static final int CHUNK = SectionPos.SECTION_SIZE;
 
-    // The most degrees the view turns in one tick.
     private static final float TURN_STEP = 10;
-    // Forward is held only whilst the view points this close to the way.
     private static final float FORWARD_ANGLE = 45;
-    // Jump or sneak is held only whilst the height is off by more than this.
     private static final double HEIGHT_BAND = 1;
-    // Further below the height than this you climb before going on.
     private static final double CLIMB_FIRST = 8;
-    // How far ahead the land is read for hills and the chunks for loading.
     private static final double LOOK_AHEAD = 48;
     private static final double LOOK_STEP = 8;
-    // Blocks kept between you and land that rises over the cruise height.
     private static final double CLEARANCE = 6;
-    // Ticks of holding forward without a block of headway before you climb over what is in the way.
     private static final int STUCK_TICKS = 60;
     private static final double STUCK_LIFT = 8;
-    // The climb is let go once you have come this far past what stopped you.
     private static final double LIFT_KEEP = 64;
-    // A leg that makes no headway for this long gives up.
     private static final int GIVE_UP_TICKS = 600;
-    // This many pull backs close together end the flight.
     private static final int PULLBACKS = 5;
     private static final int PULLBACK_TICKS = 200;
-    // Wings circle a held spot this far out.
     private static final double CIRCLE = 24;
-    // ElytraFly's Chest swap gets this many ticks to put the elytra on.
     private static final int WEAR_WAIT = 20;
-    // Why wings come down before the elytra gives out.
     private static final String WORN_ELYTRA = "your elytra is nearly worn out";
     // A stop this close below you cannot be steered towards.
     private static final double OVERHEAD = 0.5;
-    // How quickly the speed behind the time left follows the real speed.
     private static final double PACE_EASE = 0.05;
-    // Slower than this in blocks a second the time left is not shown.
     private static final double SLOWEST_PACE = 1;
     private static final long MILLIS_PER_SECOND = 1000;
-    // Where a sweep has got to is written down this often as well as at every turn and when it stops.
     private static final int SAVE_TICKS = 2 * 60 * SharedConstants.TICKS_PER_SECOND;
-    // A stop on the way that takes longer than this is given up. The next one waits at least the gap.
     private static final int STOP_TICKS = 4 * 60 * SharedConstants.TICKS_PER_SECOND;
     private static final int STOP_GAP = 60 * SharedConstants.TICKS_PER_SECOND;
-    // You stand still for a stop once you move slower than this.
     private static final double STILL = 0.01;
-    // Back in the flight's dimension after a drop the flight gives the server this long to place
-    // you. It carries on only this near where it was cut off and waits this long elsewhere for a
-    // lobby to send you on before it stops.
     private static final int SETTLE_TICKS = 2 * SharedConstants.TICKS_PER_SECOND;
     private static final double BACK_WITHIN = 8 * CHUNK;
     private static final int BACK_TICKS = 60 * SharedConstants.TICKS_PER_SECOND;
-    // This many dropped connections within the window end the flight once you are back.
     private static final int MOST_DROPS = 3;
     private static final int DROP_MINUTES = 10;
 
@@ -216,7 +193,6 @@ public final class Autopilot extends Module {
     private final PitStop pitStop = new PitStop();
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
 
-    // The stops still to come after the one flown to now.
     private final List<Stop> stops = new ArrayList<>();
     private Stop current;
     private Leg leg = Leg.IDLE;
@@ -224,69 +200,48 @@ public final class Autopilot extends Module {
     private Phase phase = Phase.FLYING;
     // The spot the autopilot command gave. A plain switch on flies there again.
     private Stop spot;
-    // Where holding or landing happens and the height held there.
     private Vec3 heldSpot;
     private double heldHeight;
     private boolean engineWasOn;
 
-    // The sweep flown whilst the route is one. It carries the line flown and the place reached.
     private Sweep sweep;
-    // True whilst the flight heads for the place the sweep starts or carries on from.
     private boolean joining;
     // False until the sweep has flown part of a line. Until then a sweep saved before is kept.
     private boolean swept;
     private int sinceSave;
-    // A saved sweep the next start flies in place of a fresh one.
     private Sweep resumed;
-    // A plain switch on that would sweep over the sweep saved here only tells you. A second one
-    // before this time starts afresh. The area command starts afresh at once.
     private long freshUntil;
     private boolean freshAsked;
-    // True once a sweep stopped short of a line that runs out of the world border.
     private boolean atBorder;
 
-    // True from the moment a stop on the way is under way until the flight takes off again. What
-    // the stop is for and how long it has taken.
     private boolean stopping;
     private boolean standingWork;
     private int stopTicks;
     private int sinceStop = STOP_GAP;
-    // Said once whilst a stop waits for ground to stand on.
     private boolean toldNoGround;
-    // Said once a flight when no stop could help the worn elytra.
     private boolean toldNoHelp;
     // A stop that left the elytra worn means no more stops for it on this flight.
     private boolean elytraLeft;
 
-    // The server and dimension the flight belongs to.
     private String flightServer;
     private String flightDimension;
-    // True once the connection dropped mid flight. The joins AutoReconnect had made by then and
-    // where you were. The ticks back in the flight's dimension since or minus one whilst elsewhere.
     private boolean cutOff;
     private int joinsAtCut;
     private Vec3 cutAt;
     private int backTicks = -1;
-    // Where you were on the last tick flown.
     private Vec3 lastAt;
-    // When the connection dropped mid flight within the last few minutes.
     private final Deque<Long> drops = new ArrayDeque<>();
 
-    // Where the last block of headway was made and the ticks of pushing since.
     private Vec3 headway;
     private int stuckTicks;
-    // The extra height climbed over something in the way and where the climb began.
     private double lift;
     private Vec3 liftedAt;
-    // The height a climb last gained a block at and the ticks climbed since. A climb that
-    // stalls under a roof is given up for the rest of the leg.
     private double climbedTo;
     private int climbTicks;
     private boolean climbBlocked;
-    // Ticks flown on wings without a glider worn.
     private int unwornTicks;
-    // True from the ground until the wings are open. Jump is held all that time. ElytraFly
-    // reads the keys a tick late and a jump let go in the air never opens them.
+    // Jump is held from the ground until the wings are open. ElytraFly reads the keys a tick late
+    // and a jump let go in the air never opens them.
     private boolean takingOff;
 
     private double pace;
@@ -294,7 +249,6 @@ public final class Autopilot extends Module {
     private boolean hurt;
     private int ticks;
     private final Deque<Integer> pullbacks = new ArrayDeque<>();
-    // The players in view on the last tick who are not friends.
     private Set<UUID> strangers = new HashSet<>();
 
     public Autopilot() {
@@ -324,7 +278,6 @@ public final class Autopilot extends Module {
         };
     }
 
-    // Flies straight to the spot. A flight already going gives way to it.
     public void flyTo(double x, double z, String name) {
         spot = new Stop(name, x, z);
         route.setValue(Route.POINT);
@@ -332,8 +285,6 @@ public final class Autopilot extends Module {
         setEnabled(true);
     }
 
-    // Sweeps the area between two corners. A flight already going gives way to it and the sweep
-    // saved here is replaced once this one reaches its first line.
     public void sweepArea(int x1, int z1, int x2, int z2) {
         cornerOne.setValue(x1 + " " + z1);
         cornerTwo.setValue(x2 + " " + z2);
@@ -344,9 +295,7 @@ public final class Autopilot extends Module {
         freshAsked = false;
     }
 
-    // Carries on with the sweep saved for this server and dimension from where it stopped. A
-    // flight already going gives way to it. Null once the autopilot has said what it does and
-    // otherwise why it cannot.
+    // Null once the autopilot has said what it does and otherwise why it cannot.
     public String resume() {
         if (!inGame()) {
             return "Join a world first";
@@ -371,7 +320,6 @@ public final class Autopilot extends Module {
         return null;
     }
 
-    // The distance and the time left for the Info bar. Null whilst nothing is flying.
     public String left() {
         if (!inGame() || cutOff) {
             return null;
@@ -453,7 +401,6 @@ public final class Autopilot extends Module {
         cutOff = false;
     }
 
-    // What a flight keeps an eye on starts from nothing. Anyone already in view never counts.
     private void watchAfresh() {
         lagback.sync();
         pullbacks.clear();
@@ -475,7 +422,7 @@ public final class Autopilot extends Module {
         return engine.is(Engine.ELYTRA) ? Modules.get(ElytraFly.class) : null;
     }
 
-    // Wings never set off on an elytra that is nearly worn out. True after telling the player.
+    // True after telling the player.
     private boolean refusesWornElytra() {
         ElytraFly wings = wings();
         if (wings == null || !wings.wearingOut()) {
@@ -485,8 +432,7 @@ public final class Autopilot extends Module {
         return true;
     }
 
-    // Lays out the stops of the route. A saved sweep picked up again takes the place of a fresh
-    // one. False after telling the player why it cannot start.
+    // False after telling the player why it cannot start.
     private boolean plan(Sweep picked) {
         stops.clear();
         sweep = null;
@@ -557,7 +503,6 @@ public final class Autopilot extends Module {
         return false;
     }
 
-    // Two whole numbers for x and z. Null for anything else.
     private static int[] corner(TextSetting text) {
         String[] parts = text.getValue().trim().split("[\\s,]+");
         if (parts.length != 2) {
@@ -574,7 +519,6 @@ public final class Autopilot extends Module {
         return OfflineClient.INSTANCE.getCommandManager().getPrefix();
     }
 
-    // Each visit goes to the nearest waypoint not yet visited. Hidden waypoints are left out.
     private void planWaypoints() {
         List<WaypointStore.Waypoint> left = new ArrayList<>(WaypointStore.get().here());
         left.removeIf(WaypointStore.Waypoint::hidden);
@@ -616,8 +560,6 @@ public final class Autopilot extends Module {
         return words;
     }
 
-    // Where the flight to the place a sweep starts or carries on from goes and how far it is.
-    // Nothing whilst you are there already.
     private String wayToSweep(boolean back) {
         double away = flat(mc.player.getX(), mc.player.getZ(), current.x(), current.z());
         if (away <= CHUNK) {
@@ -643,7 +585,6 @@ public final class Autopilot extends Module {
         return stop.name() != null ? stop.name() : Math.round(stop.x()) + " " + Math.round(stop.z());
     }
 
-    // Takes the next stop. False once none is left.
     private boolean nextLeg() {
         if (sweep != null) {
             return nextLine();
@@ -658,7 +599,6 @@ public final class Autopilot extends Module {
         return true;
     }
 
-    // Heads for the place the sweep starts or carries on from before any line is flown.
     private void joinSweep() {
         joining = true;
         current = Stop.at(sweep.place());
@@ -688,8 +628,8 @@ public final class Autopilot extends Module {
         return true;
     }
 
-    // Writes down where the sweep has got to. A fresh sweep still on its way to its start has
-    // done nothing worth keeping and the sweep saved before stays as it was.
+    // A fresh sweep still on its way to its start has done nothing worth keeping and the sweep
+    // saved before stays as it was.
     private void saveSweep() {
         sinceSave = 0;
         if (swept) {
@@ -716,7 +656,6 @@ public final class Autopilot extends Module {
         }
     }
 
-    // A fresh leg has made no headway and climbed over nothing yet.
     private void startLeg() {
         leg = Leg.FLYING;
         legFrom = mc.player.position();
@@ -825,22 +764,19 @@ public final class Autopilot extends Module {
         }
     }
 
-    // The speed behind the time left. A tick has made its move by the time its position goes out.
+    // A tick has made its move by the time its position goes out.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         pace += (EntityUtil.ownSpeed() - pace) * PACE_EASE;
     }
 
-    // What a stop on the way looks after. Once a stop has left the elytra worn a line of nought
-    // never calls for another.
     private PitStop.Needs needs() {
         return new PitStop.Needs(mendElytra.isOn(), restockFlight.isOn(), elytraLeft ? 0 : elytraLine.getValue() / 100,
             keepRockets.getInt());
     }
 
-    // A stop for the elytra or for rockets. It is looked for once a second. Bounce comes to a halt
-    // over ground it can stand on and Packet stands on a block put under you. The gliding modes come
-    // down onto ground they can stand on once some lies below.
+    // Bounce comes to a halt over ground it can stand on and Packet stands on a block put under
+    // you. The gliding modes come down onto ground they can stand on once some lies below.
     private boolean startStop() {
         if (++sinceStop < STOP_GAP || ticks % SharedConstants.TICKS_PER_SECOND != 0) {
             return false;
@@ -874,7 +810,6 @@ public final class Autopilot extends Module {
         return true;
     }
 
-    // Says once a flight why no stop can help the elytra once it is worn down to Elytra line.
     private void tellNoHelp(PitStop.Needs asked) {
         if (toldNoHelp) {
             return;
@@ -886,7 +821,6 @@ public final class Autopilot extends Module {
         }
     }
 
-    // Stands still for the stop and does its work. A stop that takes too long ends the flight.
     private void stand() {
         letGo();
         ElytraFly wings = wings();
@@ -910,8 +844,8 @@ public final class Autopilot extends Module {
         }
     }
 
-    // True once you stand still on something. Packet sinks onto a block it puts under your feet.
-    // A restock puts one beside it too whilst no spot beside you will take a container.
+    // Packet sinks onto a block it puts under your feet. A restock puts one beside it too whilst no
+    // spot beside you will take a container.
     private boolean settled(ElytraFly wings) {
         if (mc.player.onGround() && !mc.player.isFallFlying()) {
             return mc.player.getDeltaMovement().horizontalDistanceSqr() < STILL * STILL;
@@ -947,7 +881,6 @@ public final class Autopilot extends Module {
         tell("flies on.");
     }
 
-    // Lets go of whatever the stop holds.
     private void endStop() {
         if (stopping) {
             pitStop.end();
@@ -956,9 +889,8 @@ public final class Autopilot extends Module {
         standingWork = false;
     }
 
-    // Each world the client enters after the connection dropped. The flight waits on through a
-    // join AutoReconnect made by itself to the server it flew on. A queue or a lobby in another
-    // dimension is waited out. False once the flight is over.
+    // The flight waits on through a join AutoReconnect made by itself to the server it flew on. A
+    // queue or a lobby in another dimension is waited out. False once the flight is over.
     private boolean rejoined() {
         if (!cutOff || AutoReconnect.joinsMade() == joinsAtCut || !ServerInfo.key().equals(flightServer)) {
             return false;
@@ -988,8 +920,8 @@ public final class Autopilot extends Module {
         }
     }
 
-    // Takes the flight up again where the connection dropped. Nobody watched the rejoin and
-    // everyone in view then counts as someone who just came into view.
+    // Nobody watched the rejoin and everyone in view then counts as someone who just came into
+    // view.
     private void carryOn() {
         cutOff = false;
         backTicks = -1;
@@ -1006,7 +938,6 @@ public final class Autopilot extends Module {
         tell("carries on now that you are back." + back);
     }
 
-    // Why the flight should stop now or null to fly on.
     private String stopReason() {
         boolean wasHurt = hurt;
         hurt = false;
@@ -1045,8 +976,6 @@ public final class Autopilot extends Module {
         return null;
     }
 
-    // A player who is not your friend and was not in view on the last tick. Anyone in view
-    // as the flight starts never counts until they leave and come back.
     private Player newStranger() {
         Set<UUID> now = new HashSet<>();
         Player fresh = null;
@@ -1102,7 +1031,7 @@ public final class Autopilot extends Module {
         }
     }
 
-    // One tick of the leg. Passing the stop counts as reaching it.
+    // Passing the stop counts as reaching it.
     private Leg flyLeg() {
         if (leg != Leg.FLYING) {
             return leg;
@@ -1122,7 +1051,6 @@ public final class Autopilot extends Module {
         return leg;
     }
 
-    // Ends the route the way At the end says. The reason goes in chat first.
     private void end(String reason) {
         end(reason, atEnd.getValue());
     }
@@ -1167,7 +1095,6 @@ public final class Autopilot extends Module {
         Leave.QUIT.go("Autopilot " + reason + (stopped ? "\n§7AutoReconnect was turned off." : ""));
     }
 
-    // Wings circle the spot at the height they stopped at until they start to fail.
     private void hold() {
         if (wingsFail()) {
             return;
@@ -1176,8 +1103,6 @@ public final class Autopilot extends Module {
         steer(aim.x, aim.z, heldHeight, true);
     }
 
-    // True once the wings wear thin or sink well under the held height. A hold over safe ground
-    // turns into a landing. Otherwise the autopilot logs you out.
     private boolean wingsFail() {
         ElytraFly wings = wings();
         if (wings == null) {
@@ -1208,8 +1133,6 @@ public final class Autopilot extends Module {
         return centre.add(radial.scale(radius)).add(along.scale(radius));
     }
 
-    // Flight comes straight down. Wings circle the spot and sink only whilst the ground under
-    // them is safe. The engine is let go on the ground when the autopilot switched it on.
     private void land() {
         if (stopping && mc.player.isInWater()) {
             end("found no ground to stand on for the stop.");
@@ -1243,9 +1166,8 @@ public final class Autopilot extends Module {
         steer(aim.x, aim.z, safe ? mc.level.getMinY() : heldHeight, true);
     }
 
-    // True when solid ground with no lava or fire on it lies somewhere below you. Fire and berry
-    // bushes have no collision and are found in the block over the ground. Water is safe to come
-    // down into but nothing to stand on.
+    // Fire and berry bushes have no collision and are found in the block over the ground. Water is
+    // safe to come down into but nothing to stand on.
     private boolean safeGround(boolean toStand) {
         Vec3 feet = mc.player.position();
         BlockHitResult hit = mc.level.clip(new ClipContext(feet, new Vec3(feet.x, mc.level.getMinY(), feet.z),
@@ -1261,8 +1183,7 @@ public final class Autopilot extends Module {
             && !BlockUtil.harmful(mc.level.getBlockState(hit.getBlockPos().above()));
     }
 
-    // Turns towards the spot and holds the keys that take you there at the height. True
-    // whilst forward is held.
+    // True whilst forward is held.
     private boolean steer(double x, double z, double height, boolean push) {
         LocalPlayer player = mc.player;
         boolean overhead = flat(player.getX(), player.getZ(), x, z) < OVERHEAD;
@@ -1293,8 +1214,8 @@ public final class Autopilot extends Module {
         return onward;
     }
 
-    // True whilst you are well under the height and still climbing to it. A climb that gains no
-    // block for a while is given up for the rest of the leg and forward is held again.
+    // A climb that gains no block for a while is given up for the rest of the leg and forward is
+    // held again.
     private boolean climbsFirst(double height) {
         double y = mc.player.getY();
         if (climbBlocked || y >= height - CLIMB_FIRST) {
@@ -1318,14 +1239,12 @@ public final class Autopilot extends Module {
         sneak.letGo();
     }
 
-    // False whilst the chunk you are about to fly into has not loaded. You wait for it.
     private boolean aheadLoaded() {
         Vec3 ahead = mc.player.position().add(Vec3.directionFromRotation(0, mc.player.getYRot()).scale(LOOK_AHEAD));
         return LoadedChunks.has(ahead.x, ahead.z);
     }
 
-    // The cruise height or higher where the land ahead rises over it. A dimension with a roof
-    // is left to the climb over whatever stops you.
+    // A dimension with a roof is left to the climb over whatever stops you.
     private double travelHeight() {
         double height = cruiseHeight.getValue();
         if (!mc.level.dimensionType().hasCeiling()) {
@@ -1334,7 +1253,6 @@ public final class Autopilot extends Module {
         return height + lift;
     }
 
-    // The top of the highest loaded land under the way ahead.
     private double landAhead() {
         Vec3 way = Vec3.directionFromRotation(0, mc.player.getYRot());
         double top = Double.NEGATIVE_INFINITY;
@@ -1348,8 +1266,7 @@ public final class Autopilot extends Module {
         return top;
     }
 
-    // Counts the ticks forward is held without a block of headway. A wait climbs over what is
-    // in the way and a long one gives up. True once it gives up.
+    // True once it gives up.
     private boolean stuck(boolean pushing) {
         Vec3 here = mc.player.position();
         if (liftedAt != null && flat(here.x, here.z, liftedAt.x, liftedAt.z) > LIFT_KEEP) {
@@ -1372,7 +1289,6 @@ public final class Autopilot extends Module {
         return stuckTicks >= GIVE_UP_TICKS;
     }
 
-    // The way still to fly across every stop to come and the time it takes at your pace.
     private String distanceLeft() {
         if (current == null) {
             return null;
@@ -1385,8 +1301,6 @@ public final class Autopilot extends Module {
         return distance + " " + ChatUtil.shortAge(Math.round(left / pace * MILLIS_PER_SECOND));
     }
 
-    // A sweep still on its way to the place it carries on from has that place and the rest of
-    // its lines still to fly. A spiral counts only the way to that place.
     private double blocksLeft() {
         double left = flat(mc.player.getX(), mc.player.getZ(), current.x(), current.z());
         if (sweep != null && !joining) {
@@ -1404,8 +1318,6 @@ public final class Autopilot extends Module {
         return left;
     }
 
-    // The seconds the flight still takes at your pace. Empty whilst it flies to no stop or too
-    // slowly to say.
     public OptionalDouble secondsLeft() {
         if (!inGame() || cutOff || phase != Phase.FLYING || route.is(Route.TRAIL) || current == null || endless()
             || pace < SLOWEST_PACE) {

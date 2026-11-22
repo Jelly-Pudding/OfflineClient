@@ -32,23 +32,18 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-// Trades with an open villager again and again. Each round picks a wanted trade which moves
-// its payment across and then shift clicks the result. That trades until the payment runs dry.
-// With Work the hall it opens every trader in reach in turn and leaves each one be for a while
-// once nothing more can be traded with it.
+// Each round picks a wanted trade which moves its payment across and then shift clicks the result.
+// That trades until the payment runs dry.
 public final class AutoTrade extends StationModule<MerchantMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
-    // Ticks a clicked trader gets to open its screen. One that is asleep or trading with
-    // somebody else never does.
+    // A trader that is asleep or trading with somebody else never opens its screen.
     private static final int OPEN_WAIT = 30;
 
-    // Ticks between closing one trader and clicking the next.
     private static final int CLOSE_GAP = 4;
 
-    // Far more traders than stand in reach of one spot. It only bounds the memory.
+    // It only bounds the memory.
     private static final int MOST_TRADERS = 1024;
 
     private final RegistryListSetting<Item> buy = new RegistryListSetting<>("Buy",
@@ -73,18 +68,13 @@ public final class AutoTrade extends StationModule<MerchantMenu> {
         "Turns towards each trader on the server side.", true)
         .under(hall);
 
-    // Trades the inventory could not pay for since the last trade that went through.
     private final Set<Integer> unpaid = new HashSet<>();
-    // When each trader the hall round finished with is due again.
     private final Map<UUID, Long> dueAt = new BoundedMap<>(MOST_TRADERS);
-    // What the trades of this run brought in.
     private Tally gained = new Tally();
-    // The trader clicked and waited on and the one whose screen that click opened.
     private AbstractVillager clicked;
     private AbstractVillager visiting;
     private int clickedAt;
     private int resumeAt;
-    // True once the hall round is through with a trader you opened yourself. Its screen stays.
     private boolean leftOpen;
     private int traded;
 
@@ -172,8 +162,6 @@ public final class AutoTrade extends StationModule<MerchantMenu> {
         }
     }
 
-    // Nothing more can be traded here. The hall round closes the screen and moves on. With a
-    // trader you opened yourself the module stops and says why.
     private void finish(String why) {
         if (!hall.isOn()) {
             disable(why);
@@ -194,8 +182,6 @@ public final class AutoTrade extends StationModule<MerchantMenu> {
         dueAt.put(trader.getUUID(), System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(comeBack.getInt()));
     }
 
-    // Clicks the nearest trader that is due. One whose screen never opens is left alone for a
-    // while like one that is finished.
     @Override
     protected void away() {
         if (!hall.isOn() || ticks() < resumeAt || !handsFree(false) || Modules.enabled(AutoLibrarian.class)) {
@@ -221,8 +207,6 @@ public final class AutoTrade extends StationModule<MerchantMenu> {
         mc.rightClickDelay = InputUtil.USE_DELAY;
     }
 
-    // A grown trader that is awake and has a trade to offer and has not been finished with of
-    // late. A jobless villager and a nitwit never trade.
     private boolean due(Entity entity) {
         if (!(entity instanceof AbstractVillager trader) || !trader.isAlive() || trader.isBaby()
             || trader.isSleeping()) {
@@ -248,7 +232,6 @@ public final class AutoTrade extends StationModule<MerchantMenu> {
         return -1;
     }
 
-    // True whilst fewer slots are empty than Free slots asks for. Selling still goes on.
     private boolean cramped() {
         int needed = freeSlots.getInt();
         return needed > 0 && InventoryUtil.emptySlots() < needed;

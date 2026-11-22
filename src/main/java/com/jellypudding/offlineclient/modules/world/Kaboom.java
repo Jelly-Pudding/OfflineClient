@@ -85,7 +85,6 @@ public final class Kaboom extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        // The dead break nothing and the blast ends with the player.
         if (Hands.tied()) {
             setEnabled(false);
             return;

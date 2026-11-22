@@ -79,7 +79,6 @@ public final class NoSlowdown extends Module {
             + " as through air.", true)
         .under(fluidDrag);
 
-    // The sneak air strict tells the server.
     private final ServerSneak strictSneak = new ServerSneak();
 
     public NoSlowdown() {
@@ -125,22 +124,21 @@ public final class NoSlowdown extends Module {
         return isEnabled() && webs.is(WebMode.FULL_SPEED);
     }
 
-    // Read by LivingEntityMixin. True whilst water and lava let the whole land speed through.
+    // Read by LivingEntityMixin.
     public boolean skipsFluidDrag() {
         return isEnabled() && fluidDrag.isOn();
     }
 
-    // Read by EntityMixin. True whilst the local player should read as out of every fluid.
+    // Read by EntityMixin.
     public boolean ignoresFluids() {
         return skipsFluidDrag() && !buoyancy.isOn();
     }
 
-    // Read by LivingEntityMixin. The sideways push a swimmer in lava gets from a land speed.
+    // Read by LivingEntityMixin.
     public float lavaPush(float push, float speed) {
         return skipsFluidDrag() ? speed * LAVA_PUSH : push;
     }
 
-    // True when the block under or around the feet should not drag the speed down.
     public boolean skipsBlockFriction(Block block) {
         if (!isEnabled()) {
             return false;
@@ -154,7 +152,6 @@ public final class NoSlowdown extends Module {
         return false;
     }
 
-    // The friction the ground under the player should have. Slime reads as plain ground.
     public float groundFriction(Block block, float friction) {
         if (block == Blocks.SLIME_BLOCK && skipsSlime()) {
             return MovementUtil.GROUND_FRICTION;
@@ -162,7 +159,7 @@ public final class NoSlowdown extends Module {
         return friction;
     }
 
-    // The speed with the slowness share put back. Level six leaves nothing to restore.
+    // Level six leaves nothing to restore.
     public float withoutSlowness(float speed, int amplifier) {
         if (!isEnabled() || !slowness.isOn()) {
             return speed;
@@ -177,7 +174,6 @@ public final class NoSlowdown extends Module {
         strictSneak.want(items.isOn() && airStrict.isOn() && mc.player.isUsingItem());
     }
 
-    // The game speed a cobweb calls for. One whilst none holds whoever carries the player.
     // A web takes far more of a fall than of a walk and the fall gets all the speed there is.
     private float webSpeed() {
         Entity mover = mc.player.getRootVehicle();

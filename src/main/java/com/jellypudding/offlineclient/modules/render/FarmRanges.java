@@ -25,22 +25,20 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// The distances the game measures mob spawning by. The balls follow the nearest player rule of
-// natural spawning and despawning and the boxes follow BaseSpawner.
+// The balls follow the nearest player rule of natural spawning and despawning and the boxes follow
+// BaseSpawner.
 public final class FarmRanges extends Module {
 
     public enum Centre { YOU, PINNED }
 
-    // A spawner as it was last read. Its ranges come with the block's data from the server. The
-    // server never sends a trial spawner's ranges and it counts only the mobs it made itself. It
-    // gets only its wake ball at the game's default reach.
+    // The ranges come with the block's data from the server. The server never sends a trial
+    // spawner's ranges and it gets only its wake ball at the game's default reach.
     private record Spawner(BlockPos pos, int wake, int reach, boolean trial) {
     }
 
     // NaturalSpawner never lets a mob spawn on its own this close to a player.
     private static final double NO_SPAWN = 24;
 
-    // Ticks between two reads of the spawners round you.
     private static final int SCAN_TICKS = 20;
 
     private final EnumSetting<Centre> centre = new EnumSetting<>("Centre",
@@ -161,7 +159,6 @@ public final class FarmRanges extends Module {
         }
     }
 
-    // Where the player stands now or the pinned block. Null whilst pinned to nothing readable.
     private Vec3 middle(float partialTicks) {
         if (centre.is(Centre.YOU)) {
             return mc.player.getPosition(partialTicks);

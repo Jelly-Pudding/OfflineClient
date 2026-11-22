@@ -29,7 +29,6 @@ import net.minecraft.world.effect.MobEffects;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Sends silly rotations and swings and crouches to the server whilst the local view is left alone.
 // The glide pose tells the server you are off the ground whilst you walk. The server keeps a glide
 // going only for a player in the air and caps the fall it holds at one block during the glide.
 public final class Derp extends Module {
@@ -40,17 +39,14 @@ public final class Derp extends Module {
     // Each step slower waits one more tick between flips.
     private static final int TWERK_FASTEST = 10;
 
-    // How long a combat module still counts as fighting once its target has gone. One that slips
-    // out of reach or out of view for a moment is back within this.
+    // A target that slips out of reach or out of view for a moment is back within this.
     private static final int FIGHT_MEMORY_TICKS = SharedConstants.TICKS_PER_SECOND;
 
-    // How near something a combat module would fight keeps the arm still. A swing reaches about
-    // four blocks and two sprinters close seven more whilst the cooldown of a sword fills.
+    // A swing reaches about four blocks and two sprinters close seven more whilst the cooldown of a
+    // sword fills.
     private static final double FIGHT_RANGE = 12;
 
-    // How long a start waits for the server to show the glide.
     private static final int ECHO_WAIT_TICKS = SharedConstants.TICKS_PER_SECOND;
-    // How long a refused start waits before the next try.
     private static final int RETRY_TICKS = 3 * SharedConstants.TICKS_PER_SECOND;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -80,7 +76,6 @@ public final class Derp extends Module {
     private boolean rising = true;
     private boolean left;
     private int flailTimer;
-    // Counts down from the last tick a combat module had something to fight.
     private int fightMemory;
     private int twerkTimer;
     private boolean crouched;
@@ -155,8 +150,7 @@ public final class Derp extends Module {
         waitFor = ECHO_WAIT_TICKS;
     }
 
-    // Walking with a glider the server lets you open. Mining stands aside because the server digs
-    // slowly for a player in the air.
+    // Mining stands aside because the server digs slowly for a player in the air.
     private boolean poseWanted() {
         LocalPlayer player = mc.player;
         return glidePose.isOn() && player.onGround() && !player.isPassenger() && !player.isInLiquid()
@@ -164,7 +158,6 @@ public final class Derp extends Module {
             && MovementUtil.wearsGlider() && !mc.gameMode.isDestroying();
     }
 
-    // The server kept you from gliding. Your packets tell the truth again until the next try.
     private void refused() {
         posing = false;
         waitFor = 0;
@@ -235,7 +228,6 @@ public final class Derp extends Module {
                 pitch = 0;
             }
             case SHAKE -> {
-                // Alternates either side of where the player really looks.
                 left = !left;
                 yaw = mc.player.getYRot() + (left ? step : -step);
                 pitch = mc.player.getXRot();
@@ -283,16 +275,13 @@ public final class Derp extends Module {
         twerkSneak.want(crouched);
     }
 
-    // Hands the server back to the sneak key.
     private void standUp() {
         twerkSneak.release();
         crouched = false;
     }
 
-    // Swings the main arm for everyone else. The punch carries no hand and the server never
-    // echoes the swing back. The view stays still. Every punch restarts the attack cooldown on the
-    // server and a fight that begins before it has filled begins late. The arm keeps still
-    // whilst one may begin.
+    // The punch carries no hand and the server never echoes the swing back. Every punch restarts
+    // the attack cooldown on the server and the arm keeps still whilst a fight may begin.
     private void flail() {
         if (flailTimer > 0 || pauseInCombat.isOn() && Modules.fightNear(FIGHT_RANGE)) {
             return;
@@ -301,13 +290,12 @@ public final class Derp extends Module {
         SwingMode.PACKET.hit();
     }
 
-    // Ticks from one punch to the next. The server starts a fresh swing only once the one before
-    // is past its half. A punch sooner than that shows nothing and still restarts the cooldown.
+    // The server starts a fresh swing only once the one before is past its half. A punch sooner
+    // than that shows nothing and still restarts the cooldown.
     private int flailGap() {
         return mc.player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation().duration() / 2 + 1;
     }
 
-    // True whilst a combat module has something to fight and for a second after.
     private boolean inFight() {
         fightMemory = Modules.fighting() ? FIGHT_MEMORY_TICKS : Math.max(0, fightMemory - 1);
         return fightMemory > 0;

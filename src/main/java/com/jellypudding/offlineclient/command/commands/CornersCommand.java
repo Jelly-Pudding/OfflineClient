@@ -19,9 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// Hands a module that works on a box both of its corners by typing. A corner out of sight or
-// out of reach cannot be clicked. The module is switched on afresh for the box and says the
-// rest itself.
 public final class CornersCommand extends Command {
 
     private static final int SIZE_WORDS = 3;
@@ -65,13 +62,11 @@ public final class CornersCommand extends Command {
         }
     }
 
-    // Null for a word that names no module taking corners.
     private static Module taker(String name) {
         return OfflineClient.INSTANCE.getModuleManager().get(name) instanceof CornerPicker.Taker taker
             ? (Module) taker : null;
     }
 
-    // The module to take a box typed without a name. Null unless exactly one of them is on.
     private static Module onlyOneOn() {
         Module only = null;
         for (CornerPicker.Taker taker : Modules.all(CornerPicker.Taker.class)) {
@@ -93,15 +88,12 @@ public final class CornersCommand extends Command {
         return names;
     }
 
-    // Two corners as typed. Null after telling the player what was wrong.
     private static BlockPos[] typed(LocalPlayer player, String[] numbers) {
         Vec3 first = coordinates(numbers, 0, player.position());
         Vec3 second = first == null ? null : coordinates(numbers, SIZE_WORDS, player.position());
         return second == null ? null : new BlockPos[] {BlockPos.containing(first), BlockPos.containing(second)};
     }
 
-    // A box that starts at the block in front of your feet. It runs its length the way you face
-    // with its width spread evenly to both sides. Null after telling the player what was wrong.
     private static BlockPos[] ahead(LocalPlayer player, String[] numbers) {
         int[] size = new int[SIZE_WORDS];
         for (int i = 0; i < SIZE_WORDS; i++) {
@@ -127,7 +119,6 @@ public final class CornersCommand extends Command {
             : new BlockPos[] {near.below(), far.above(height)};
     }
 
-    // False after telling the player the box is outside the world or too large.
     private static boolean fits(Level level, BlockPos[] corners) {
         for (BlockPos corner : corners) {
             if (level.isOutsideBuildHeight(corner)) {

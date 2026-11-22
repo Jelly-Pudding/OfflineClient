@@ -22,8 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-// How the picker offers and shows the entries of a registry. Every list setting that picks from
-// a registry reads them from here.
 final class RegistryEntries {
 
     // Entities with no egg and no item of their own name.
@@ -53,8 +51,8 @@ final class RegistryEntries {
 
     private static final Identifier AIR = Identifier.withDefaultNamespace("air");
 
-    // The families of entity the picker takes in one press. Boats and minecarts come in
-    // a kind for every wood and every load and go by the end of their id.
+    // Boats and minecarts come in a kind for every wood and every load and go by the end of their
+    // id.
     private enum Family {
         HOSTILE("hostile", "mob that hunts you", type -> EntityKind.of(type) == EntityKind.HOSTILE),
         NEUTRAL("neutral", "mob that only fights back", type -> EntityKind.of(type) == EntityKind.NEUTRAL),
@@ -77,7 +75,7 @@ final class RegistryEntries {
     private RegistryEntries() {
     }
 
-    // Every entry the test passes. Air stands for nothing and is never offered.
+    // Air stands for nothing and is never offered.
     static <T> List<T> offered(Registry<T> registry, Predicate<T> test) {
         List<T> all = new ArrayList<>();
         registry.stream().forEach(entry -> {
@@ -124,7 +122,6 @@ final class RegistryEntries {
         };
     }
 
-    // Empty when the entry has no item form.
     static ItemStack icon(Object entry) {
         return switch (entry) {
             case Block block -> new ItemStack(block);
@@ -134,8 +131,6 @@ final class RegistryEntries {
         };
     }
 
-    // The spawn egg where there is one and otherwise the item of the same name such as a boat.
-    // The rest fall back to an item or a barrier.
     private static ItemStack entityIcon(EntityType<?> type) {
         Optional<Holder<Item>> egg = SpawnEggItem.byId(type);
         if (egg.isPresent()) {

@@ -9,18 +9,13 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 
-// Keeps the player on the heels of an entity. Faces it and either goes straight
-// at it or lets the pathfinder pick the way round whatever is between. In the air
-// it always goes straight and climbs or sinks to the height of the target.
+// In the air the chase always goes straight and climbs or sinks to the height of the target.
 public final class Chase {
 
-    // A moving target needs a fresh path this often.
     private static final int RETARGET_TICKS = 10;
 
-    // The nudge that lifts a swimmer up towards a target above the water.
     private static final double SWIM_LIFT = 0.04;
 
-    // How far above or below the target a flyer may hang before the height keys go down.
     private static final double LEVEL_SLACK = 0.5;
 
     // The game takes two fresh presses of jump within seven ticks for the double tap that
@@ -33,21 +28,17 @@ public final class Chase {
     private final HeldKey sneak = new HeldKey(options -> options.keyShift);
     private int retarget;
 
-    // Ticks the jump key has been the chase's alone since it last pressed it.
     private int jumpQuiet;
 
-    // The player tick on which the chase last had the jump key to itself.
     private int ownedAt = -1;
 
-    // The switch of every module that goes after something.
     public static BoolSetting pathSwitch(boolean defaultValue) {
         return new BoolSetting("Use pathfinder",
             "Finds a way round what is in between instead of heading straight at the target. In the air"
                 + " you always go straight and keep to the height of the target.", defaultValue);
     }
 
-    // True whilst you fly by the game's own flight or by Flight. The pathfinder only knows
-    // the ground and has nothing to offer up there.
+    // The pathfinder only knows the ground and has nothing to offer in flight.
     public static boolean inFlight() {
         LocalPlayer player = OfflineClient.MC.player;
         return player != null && (player.getAbilities().flying || Modules.enabled(Flight.class));
@@ -95,9 +86,6 @@ public final class Chase {
         }
     }
 
-    // Climbs or sinks to the height of the target with the keys flight reads. Jump stays
-    // down whilst the target is well above and a fresh press waits for the window of the
-    // one before to shut.
     private void level(LocalPlayer player, double above) {
         ownJump(player);
         boolean holdsJump = jump.isHeld();

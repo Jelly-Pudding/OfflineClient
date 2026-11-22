@@ -15,12 +15,9 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Function;
 
-// A centred window with a search box over a list and tabs down the side. It follows the
-// ClickGUI scale like every other panel and goes back to the screen it was opened over.
 abstract class ListWindow extends ScaledScreen {
 
     protected static final int MARGIN = WindowParts.MARGIN;
-    // Room under the title bar and under the toolbar.
     private static final int GAP = 5;
 
     protected final Screen parent;
@@ -33,22 +30,18 @@ abstract class ListWindow extends ScaledScreen {
         this.parent = parent;
     }
 
-    // Opens a window over whatever screen is open. It waits a frame because a chat line that
-    // opened it would otherwise close it again.
+    // It waits a frame because a chat line that opened it would otherwise close it again.
     static void openOver(Function<Screen, ListWindow> window) {
         Minecraft mc = OfflineClient.MC;
         mc.schedule(() -> mc.gui.setScreen(window.apply(mc.gui.screen())));
     }
 
-    // The rows are worked out again before the next frame.
     protected abstract void changed();
 
     protected abstract void renderView(GuiGraphicsExtractor context, int mouseX, int mouseY);
 
-    // True when the window took the click.
     protected abstract boolean click(double mx, double my);
 
-    // Lets go of every scroll bar the window has.
     protected abstract void releaseLists();
 
     protected final int windowWidth() {
@@ -88,7 +81,6 @@ abstract class ListWindow extends ScaledScreen {
         return windowWidth() - WindowParts.SIDEBAR_WIDTH - MARGIN;
     }
 
-    // The window and the screen under it close once the walk starts.
     protected final void walkTo(BlockPos pos) {
         if (Travel.to(pos)) {
             closeAll();
@@ -103,7 +95,6 @@ abstract class ListWindow extends ScaledScreen {
         footer.say("Copied " + spot);
     }
 
-    // The search box always takes the keys.
     @Override
     public boolean isTyping() {
         return true;
@@ -157,7 +148,6 @@ abstract class ListWindow extends ScaledScreen {
         return search.charTyped((char) event.codepoint()) || super.charTyped(event);
     }
 
-    // The search here is always live and takes every character typed.
     @Override
     public void added() {
         super.added();
@@ -170,7 +160,6 @@ abstract class ListWindow extends ScaledScreen {
         super.removed();
     }
 
-    // Back to the screen it was opened over. Opened from chat that is the game.
     @Override
     public void onClose() {
         OfflineClient.MC.gui.setScreen(parent);

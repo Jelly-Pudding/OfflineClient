@@ -4,8 +4,6 @@ import net.minecraft.ChatFormatting;
 
 import java.util.function.ToIntFunction;
 
-// The codes a player types for colour and style such as an ampersand and a c for red and what
-// has to go to the server for it to keep them.
 public final class FormatCodes {
 
     public static final char TYPED = '&';
@@ -45,8 +43,7 @@ public final class FormatCodes {
         return out.toString();
     }
 
-    // The longest start of the line whose letters fit the width. Codes take no room and none is
-    // cut in half.
+    // Codes take no room and none is cut in half.
     public static String fit(String line, ToIntFunction<String> width, int maxWidth) {
         StringBuilder out = new StringBuilder(line.length());
         StringBuilder letters = new StringBuilder(line.length());
@@ -65,7 +62,6 @@ public final class FormatCodes {
         return out.toString();
     }
 
-    // True where an ampersand stands in front of a letter the game knows as a code.
     private static boolean isCode(String text, int index) {
         return text.charAt(index) == TYPED && index + 1 < text.length()
             && ChatFormatting.getByCode(text.charAt(index + 1)) != null;

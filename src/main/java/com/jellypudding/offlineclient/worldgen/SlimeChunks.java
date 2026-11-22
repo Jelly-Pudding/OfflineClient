@@ -8,7 +8,6 @@ public final class SlimeChunks {
 
     // Slime.checkSlimeSpawnRules mixes this into the seed.
     private static final long SALT = 987234911L;
-    // One chunk in this many is a slime chunk.
     private static final int ONE_IN = 10;
 
     private SlimeChunks() {

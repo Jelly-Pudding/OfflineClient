@@ -21,8 +21,6 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.StringJoiner;
 
-// Presses the game's own controls for the player. It says nothing when a press goes through
-// because its place is inside a macro. A hold takes its time the way a macro wait does.
 public final class InputCommand extends Command {
 
     private static final String SWAP = "swap";
@@ -115,7 +113,6 @@ public final class InputCommand extends Command {
         ChatUtil.message("§7Holding " + held + "§7.");
     }
 
-    // What the swap hands key sends.
     private static void swap(LocalPlayer player) {
         if (!player.isSpectator()) {
             player.connection.send(new ServerboundPlayerActionPacket(
@@ -123,7 +120,6 @@ public final class InputCommand extends Command {
         }
     }
 
-    // The hotbar slot a word from 1 to 9 names. Minus one for any other word.
     private static int slotOf(String word) {
         int slot = word.length() == 1 ? word.charAt(0) - '1' : -1;
         return slot >= 0 && slot < InventoryUtil.HOTBAR_SIZE ? slot : -1;

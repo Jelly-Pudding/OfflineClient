@@ -13,7 +13,6 @@ import org.joml.Matrix3x2fStack;
 
 import java.util.List;
 
-// The first page of a book drawn on the open book picture inside a tooltip.
 public final class BookPreview implements ClientTooltipComponent {
 
     private static final int SIZE = 128;
@@ -26,7 +25,6 @@ public final class BookPreview implements ClientTooltipComponent {
     private static final float TEXT_SCALE = 0.7f;
     private static final int INK = 0xFF000000;
 
-    // The lines that fit on the page picture.
     private static final int MAX_LINES = 18;
     // The narrowest letter with its gap is two pixels. No more text than this can show.
     private static final int MAX_CHARACTERS = MAX_LINES * TEXT_WIDTH / 2;
@@ -37,8 +35,7 @@ public final class BookPreview implements ClientTooltipComponent {
         this.page = page;
     }
 
-    // The start of a page up to what the picture can show with its styles kept. A server can
-    // send a page millions of letters long and the tooltip lays it out every frame.
+    // A server can send a page millions of letters long and the tooltip lays it out every frame.
     public static MutableComponent head(Component page) {
         return ChatUtil.head(page, MAX_CHARACTERS);
     }

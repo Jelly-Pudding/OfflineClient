@@ -19,13 +19,11 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 
-// The totems you carry and the ones each player has popped since they last died. The pops
-// are counted afresh in every new world.
+// The pops are counted afresh in every new world.
 public final class Totems {
 
     public static final Totems INSTANCE = new Totems();
 
-    // Pops held whilst the game thread is busy. Anything past this is dropped.
     private static final int MAX_PENDING = 4096;
 
     private static final int MAX_TRACKED = 512;
@@ -39,7 +37,6 @@ public final class Totems {
     private Totems() {
     }
 
-    // Every totem you carry. The one in your offhand counts.
     public static int carried() {
         if (OfflineClient.MC.player == null) {
             return 0;
@@ -47,8 +44,7 @@ public final class Totems {
         return InventoryUtil.countWithOffhand(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // Whether either hand holds something that saves the entity from death. The game looks for death
-    // protection in both hands and a totem is only the usual one.
+    // The game looks for death protection in both hands and a totem is only the usual one.
     public static boolean inHand(LivingEntity entity) {
         for (InteractionHand hand : InteractionHand.values()) {
             if (entity.getItemInHand(hand).has(DataComponents.DEATH_PROTECTION)) {
@@ -58,7 +54,6 @@ public final class Totems {
         return false;
     }
 
-    // Totems the player has popped since they last died.
     public int popped(Player player) {
         return pops.getOrDefault(player.getUUID(), 0);
     }
@@ -89,8 +84,8 @@ public final class Totems {
         }
     }
 
-    // Counts the pops the netty thread has passed on. Ids from the last world name nothing here.
-    // The pops of a player who is dying go into the death.
+    // Ids from the last world name nothing here. The pops of a player who is dying go into the
+    // death.
     private void catchUp(Player dying) {
         if (world.changed()) {
             waiting.clear();

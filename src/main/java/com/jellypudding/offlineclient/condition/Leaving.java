@@ -1,9 +1,8 @@
 package com.jellypudding.offlineclient.condition;
 
-// Leaving the server. It is the one thing that happens with no world left.
+// The one thing that happens with no world left.
 final class Leaving extends Condition {
 
-    // True once a tick has passed in a world since the last leave.
     private boolean inside;
 
     Leaving(Frame frame) {

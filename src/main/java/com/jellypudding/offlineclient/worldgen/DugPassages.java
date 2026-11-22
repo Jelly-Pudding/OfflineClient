@@ -26,22 +26,18 @@ public final class DugPassages {
 
     public enum Kind { CORRIDOR, SHAFT, STAIRS, DIAGONAL }
 
-    // A dug cell or the foot of a shaft with how tall its opening is.
     public record Find(int x, int y, int z, Kind kind, int height) {
     }
 
-    // What the scan looks for. It reads these once a chunk.
     public record Rules(int low, int high, int widest, boolean onlyAir, boolean naturalWalls, boolean corridors,
                         int minLength, int minHeight, int maxHeight, boolean shafts, int minDepth,
                         boolean waterShafts, boolean stairs, int stairSteps, int minHeadroom, int maxHeadroom,
                         boolean diagonals, int diagonalSteps, int shortestRun, int longestRun) {
     }
 
-    // The first and last cell across a tunnel.
     private record Span(int from, int to) {
     }
 
-    // How many of the blocks round a passage are natural ground.
     private static final class Walls {
 
         private int all;
@@ -61,7 +57,6 @@ public final class DugPassages {
 
     private static final Direction[] AROUND = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
     private static final Direction.Axis[] FLAT_AXES = {Direction.Axis.X, Direction.Axis.Z};
-    // A path is followed no further than this each way from where its trace began.
     private static final int LONGEST_PATH = 256;
     // A cell is walled by its neighbours and a short run carries on across a chunk border.
     public static final int CELL_BORDER = 2;
@@ -91,7 +86,6 @@ public final class DugPassages {
         this.to = Math.min(rules.high(), maxY - 2);
     }
 
-    // Every dug cell and shaft foot in the chunk the view centres on.
     public static void scan(ChunkScanner.View view, Rules rules, List<Find> out) {
         new DugPassages(view::get, view.pos(), view.minY(), view.maxY(), rules).collect(out);
     }
@@ -142,8 +136,7 @@ public final class DugPassages {
             || rules.waterShafts() && world.at(x, y, z).getFluidState().getType().isSame(Fluids.WATER);
     }
 
-    // The opening over a floor or nought when it has no floor or no ceiling or its height
-    // is out of range.
+    // Nought when it has no floor or no ceiling or its height is out of range.
     private int opening(int x, int y, int z, int least, int most) {
         if (!solid(x, y - 1, z)) {
             return 0;
@@ -155,7 +148,6 @@ public final class DugPassages {
         return h >= least && h <= most && solid(x, y + h, z) ? h : 0;
     }
 
-    // True when no cell beside an opening is open.
     private boolean walled(int x, int y, int z, int h) {
         for (int i = 0; i < h; i++) {
             if (open(x, y + i, z)) {
@@ -217,8 +209,6 @@ public final class DugPassages {
         }
     }
 
-    // The columns of this chunk that lie in a hole at one height. Each open patch is flooded
-    // once.
     private boolean[] holes(int y) {
         boolean[] holes = new boolean[COLUMNS];
         LongSet seen = new LongOpenHashSet();
@@ -243,8 +233,8 @@ public final class DugPassages {
         return holes;
     }
 
-    // The open patch round a cell at one height. Null when it spreads further from the chunk
-    // than a hole of Widest could. Every cell it reaches is seen.
+    // Null when the patch spreads further from the chunk than a hole of Widest could. Every cell it
+    // reaches is seen.
     private LongArrayList patch(int x, int y, int z, LongSet seen) {
         int reach = rules.widest() + 1;
         LongArrayList patch = new LongArrayList();
@@ -357,8 +347,7 @@ public final class DugPassages {
         return new Span(at - back, at + ahead);
     }
 
-    // How many open cells lie one way across from a tunnel cell before its wall. Minus one when
-    // something other than a wall ends it or it runs on past Widest.
+    // Minus one when something other than a wall ends it or it runs on past Widest.
     private int beside(int x, int y, int z, int h, int stepX, int stepZ) {
         int last = h;
         for (int k = 1; k <= rules.widest(); k++) {
@@ -373,7 +362,6 @@ public final class DugPassages {
         return -1;
     }
 
-    // A cell that starts or carries on a staircase in one of the four directions.
     private void staircase(int x, int y, int z) {
         for (Direction way : AROUND) {
             int h = step(x, y, z, way);
@@ -395,7 +383,6 @@ public final class DugPassages {
         }
     }
 
-    // The headroom of a step walled on both sides across the way it climbs or nought.
     private int step(int x, int y, int z, Direction way) {
         int h = opening(x, y, z, rules.minHeadroom(), rules.maxHeadroom());
         if (h == 0) {
@@ -428,7 +415,6 @@ public final class DugPassages {
         return ways.isEmpty() || ways.size() > 2 ? null : ways;
     }
 
-    // Follows the path through a turning cell both ways and marks the zigzags on it.
     private void diagonal(int x, int y, int z, LongSet traced) {
         List<Direction> ways = pathWays(x, y, z);
         if (ways == null || ways.size() < 2 || ways.get(0).getAxis() == ways.get(1).getAxis()
@@ -443,7 +429,6 @@ public final class DugPassages {
         zigzags(path);
     }
 
-    // The cells of the path one way from a cell until it ends or splits.
     private List<BlockPos> follow(int x, int y, int z, Direction first, LongSet traced) {
         List<BlockPos> cells = new ArrayList<>();
         Direction way = first;
@@ -525,7 +510,6 @@ public final class DugPassages {
         return last;
     }
 
-    // The way the path goes from one cell to the next.
     private static Direction move(List<BlockPos> path, int i) {
         BlockPos a = path.get(i);
         BlockPos b = path.get(i + 1);

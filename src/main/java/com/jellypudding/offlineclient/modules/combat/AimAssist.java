@@ -33,7 +33,6 @@ public final class AimAssist extends Module {
 
     public enum AimPoint { AUTO, HEAD, CENTRE, FEET }
 
-    // The weapons the held item list starts with.
     private static final List<Item> MELEE_WEAPONS = List.of(
         Items.WOODEN_SWORD, Items.STONE_SWORD, Items.COPPER_SWORD, Items.IRON_SWORD,
         Items.GOLDEN_SWORD, Items.DIAMOND_SWORD, Items.NETHERITE_SWORD,
@@ -82,7 +81,7 @@ public final class AimAssist extends Module {
 
     private Entity target;
 
-    // False whilst the aim sits the tick out. A locked target is kept through the pause.
+    // A locked target is kept through the pause.
     private boolean aiming;
 
     public AimAssist() {
@@ -105,7 +104,7 @@ public final class AimAssist extends Module {
         aiming = false;
     }
 
-    // Read by MouseHandlerMixin. One means your mouse moves the view as usual.
+    // Read by MouseHandlerMixin.
     public double mouseScale() {
         return isEnabled() && aiming && target != null ? 1 - ignoreMouse.getValue() / 100.0 : 1;
     }
@@ -124,8 +123,7 @@ public final class AimAssist extends Module {
         }
     }
 
-    // Called by CameraMixin once a frame just before the view is placed. The turn shows in
-    // the very frame it was made for and follows the target where it is drawn.
+    // Called by CameraMixin once a frame just before the view is placed.
     public void onFrame(DeltaTracker delta) {
         if (!aiming || target == null || !inGame() || mc.gui.screen() != null) {
             return;
@@ -135,7 +133,6 @@ public final class AimAssist extends Module {
         RotationManager.turnFrame(point, partialTicks, frameStep(delta));
     }
 
-    // Snap turns all the way. Otherwise the turn speed covers the time the frame took.
     private float frameStep(DeltaTracker delta) {
         if (snap.isOn()) {
             return RotationManager.NO_STEP;
@@ -143,7 +140,6 @@ public final class AimAssist extends Module {
         return (float) (speed.getValue() * delta.getRealtimeDeltaTicks() / SharedConstants.TICKS_PER_SECOND);
     }
 
-    // Every reason the aim sits a tick out.
     private boolean ready() {
         if (!inGame() || Hands.tied() || mc.gui.screen() != null) {
             return false;
@@ -154,7 +150,6 @@ public final class AimAssist extends Module {
         return !onlyHolding.isOn() || heldItems.contains(mc.player.getMainHandItem().getItem());
     }
 
-    // A locked target is followed outside the field of view.
     private boolean keeps(Entity locked) {
         return locked != null && !locked.isRemoved() && eligible(locked)
             && (keepThroughWalls.isOn() || inSight(locked));
@@ -177,7 +172,6 @@ public final class AimAssist extends Module {
         return best;
     }
 
-    // Inside the range and allowed by every filter.
     private boolean eligible(Entity entity) {
         return entity != mc.player && mc.player.distanceTo(entity) <= range.getValue()
             && targets.attackable(entity, filter);
@@ -197,7 +191,6 @@ public final class AimAssist extends Module {
         };
     }
 
-    // The eye position pulled onto the box on every axis at once.
     private static Vec3 nearestPoint(AABB box, Vec3 eyes) {
         return new Vec3(Mth.clamp(eyes.x, box.minX, box.maxX),
             Mth.clamp(eyes.y, box.minY, box.maxY),

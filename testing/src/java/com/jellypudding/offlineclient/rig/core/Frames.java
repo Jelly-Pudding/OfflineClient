@@ -20,7 +20,6 @@ import java.util.Locale;
 // its window has however small the real window is.
 public final class Frames {
 
-    // One picture and everything the interface drew in it.
     public record Frame(Path picture, List<Drawn> drawn, int screenWidth, int screenHeight) {
 
         public List<String> texts() {
@@ -39,7 +38,6 @@ public final class Frames {
 
     private static final String TEXT_LIST = ".txt";
     private static final String UNSAFE = "[^a-z0-9_.]+";
-    // Ticks a new size gets before anything is drawn at it.
     private static final int RESIZE_TICKS = 3;
 
     private final Rig rig;
@@ -63,7 +61,6 @@ public final class Frames {
         rig.ticks(RESIZE_TICKS);
     }
 
-    // Sets the GUI scale option the way the video settings screen does.
     public void guiScale(int scale) {
         rig.act(mc -> {
             mc.options.guiScale().set(scale);

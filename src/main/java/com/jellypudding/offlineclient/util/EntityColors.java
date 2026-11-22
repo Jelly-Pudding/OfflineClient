@@ -14,8 +14,6 @@ import net.minecraft.world.entity.player.Player;
 import java.util.ArrayList;
 import java.util.List;
 
-// How a render module colours an entity. One colour per kind of entity or a fade
-// with distance or with health or the same colour for everything.
 public final class EntityColors {
 
     public enum Mode { TYPE, DISTANCE, HEALTH, SINGLE }
@@ -42,7 +40,6 @@ public final class EntityColors {
     private static final Shade ITEM = new Shade(51, 0.75f, 1f);
     private static final Shade OTHER = new Shade(28, 0.87f, 1f);
 
-    // The single colour starts red unless a module picks another hue.
     private static final float RED_HUE = 0;
 
     private final EnumSetting<Mode> mode;
@@ -64,14 +61,12 @@ public final class EntityColors {
 
     // False for a module that never draws a player. The rows about players stay off its list.
     private boolean players = true;
-    // False for a module that never draws a dropped item. The item row stays off its list.
     private boolean items = true;
 
     public EntityColors(Mode defaultMode) {
         this(defaultMode, RED_HUE);
     }
 
-    // A module whose marks already have a colour of their own keeps it as the single colour.
     public EntityColors(Mode defaultMode, float singleHue) {
         mode = new EnumSetting<>("Colour mode", "How the colour is chosen.", defaultMode)
             .describe(Mode.TYPE, "Each kind of entity has its own colour.")
@@ -138,15 +133,13 @@ public final class EntityColors {
         return all.toArray(new Setting<?>[0]);
     }
 
-    // The one colour of friends in every render. ClickGUI holds it beside the other client
-    // wide colours and its default stands in before the client is built.
+    // ClickGUI holds the colour and its default stands in before the client is built.
     public static int friendColor() {
         ClickGuiModule gui = Modules.get(ClickGuiModule.class);
         return gui != null ? gui.friendColor()
             : ColorUtil.hsv(ClickGuiModule.FRIEND_HUE, ClickGuiModule.FRIEND_SATURATION, 1f);
     }
 
-    // The one colour of listed enemies in every render. It lives beside the friend colour.
     public static int enemyColor() {
         ClickGuiModule gui = Modules.get(ClickGuiModule.class);
         return gui != null ? gui.enemyColor()
@@ -190,8 +183,6 @@ public final class EntityColors {
         };
     }
 
-    // The near colour at the feet and the far colour at the far distance. Red and green
-    // blend round the colour wheel through yellow.
     private int distanceColor(Entity entity) {
         Player self = OfflineClient.MC.player;
         double away = self == null ? farDistance.getValue() : self.distanceTo(entity);
@@ -206,8 +197,6 @@ public final class EntityColors {
         return ColorUtil.redToGreen(EntityUtil.healthShare(living));
     }
 
-    // The colour of an entity's kind for a mark no colour rows govern such as a radar dot. Friends
-    // and listed enemies get their own colours and other players fade from red to green with distance.
     public static int kindColor(Entity entity) {
         return switch (EntityKind.of(entity)) {
             case PLAYER -> EntityUtil.isFriend(entity) ? friendColor()

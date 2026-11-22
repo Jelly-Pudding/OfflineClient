@@ -49,7 +49,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Uses the same launch speed and gravity and drag as the real projectile.
 public final class Trajectories extends Module {
 
     // Launches only a held item makes. ProjectilePath knows the rest.
@@ -61,14 +60,11 @@ public final class Trajectories extends Module {
     private static final int COLOR_ENTITY = 0xFFFF4040;
     // A multishot crossbow fires its side arrows this far off the middle one.
     private static final double MULTISHOT_ANGLE = 10;
-    // Half the width of the landing marker.
     private static final double MARKER_HALF = 0.25;
     // How thick the flat landing marker is. Its faces need a direction.
     private static final double MARKER_DEPTH = 0.005;
-    // Other players further off than this get no arc.
     private static final double OTHER_RANGE_SQ = 64 * 64;
 
-    // A projectile in the air and the rest of its flight as the last tick saw it.
     private record Fired(Projectile projectile, Path path) {
     }
 
@@ -193,7 +189,6 @@ public final class Trajectories extends Module {
         }
     }
 
-    // The flight starts where the projectile is drawn this frame.
     private void drawFired(DrawBatch batch, Fired shot, float partialTicks) {
         List<Vec3> points = shot.path().points();
         if (!points.isEmpty()) {
@@ -233,7 +228,6 @@ public final class Trajectories extends Module {
         }
     }
 
-    // A half block square lying flat on the face that was hit.
     private static AABB marker(BlockHitResult hit) {
         Vec3 at = hit.getLocation();
         Direction.Axis axis = hit.getDirection().getAxis();
@@ -243,7 +237,6 @@ public final class Trajectories extends Module {
         return new AABB(at.subtract(x, y, z), at.add(x, y, z));
     }
 
-    // Null if the item cannot be thrown or shot or is not on the list.
     private Launch launchFor(Player player, ItemStack stack) {
         if (stack.isEmpty() || !items.contains(stack.getItem())) {
             return null;
@@ -299,7 +292,6 @@ public final class Trajectories extends Module {
         return player.getProjectile(stack).is(Items.FIREWORK_ROCKET) ? FIREWORK : CROSSBOW_ARROW;
     }
 
-    // The position and speed the projectile starts with. The angle turns the aim left or right.
     private static Shot leaveHand(Player shooter, Launch launch, float partialTicks, double angle) {
         return ProjectilePath.leaveHand(shooter, launch, shooter.getPosition(partialTicks),
             shooter.getYRot(partialTicks) + angle, shooter.getXRot(partialTicks));

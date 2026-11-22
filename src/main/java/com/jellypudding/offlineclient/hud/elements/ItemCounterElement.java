@@ -27,13 +27,11 @@ import java.util.function.Predicate;
 
 public final class ItemCounterElement extends HudElement {
 
-    // What an item you carry none of shows.
     public enum Empty { HIDE, ZERO, GREY }
 
     private static final int SLOT = 16;
     private static final int GAP = 3;
 
-    // A dark wash over an item you carry none of and the colour of its nought without icons.
     private static final int GREYED = 0xA0000000;
     private static final int GREY_TEXT = 0xFF808080;
 
@@ -46,7 +44,6 @@ public final class ItemCounterElement extends HudElement {
     private final EnumSetting<HudLayout> layout;
     private final BoolSetting icons;
     private final EnumSetting<Empty> empty;
-    // Each gathering walks the whole inventory once for every counted item.
     private final RowCache<Counted> counts = new RowCache<>(this::build);
 
     public ItemCounterElement(int number) {
@@ -74,7 +71,6 @@ public final class ItemCounterElement extends HudElement {
         return isActive() && !tallies().isEmpty();
     }
 
-    // A full stack of each counted item stands in whilst the editor is open and nothing is counted.
     private List<Counted> tallies() {
         List<Counted> counted = counts.get();
         if (!counted.isEmpty() || !editing()) {
@@ -103,7 +99,6 @@ public final class ItemCounterElement extends HudElement {
         return found;
     }
 
-    // The bag and the other hand and whilst the worn items switch is on whatever you wear.
     private int count(Player player, Item item) {
         Predicate<ItemStack> counted = stack -> stack.is(item) && durableEnough(stack);
         int total = InventoryUtil.countWithOffhand(counted, InventoryUtil.WHOLE_INVENTORY);
@@ -128,12 +123,10 @@ public final class ItemCounterElement extends HudElement {
         return tally.count() == 0 && empty.is(Empty.GREY);
     }
 
-    // A greyed item says it all with its icon. Without icons its nought stays.
     private String labelOf(Counted tally) {
         return greyed(tally) && icons.isOn() ? "" : String.valueOf(tally.count());
     }
 
-    // Down the column the icon leads and across the row the number sits under it.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Counted> found = tallies();

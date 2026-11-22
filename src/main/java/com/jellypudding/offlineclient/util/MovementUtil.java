@@ -87,7 +87,6 @@ public final class MovementUtil {
     public static final double SPEED_PER_LEVEL = 0.2;
     public static final double SLOWNESS_PER_LEVEL = 0.15;
 
-    // A pace scaled by Speed and Slowness the way the walk speed attribute is.
     public static double withSpeedEffects(LocalPlayer player, double pace) {
         MobEffectInstance speed = player.getEffect(MobEffects.SPEED);
         if (speed != null) {
@@ -100,7 +99,6 @@ public final class MovementUtil {
         return pace;
     }
 
-    // True whilst any movement key is held.
     public static boolean hasInput() {
         LocalPlayer player = OfflineClient.MC.player;
         return player != null && hasInput(player);
@@ -128,14 +126,12 @@ public final class MovementUtil {
             && !player.isInWater() && !player.isInLava() && !player.onClimbable();
     }
 
-    // The way the movement keys point in world space.
-    // Vec3.ZERO whilst none of them is held.
+    // Vec3.ZERO whilst no movement key is held.
     public static Vec3 inputDirection() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? Vec3.ZERO : inputDirection(player.getYRot());
     }
 
-    // The same for a player turned to the given yaw.
     public static Vec3 inputDirection(float facing) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null || !hasInput(player)) {
@@ -149,14 +145,12 @@ public final class MovementUtil {
         return new Vec3(move.x * cos - move.y * sin, 0, move.y * cos + move.x * sin).normalize();
     }
 
-    // The space just ahead of the entity where a ledge it walks into would be.
     public static AABB ledgeProbe(Entity entity, Vec3 heading) {
         Vec3 ahead = heading.scale(LEDGE_REACH);
         return entity.getBoundingBox().move(ahead.x, FLOOR_GAP, ahead.z);
     }
 
-    // How far up the ledge ahead sits. Zero when there is none or the space on top
-    // is taken. A wall that carries on upward fails the room check.
+    // Zero when there is no ledge or the space on top is taken.
     public static double ledgeRise(Entity entity, Vec3 heading) {
         Level level = entity.level();
         double top = Double.NEGATIVE_INFINITY;

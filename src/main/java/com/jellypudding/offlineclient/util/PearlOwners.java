@@ -35,16 +35,13 @@ import java.util.function.Predicate;
 public enum PearlOwners {
     INSTANCE;
 
-    // The owner of a pearl with the name they last went by.
     public record Owner(UUID id, String name) {
     }
 
-    // A pearl the server added and the entity id of whoever threw it.
     private static final class Pearl {
 
         private final UUID uuid;
         private final int ownerId;
-        // True whilst the pearl rested in a stasis chamber at the last look.
         private boolean resting;
 
         private Pearl(UUID uuid, int ownerId) {
@@ -53,22 +50,19 @@ public enum PearlOwners {
         }
     }
 
-    // A pearl that came or went and the tick it was read.
     private record Sighting(Pearl pearl, int tick) {
     }
 
-    // Players new to the tab list and the newest entity id read before them.
     private record Listing(List<ClientboundPlayerInfoUpdatePacket.Entry> entries, int newestBefore) {
     }
 
-    // A player who joined the tab list. Their entity id is newer than every id read before.
+    // The entity id of a player who joined is newer than every id read before.
     private record Join(Owner player, int tick, int newestBefore) {
     }
 
     private record Leave(Owner player, int tick) {
     }
 
-    // Packets held whilst the game thread is busy. Anything past this is dropped.
     private static final int MAX_PENDING = 4096;
     private static final int MAX_PLAYERS = 1024;
     private static final int MAX_PEARLS = 1024;
@@ -86,7 +80,6 @@ public enum PearlOwners {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Packets and listings in the order they came.
     private final Queue<Object> waiting = new LinkedBlockingQueue<>(MAX_PENDING);
     // Entity ids hold for a whole visit. A respawn keeps the id.
     private final Map<Integer, UUID> players = new BoundedMap<>(MAX_PLAYERS);
@@ -101,21 +94,20 @@ public enum PearlOwners {
     private final List<Leave> leaves = new ArrayList<>();
     private final PearlLedger ledger = new PearlLedger();
     private final WorldWatch world = new WorldWatch();
-    // The newest entity id read on this connection. Only the network thread touches it.
+    // Only the network thread touches it.
     private int newestRead;
     private UUID self;
     private int tick;
     private int joinedAt;
 
-    // Who owns the pearl. Null when nobody can tell. Guesses and remembered owners only count
-    // whilst PearlTracker allows them.
+    // Null when nobody can tell. Guesses and remembered owners only count whilst PearlTracker
+    // allows them.
     public Owner ownerOf(ThrownEnderpearl pearl) {
         catchUp();
         Pearl seen = pearls.get(pearl.getId());
         return ownerOf(pearl.getUUID(), seen == null ? NO_OWNER : seen.ownerId);
     }
 
-    // The same as a name. Null when nobody can tell.
     public String nameOf(ThrownEnderpearl pearl) {
         Owner owner = ownerOf(pearl);
         return owner == null ? null : owner.name();
@@ -174,7 +166,6 @@ public enum PearlOwners {
         }
     }
 
-    // A fresh join to a server. Entity ids start again and nobody is known yet.
     private void joined(int ownId) {
         players.clear();
         names.clear();
@@ -294,7 +285,6 @@ public enum PearlOwners {
         return Math.abs(listed - sighting.tick()) <= WINDOW;
     }
 
-    // A pearl whose thrower this client has never seen.
     private boolean unexplained(Pearl pearl) {
         return pearl.ownerId != NO_OWNER && !players.containsKey(pearl.ownerId);
     }
@@ -304,8 +294,6 @@ public enum PearlOwners {
         return players.containsValue(player.id());
     }
 
-    // The owner id shared by every unexplained pearl that passes the test. A player has only the
-    // one. No owner when none passes or they differ.
     private int soleOwner(List<Sighting> sightings, Predicate<Sighting> test) {
         int owner = NO_OWNER;
         for (Sighting sighting : sightings) {
@@ -321,7 +309,6 @@ public enum PearlOwners {
         return owner;
     }
 
-    // The one that passes. Null when none does or more than one.
     private static <T> T only(List<T> listings, Predicate<T> test) {
         T found = null;
         for (T listing : listings) {
@@ -336,7 +323,6 @@ public enum PearlOwners {
         return found;
     }
 
-    // Finds the pearls resting in stasis and keeps their owners for the next visit.
     private void sweep() {
         boolean remembering = Modules.remembersPearlOwners();
         for (Map.Entry<Integer, Pearl> entry : pearls.entrySet()) {
@@ -378,8 +364,6 @@ public enum PearlOwners {
         return kept == null ? null : named(kept.id(), kept.name());
     }
 
-    // The name in the tab list whilst they are online and the last one seen otherwise. Null
-    // when no name was ever seen.
     private Owner named(UUID id, String lastName) {
         ClientPacketListener connection = MC.getConnection();
         PlayerInfo info = connection == null ? null : connection.getPlayerInfo(id);

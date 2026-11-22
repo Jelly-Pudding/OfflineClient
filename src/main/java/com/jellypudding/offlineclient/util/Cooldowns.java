@@ -34,7 +34,6 @@ public final class Cooldowns<K> {
         return until.containsKey(key);
     }
 
-    // Lets every key the test picks go before its time is up.
     public void releaseIf(Predicate<K> test) {
         until.keySet().removeIf(test);
     }

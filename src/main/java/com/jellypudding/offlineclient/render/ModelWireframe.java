@@ -33,7 +33,6 @@ public final class ModelWireframe {
         return feet.add(renderer.getRenderOffset(renderer.createRenderState(entity, delta)));
     }
 
-    // Four corners per quad in the entity's own space.
     public static List<Vec3[]> capture(Entity entity, float partialTicks) {
         float delta = OfflineClient.MC.level.tickRateManager().isFrozen() ? 1 : partialTicks;
         EntityRenderer<Entity, EntityRenderState> renderer = rendererOf(entity);
@@ -45,8 +44,7 @@ public final class ModelWireframe {
         return collector.quads;
     }
 
-    // Draws captured quads at an origin. The scale grows or shrinks them about the feet. The fill
-    // colour is drawn as given with no fill opacity worked in.
+    // The fill colour is drawn as given with no fill opacity worked in.
     public static void draw(DrawBatch batch, List<Vec3[]> quads, Vec3 origin, double scale,
                             BoxStyle.Shape shape, int line, int fill, boolean throughWalls) {
         Vec3[] corners = new Vec3[4];
@@ -63,7 +61,6 @@ public final class ModelWireframe {
         }
     }
 
-    // Captures and draws in one go for a module that redraws the model every frame.
     public static void draw(DrawBatch batch, Entity entity, float partialTicks, BoxStyle.Shape shape,
                             int line, int fill, boolean throughWalls) {
         draw(batch, capture(entity, partialTicks), origin(entity, partialTicks), 1, shape, line, fill,
@@ -76,7 +73,6 @@ public final class ModelWireframe {
             OfflineClient.MC.getEntityRenderDispatcher().getRenderer(entity);
     }
 
-    // Takes the model and geometry submissions and turns each into quads.
     private static final class Collector extends SubmitNodeStorage {
 
         private final List<Vec3[]> quads = new ArrayList<>();

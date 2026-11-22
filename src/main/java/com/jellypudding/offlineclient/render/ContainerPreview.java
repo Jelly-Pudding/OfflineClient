@@ -13,7 +13,6 @@ import net.minecraft.world.level.block.ShulkerBoxBlock;
 
 import java.util.List;
 
-// A grid of items drawn inside a tooltip.
 public final class ContainerPreview implements ClientTooltipComponent {
 
     private static final int SLOT = 18;
@@ -21,7 +20,6 @@ public final class ContainerPreview implements ClientTooltipComponent {
     private static final int BACKGROUND = 0xC0100010;
     private static final int ENDER_TINT = 0xC0003232;
     private static final int SHULKER_SLOTS = 27;
-    // How far a dyed box background sits from black towards its dye.
     private static final float TINT_SHADE = 0.45f;
     private static final int BORDER = 0x60FFFFFF;
 
@@ -37,7 +35,6 @@ public final class ContainerPreview implements ClientTooltipComponent {
         return items;
     }
 
-    // A shulker box previews on a dark shade of its own dye and an ender chest on dark teal.
     public static int tintOf(ItemStack stack) {
         if (stack.is(Items.ENDER_CHEST)) {
             return ENDER_TINT;
@@ -54,7 +51,6 @@ public final class ContainerPreview implements ClientTooltipComponent {
         this(items, columns, BACKGROUND);
     }
 
-    // A background of the box's own dye colour. A red shulker previews red.
     public ContainerPreview(List<ItemStack> items, int columns, int background) {
         this.items = items;
         this.columns = Math.max(1, Math.min(columns, items.size()));
@@ -62,7 +58,7 @@ public final class ContainerPreview implements ClientTooltipComponent {
         this.background = background;
     }
 
-    // Draws the grid at a point on any screen and returns the index under the mouse or minus one.
+    // Returns the index under the mouse or minus one.
     public int drawAt(GuiGraphicsExtractor context, Font font, int x, int y, int mouseX, int mouseY) {
         extractImage(font, x, y, 0, 0, context);
         int hovered = -1;

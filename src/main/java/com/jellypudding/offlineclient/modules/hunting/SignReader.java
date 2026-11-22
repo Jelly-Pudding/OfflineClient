@@ -46,16 +46,13 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-// Reads the text the server sends with every sign in loaded chunks. A 26.3 server flags every
-// sign it loads from a world saved before 26.3 as allowed to run operator commands and sends the
-// flag with the text. Only an operator can give a newer sign that flag. The igloo and taiga
-// village templates carry it too. Every sign with writing is a find that keeps the exact text it
-// showed first and the last few texts after it. A sign that goes or is wiped stays in the finds
-// and AutoSign can write its first text back.
+// A 26.3 server flags every sign it loads from a world saved before 26.3 as allowed to run operator
+// commands and sends the flag with the text. Only an operator can give a newer sign that flag. The
+// igloo and taiga village templates carry it too.
 public final class SignReader extends Module implements FindSource {
 
-    // What a sign said at one time. Four front lines then four back lines as the server sent
-    // them. All eight are empty for a sign that is gone or wiped.
+    // Four front lines then four back lines as the server sent them. All eight are empty for a sign
+    // that is gone or wiped.
     private record Text(List<String> lines) {
 
         private static Text of(SignBlockEntity sign) {
@@ -73,13 +70,11 @@ public final class SignReader extends Module implements FindSource {
             return lines.stream().allMatch(String::isBlank);
         }
 
-        // The four lines of one side.
         private List<String> side(SignTextSlot side) {
             int from = side == SignTextSlot.FRONT ? 0 : SignText.LINES;
             return lines.subList(from, from + SignText.LINES);
         }
 
-        // The written lines in one piece such as Home / Bob. Nothing written reads as blank.
         private String shown() {
             String text = lines.stream().map(line -> ChatFormatting.stripFormatting(line).strip())
                 .filter(line -> !line.isEmpty()).collect(Collectors.joining(LINE_BREAK));
@@ -87,8 +82,7 @@ public final class SignReader extends Module implements FindSource {
         }
     }
 
-    // Everything remembered of one sign. The newest text comes first and the first text seen
-    // stays last however many came between.
+    // The newest text comes first and the first text seen stays last however many came between.
     private record Memory(List<Text> texts) {
 
         private static Memory of(FindLog.Find find) {
@@ -118,7 +112,6 @@ public final class SignReader extends Module implements FindSource {
             return texts.getFirst();
         }
 
-        // The first text seen with writing on it. Null when none had any.
         private Text original() {
             for (int i = texts.size() - 1; i >= 0; i--) {
                 if (!texts.get(i).blank()) {
@@ -128,15 +121,12 @@ public final class SignReader extends Module implements FindSource {
             return null;
         }
 
-        // The same memory with the newest text read again exactly.
         private Memory withNewest(Text text) {
             List<Text> next = new ArrayList<>(texts);
             next.set(0, text);
             return new Memory(next);
         }
 
-        // The memory once the sign reads the text. The texts between the first and the newest
-        // drop out oldest first.
         private Memory after(Text text) {
             List<Text> next = new ArrayList<>(texts);
             next.addFirst(text);
@@ -152,28 +142,24 @@ public final class SignReader extends Module implements FindSource {
             return content;
         }
 
-        // The newest text and then the ones before it.
         private String detail() {
             return texts.stream().map(Text::shown).collect(Collectors.joining(EARLIER));
         }
     }
 
-    // A sign in a loaded chunk. The lines before the front count are its front and the rest its
-    // back. First is what it said when first seen or null whilst it still says that.
+    // The lines before the front count are its front and the rest its back. First is what it said
+    // when first seen or null whilst it still says that.
     private record Sign(BlockPos pos, AABB box, List<String> lines, int front, boolean old, String first) {
     }
 
-    // A remembered sign whose block is gone and what it said first.
     private record Ghost(BlockPos pos, String first) {
     }
 
     private static final List<SignTextSlot> SIDES = List.of(SignTextSlot.FRONT, SignTextSlot.BACK);
     private static final int TEXT_LINES = SignText.LINES * 2;
 
-    // Twice a second is quick enough for a sign that was just written.
     private static final int SCAN_TICKS = 10;
 
-    // The background of a label reaches this far past its line of text.
     private static final int LINE_GAP = 2;
 
     private static final int TEXT = 0xFFFFFFFF;
@@ -183,14 +169,12 @@ public final class SignReader extends Module implements FindSource {
     private static final String OLD_SIGN = "old sign";
     private static final String BLANK_WORDS = "blank";
 
-    // The lines of a sign read as one text with this between them.
     private static final String LINE_BREAK = " / ";
     private static final Pattern LINE_MARK = Pattern.compile(LINE_BREAK, Pattern.LITERAL);
     // Each earlier text follows the newer ones behind this mark. The character never stays in a text.
     private static final char EARLIER_CHAR = '«';
     private static final String EARLIER = " " + EARLIER_CHAR + " ";
     private static final Pattern EARLIER_MARK = Pattern.compile(EARLIER, Pattern.LITERAL);
-    // How many texts a sign keeps besides the first one it showed.
     private static final int KEPT_TEXTS = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -225,11 +209,10 @@ public final class SignReader extends Module implements FindSource {
     private final FindLog finds = new FindLog(this);
 
     private final WorldWatch world = new WorldWatch();
-    // Rebuilt by every scan.
     private List<Sign> signs = List.of();
     private List<Ghost> ghosts = List.of();
-    // Known signs the last scan found missing or blank. Paper sends the signs of a crowded chunk
-    // just after the chunk. Only a sign missing from two scans running is gone.
+    // Paper sends the signs of a crowded chunk just after the chunk. Only a sign missing from two
+    // scans running is gone.
     private Set<BlockPos> missing = Set.of();
     private int wait;
 
@@ -253,7 +236,6 @@ public final class SignReader extends Module implements FindSource {
         return count(finds.count());
     }
 
-    // The four lines of one side of the sign remembered at a spot as it read when first seen.
     // AutoSign writes them back. Null when no sign with writing is remembered there.
     public List<String> remembered(BlockPos pos, SignTextSlot side) {
         FindLog.Find find = finds.at(pos);
@@ -314,9 +296,7 @@ public final class SignReader extends Module implements FindSource {
         followMissing(scanned, standing);
     }
 
-    // A new sign the skip words leave out is neither drawn nor put in the finds. One already
-    // remembered is followed whatever it reads. A blank sign is only drawn when it once had
-    // writing or blank signs are not skipped.
+    // A sign already remembered is followed whatever it reads.
     private void read(SignBlockEntity sign, List<String> words, Map<BlockPos, Boolean> standing, List<Sign> out) {
         BlockPos pos = sign.getBlockPos();
         Text now = Text.of(sign);
@@ -340,8 +320,6 @@ public final class SignReader extends Module implements FindSource {
         out.add(new Sign(pos, BlockUtil.outlineBox(pos, sign.getBlockState()), lines, front, old, said));
     }
 
-    // Puts a written sign in the finds. A sign whose text changed keeps the texts it showed
-    // before. Gives what is remembered of it now.
     private Memory remember(BlockPos pos, Text now, boolean old, FindLog.Find known) {
         String kind = old ? OLD_SIGN : SIGN;
         if (known == null) {
@@ -372,8 +350,6 @@ public final class SignReader extends Module implements FindSource {
         return next;
     }
 
-    // A known sign that is missing from a scanned chunk or left blank stays in the finds with a
-    // blank text on top. The gone ones are drawn as ghosts.
     private void followMissing(Set<Long> scanned, Map<BlockPos, Boolean> standing) {
         Set<BlockPos> missingNow = new HashSet<>();
         List<Ghost> gone = new ArrayList<>();
@@ -410,7 +386,6 @@ public final class SignReader extends Module implements FindSource {
         Notice.post(messages, this, Component.literal(text));
     }
 
-    // A text for chat with the breaks between its lines greyed.
     private static String shown(String text) {
         return text.replace(LINE_BREAK, " §7/ §f");
     }
@@ -419,8 +394,7 @@ public final class SignReader extends Module implements FindSource {
         return mc.player.distanceToSqr(spot) <= reach * reach;
     }
 
-    // The colour a sign is tinted in or null for the colours of the box. Changed signs take their
-    // own colour over the colour of old ones.
+    // Null for the colours of the box.
     private Integer tint(Sign sign) {
         if (sign.first() != null && changedSigns.isOn()) {
             return changedColor.getColor();

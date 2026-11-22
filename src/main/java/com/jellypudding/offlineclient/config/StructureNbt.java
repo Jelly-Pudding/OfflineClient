@@ -5,9 +5,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
-// A structure as the game itself saves one from a structure block. It is gzipped NBT with a
-// palette of block states and a list of blocks. Each block names its place and a palette index.
-// A cell the list leaves out is left alone. A file with several palettes is read with its first.
+// Gzipped NBT with a palette of block states and a list of blocks. A cell the list leaves out is
+// left alone. A file with several palettes is read with its first.
 final class StructureNbt {
 
     static final String EXTENSION = ".nbt";

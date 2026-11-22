@@ -12,17 +12,15 @@ import net.minecraft.util.Util;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-// Asks a server what it reports about itself the way the server list does. The ask goes over a
-// connection of its own and the answer comes back on the game thread.
+// The ask goes over a connection of its own and the answer comes back on the game thread.
 public final class StatusPing {
 
-    // A server that has not answered in this time is taken as one that will not.
     private static final int WAIT_TICKS = 10 * SharedConstants.TICKS_PER_SECOND;
 
     private StatusPing() {
     }
 
-    // Hands the server's own report to the callback. Null when it did not answer.
+    // The callback gets null when the server did not answer.
     public static void ask(String address, Consumer<ServerData> answer) {
         ServerData asked = new ServerData("", address, ServerData.Type.OTHER);
         ServerStatusPinger pinger = new ServerStatusPinger();
@@ -40,7 +38,6 @@ public final class StatusPing {
         });
     }
 
-    // Keeps the connection of the ping going until the answer comes or the wait is over.
     private static final class Wait {
 
         private final ServerStatusPinger pinger;

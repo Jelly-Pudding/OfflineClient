@@ -20,8 +20,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Runs round the target whilst you fight. The pace is a plain sprint which the movement
-// check never questions.
+// The pace is a plain sprint which the movement check never questions.
 public final class Confuse extends Module {
 
     public enum Mode { CIRCLE, RANDOM }
@@ -29,14 +28,11 @@ public final class Confuse extends Module {
     // How hard a wrong distance pulls you back onto the circle. One closes the gap in a tick.
     private static final double RADIUS_PULL = 0.5;
 
-    // Random picks a new way round after somewhere between these many ticks.
     private static final int MIN_FLIP_TICKS = 5;
     private static final int MAX_FLIP_TICKS = 25;
 
-    // Random strays up to this far either side of the chosen distance.
     private static final double RADIUS_WOBBLE = 1;
 
-    // How many ticks of travel ahead a wall or a drop turns you back.
     private static final double LOOK_AHEAD_TICKS = 2;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -56,7 +52,6 @@ public final class Confuse extends Module {
     private final BoolSetting jump = new BoolSetting("Jump",
         "Hops the whole way round to be harder still to hit.", false);
 
-    // One runs to your left as you face the target and minus one to your right.
     private int way = 1;
     private double wobble;
     private int flipTimer;
@@ -93,7 +88,6 @@ public final class Confuse extends Module {
         run(target);
     }
 
-    // Swimming and climbing and flying and sneaking are left alone.
     private static boolean free(LocalPlayer player) {
         return MovementUtil.inPlainAir(player) && !player.isShiftKeyDown();
     }
@@ -137,7 +131,6 @@ public final class Confuse extends Module {
         WholeMove.set(heading.x * pace, heading.z * pace);
     }
 
-    // Along the circle with a pull back towards the chosen distance.
     private Vec3 heading(LivingEntity target, int side) {
         Vec3 away = mc.player.position().subtract(target.position()).multiply(1, 0, 1);
         double distance = away.length();
@@ -148,8 +141,6 @@ public final class Confuse extends Module {
         return round.add(out.scale((wanted - distance) * RADIUS_PULL)).normalize();
     }
 
-    // A wall too tall to step up or a drop deeper than allowed. The drop only counts
-    // from the ground.
     private boolean blocked(Vec3 heading, double pace) {
         Vec3 ahead = heading.scale(pace * LOOK_AHEAD_TICKS);
         AABB box = mc.player.getBoundingBox().move(ahead.x, 0, ahead.z);

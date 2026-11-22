@@ -21,7 +21,6 @@ import java.util.Locale;
 // ground in blocks a second and jumps are the height a full charge reaches.
 public final class Mounts {
 
-    // What a figure measures.
     public enum Measure { HEALTH, SPEED, JUMP, STRENGTH }
 
     // One figure with where it sits from the worst wild horse at nought to the best at one.
@@ -52,7 +51,6 @@ public final class Mounts {
     private static final double NAUTILUS_SHARE = 0.0325;
     private static final double NAUTILUS_DRAG = 0.9;
 
-    // A jump still climbing after this many ticks is left there.
     private static final int MAX_RISE_TICKS = 200;
 
     // The worst and the best a wild horse spawns with. Breeding never goes past them.
@@ -131,7 +129,6 @@ public final class Mounts {
         return rise(lift, gravity, drag);
     }
 
-    // Where a figure sits from the worst wild horse at nought to the best at one.
     private static float speedShare(double blocksPerSecond) {
         return share(blocksPerSecond, SLOWEST, FASTEST);
     }
@@ -152,7 +149,6 @@ public final class Mounts {
         return (float) Math.clamp((value - worst) / (best - worst), 0, 1);
     }
 
-    // The push a mount gets on ordinary ground under its own friction and drag modifiers.
     private static double overGround(LivingEntity mount, double input, double speed) {
         double friction = modified(MovementUtil.GROUND_FRICTION, mount.getAttributeValue(Attributes.FRICTION_MODIFIER));
         double drag = modified(LivingEntity.BASE_HORIZONTAL_AIR_DRAG,

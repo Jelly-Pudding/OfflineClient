@@ -25,8 +25,6 @@ public final class TrailMaker extends AreaPlacer {
 
     private static final int TARGET_COLOR = 0xFF70E0A0;
 
-    // Spots still waiting to be filled. The oldest drop off past this. Spots out of range
-    // go long before.
     private static final int MAX_SPOTS = 1024;
 
     private final EnumSetting<Shape> shape = new EnumSetting<>("Shape",
@@ -54,7 +52,6 @@ public final class TrailMaker extends AreaPlacer {
     private BlockPos last;
     private boolean stoodOnLast;
 
-    // Steps taken since the last part went down.
     private int gap;
 
     public TrailMaker() {
@@ -104,7 +101,6 @@ public final class TrailMaker extends AreaPlacer {
         }
     }
 
-    // The block the feet just left joins the trail with the rest of its part.
     private void track() {
         BlockPos feet = mc.player.blockPosition();
         if (feet.equals(last)) {
@@ -139,7 +135,6 @@ public final class TrailMaker extends AreaPlacer {
         }
     }
 
-    // The blocks of one part of the trail on the level of the spot.
     private List<BlockPos> footprint(BlockPos spot, Direction heading) {
         return switch (shape.getValue()) {
             case ROW -> row(spot, heading.getClockWise());
@@ -147,7 +142,6 @@ public final class TrailMaker extends AreaPlacer {
         };
     }
 
-    // The spot in the middle of a row that runs across the way you walk.
     private List<BlockPos> row(BlockPos spot, Direction right) {
         int blocks = width.getInt();
         List<BlockPos> row = new ArrayList<>(blocks);
@@ -157,7 +151,6 @@ public final class TrailMaker extends AreaPlacer {
         return row;
     }
 
-    // Every block on the level whose middle lies within the radius of the spot's middle.
     private List<BlockPos> patch(BlockPos spot) {
         double reach = radius.getValue();
         int span = (int) Math.floor(reach);

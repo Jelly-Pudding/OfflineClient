@@ -5,8 +5,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import net.minecraft.world.phys.Vec3;
 
-// Being within a radius of typed coordinates. Two numbers are a column and any height counts.
-// Three numbers pin the height as well.
+// Two numbers are a column and any height counts. Three numbers pin the height as well.
 final class Spot extends Condition {
 
     private static final int COLUMN = 2;

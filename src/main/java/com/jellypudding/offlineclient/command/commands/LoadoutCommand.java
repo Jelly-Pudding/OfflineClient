@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.Tally;
 import java.util.List;
 import java.util.Map;
 
-// The layouts Loadouts puts back. A key only works whilst Loadouts is on.
 public final class LoadoutCommand extends KeyedCommand<Loadout> {
 
     public LoadoutCommand() {

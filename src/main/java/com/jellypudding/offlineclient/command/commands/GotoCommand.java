@@ -13,8 +13,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalDouble;
 
-// Walks to a spot with the pathfinder. The walk carries on until it arrives or
-// until goto stop is typed. Places joined by then make a route of several stops.
 public final class GotoCommand extends PlaceCommand {
 
     private static final String STOP = "stop";
@@ -61,7 +59,6 @@ public final class GotoCommand extends PlaceCommand {
         Travel.along(stops, wait, loop);
     }
 
-    // A word on its own is the name of a place whatever it says.
     private static boolean takeLast(List<String> words, String word) {
         boolean there = words.size() > 1 && words.getLast().equalsIgnoreCase(word);
         if (there) {
@@ -70,8 +67,6 @@ public final class GotoCommand extends PlaceCommand {
         return there;
     }
 
-    // The ticks to wait at each stop. Nought when none was asked for and minus one after
-    // telling the player the number was wrong.
     private static int takeWait(List<String> words) {
         int at = words.size() - 2;
         if (at < 0 || !words.get(at).equalsIgnoreCase(WAIT)) {
@@ -88,7 +83,6 @@ public final class GotoCommand extends PlaceCommand {
         return (int) Math.min(Integer.MAX_VALUE, Math.round(seconds.getAsDouble() * SharedConstants.TICKS_PER_SECOND));
     }
 
-    // Null after telling the player which place was wrong.
     private List<Travel.Stop> stops(List<String> words, LocalPlayer player) {
         List<Travel.Stop> stops = new ArrayList<>();
         List<String> place = new ArrayList<>();

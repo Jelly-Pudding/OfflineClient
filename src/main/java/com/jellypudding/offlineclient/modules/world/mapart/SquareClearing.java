@@ -29,20 +29,14 @@ import java.util.function.Predicate;
 // Clears the picture off the map square once its map is stored.
 public final class SquareClearing {
 
-    // How the reset of a carpet map goes.
     private enum Reset { PRESS, WASH, RELEASE, DRAIN }
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks between looks over the whole square whilst it is cleared.
     private static final int CHECK_TICKS = 10;
-    // Ticks a lever gets to show it moved on top of the round trip.
     private static final int SWITCH_TICKS = 20;
-    // The longest the square may go without one more cell washed or drained once the reset is pressed.
     private static final int WASH_TICKS = 1200;
-    // Presses of a reset that washed too little before the printer gives up on it.
     private static final int PRESSES = 3;
-    // Ticks with nothing more mined before the printer gives up on mining the square away.
     private static final int MINE_STALL_TICKS = 2400;
 
     private final Printer printer;
@@ -52,19 +46,15 @@ public final class SquareClearing {
     private final InventoryUtil.SlotSwap tools;
 
     private Reset reset = Reset.PRESS;
-    // The cells last seen the way the clearing waits for.
     private final BitSet clearedCells = new BitSet();
     private int mostCleared;
     private int waitTicks;
-    // The nearest cell out of view not yet seen passing. Null whilst every such cell is in view.
     private BlockPos unseen;
-    // The tick a look over the square last found nothing to mine. Minus one before.
     private int nothingToMineAt = -1;
     // Whether the reset is a lever. Read whenever it is in view and kept for when it is not.
     private boolean leverReset;
     private int presses;
     private int leverTries;
-    // The tick the last press of the reset went out. Minus one whilst none is waited on.
     private int pressedAt = -1;
     // Why the printer stops once the lever is off again. Null to carry on.
     private String afterRelease;
@@ -78,7 +68,6 @@ public final class SquareClearing {
         this.tools = tools;
     }
 
-    // Every file starts its clearing afresh.
     public void reset() {
         reset = Reset.PRESS;
         clearedCells.clear();
@@ -105,14 +94,12 @@ public final class SquareClearing {
         }
     }
 
-    // True whilst a lever keeps the water of a wash running over the square.
     public boolean holdsWater() {
         Station station = printer.station();
         return station.stage() == Stage.CLEAR && station.block(Role.RESET) != null && reset == Reset.WASH
             && leverReset;
     }
 
-    // Switches the lever off and then stops the printer with the reason.
     public void stopAfterRelease(String reason) {
         afterRelease = reason;
         beginWait(Reset.RELEASE);
@@ -167,8 +154,6 @@ public final class SquareClearing {
         }
     }
 
-    // A lever on already has nothing to press. Otherwise the wash is waited for once the press
-    // went out and a lever shows it moved. A press cut short is made again.
     private void pressReset(BlockPos pos, BlockState there, boolean lever) {
         if (lever && powered(there)) {
             leverTries = 0;
@@ -212,7 +197,6 @@ public final class SquareClearing {
         waitTicks = 0;
     }
 
-    // Switches the lever off. The drain is waited for once it shows it moved.
     private void releaseLever(BlockPos pos, BlockState there) {
         if (!powered(there)) {
             leverTries = 0;
@@ -254,13 +238,12 @@ public final class SquareClearing {
         return state.isAir() || state.getBlock() instanceof LiquidBlock;
     }
 
-    // The cell is empty air.
     private static boolean dry(BlockPos pos) {
         return BlockUtil.state(pos).isAir();
     }
 
-    // Marks which cells the picture covers pass the test. A cell out of view keeps its mark. More
-    // cells passing than ever before sets the wait back. True when no cell in view fails.
+    // A cell out of view keeps its mark. More cells passing than ever before sets the wait back.
+    // True when no cell in view fails.
     private boolean checkCells(Predicate<BlockPos> done) {
         boolean inView = true;
         for (int cell : printer.covered()) {
@@ -284,7 +267,6 @@ public final class SquareClearing {
         return clearedCells.cardinality() == printer.covered().length;
     }
 
-    // Looks over the square every few ticks. True once every cell passes.
     private boolean waitedFor(Predicate<BlockPos> done) {
         if (printer.ticks() % CHECK_TICKS == 0) {
             checkCells(done);
@@ -297,15 +279,13 @@ public final class SquareClearing {
         return false;
     }
 
-    // Walks on towards the part out of view and counts the tick. True once the square has gone
-    // too long without one more cell washed or drained. A walk that stopped the printer counts
-    // nothing.
+    // True once the square has gone too long without one more cell washed or drained. A walk that
+    // stopped the printer counts nothing.
     private boolean stalled() {
         return walkToUnseen() != Printer.Walk.STOPPED && ++waitTicks > WASH_TICKS;
     }
 
-    // Walks towards the part out of view not yet seen passing. A short view never sees the whole
-    // square at once. With every such part in view the player stands.
+    // A short view never sees the whole square at once.
     private Printer.Walk walkToUnseen() {
         if (unseen == null) {
             printer.arrived();
@@ -314,16 +294,12 @@ public final class SquareClearing {
         return printer.goTo(unseen);
     }
 
-    // The nearest cell out of view not yet seen passing. Null when every such cell is in view.
     private BlockPos nearestUnseen() {
         int nearest = printer.nearestCell(IntArrayList.wrap(printer.covered()),
             (cell, pos) -> !clearedCells.get(cell) && BlockUtil.state(pos).is(Blocks.VOID_AIR));
         return nearest == -1 ? null : printer.cellPos(nearest);
     }
 
-    // Mines the square one block at a time and picks up what falls. A full inventory empties
-    // into the chests that hold each block and the rest into the dump. Whatever lies out of view
-    // is walked to once nothing in view is left to mine.
     private void mineAway() {
         boolean full = MC.player.getInventory().getFreeSlot() == -1;
         if (full && stock.putAway(item -> true, true)) {
@@ -361,14 +337,11 @@ public final class SquareClearing {
         }
     }
 
-    // A block standing in a cell of the square the picture covers that can be mined.
     private boolean toMine(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         return !state.isAir() && state.getFluidState().isEmpty() && BlockUtil.diggable(pos);
     }
 
-    // The first such block in walk order that the miner has not left alone for a while. Null for
-    // none. A look that found none is not made again for a few ticks.
     private BlockPos nextToMine() {
         if (nothingToMineAt >= 0 && printer.ticks() - nothingToMineAt < CHECK_TICKS) {
             return null;

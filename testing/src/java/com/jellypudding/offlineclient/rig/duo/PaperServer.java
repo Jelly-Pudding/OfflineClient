@@ -56,8 +56,6 @@ public final class PaperServer {
     private static final String WORLD_DEFAULTS = "config/paper-world-defaults.yml";
     private static final Pattern ANTI_XRAY = Pattern.compile("(anti-xray:\\s*\\n\\s*enabled: )(true|false)");
 
-    // True when a plugin whose jar begins with the name lies among the plugins of the borrowed
-    // server or in the rig's own folder of plugins.
     public static boolean has(String plugin) {
         return !jars(plugin).isEmpty();
     }
@@ -126,7 +124,6 @@ public final class PaperServer {
         return HOST + ":" + PORT;
     }
 
-    // Copies what the server needs and starts it and waits until players can join.
     public static PaperServer start(Rig rig, Setup setup) {
         Path source = RigConfig.server();
         Path home = rig.results().out().getParent().resolveSibling(HOME);
@@ -361,13 +358,12 @@ public final class PaperServer {
         return "Its last lines were " + all.subList(Math.max(0, all.size() - 12), all.size());
     }
 
-    // Types a line at the server's console and hands back what the server wrote in answer.
-    public List<String> console(String line) {
+    // A case changes the server through its world. The world knows what the client has yet to hear.
+    List<String> console(String line) {
         return console(List.of(line));
     }
 
-    // The same for several lines the server runs within one tick.
-    public List<String> console(List<String> typed) {
+    List<String> console(List<String> typed) {
         int from = lines.size();
         String mark = WORD + "mark " + ++marks;
         try {
@@ -418,7 +414,6 @@ public final class PaperServer {
         return null;
     }
 
-    // Every such line since a place in the log.
     public List<String> allHeard(String head, int from) {
         String wanted = WORD + head + " ";
         List<String> found = new ArrayList<>();
@@ -431,17 +426,14 @@ public final class PaperServer {
         return found;
     }
 
-    // Where the log stands now. A case hands it to since later.
     public int logMark() {
         return lines.size();
     }
 
-    // What the probe says about a player this tick.
     public Map<String, String> player(String name) {
         return pairs(probe("player " + name, ""));
     }
 
-    // What the player did since the tallies were last reset.
     public Map<String, Double> tally(String name) {
         Map<String, Double> counted = new LinkedHashMap<>();
         pairs(probe("tally " + name, "")).forEach((key, value) -> counted.put(key, Double.parseDouble(value)));
@@ -457,7 +449,6 @@ public final class PaperServer {
         probe("reset", "");
     }
 
-    // The id of the block the server holds there with its namespace in front.
     public String block(int x, int y, int z) {
         return probe("block", x + " " + y + " " + z);
     }

@@ -9,13 +9,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-// Rows that pair a kind of thing with how many of it there are.
 public final class CountRows {
 
     public record Counted(String name, int count) {
     }
 
-    // The most there are first and the same count from A to Z.
     private static final Comparator<Counted> ORDER = Comparator.comparingInt(Counted::count).reversed()
         .thenComparing(Counted::name, String.CASE_INSENSITIVE_ORDER);
 
@@ -29,7 +27,6 @@ public final class CountRows {
         return counted;
     }
 
-    // The kind in the colour of the setting and its count in white. A rainbow runs down the rows.
     public static List<TextRow> rows(Font font, List<Counted> counted, ColorSetting color) {
         List<TextRow> rows = new ArrayList<>(counted.size());
         for (int row = 0; row < counted.size(); row++) {

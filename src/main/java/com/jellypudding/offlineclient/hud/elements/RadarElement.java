@@ -10,15 +10,11 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 
-// The map of nearby entities. It is on whilst the Radar module is. The module picks what shows
-// and this decides where it sits and how big it is.
 public final class RadarElement extends HudElement {
 
-    // The square before any stretch.
     private static final int SIZE = 100;
     private static final int GRID = 0x40FFFFFF;
     private static final int SELF = 0xFFFFFFFF;
-    // How far the cross through the middle stops short of the edges.
     private static final int INSET = 2;
 
     public RadarElement() {
@@ -31,8 +27,6 @@ public final class RadarElement extends HudElement {
         return isActive() && OfflineClient.MC.player != null && OfflineClient.MC.level != null;
     }
 
-    // Laid out in GUI pixels. A stretch gives the map more room and leaves the dots and names
-    // their size.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         Radar radar = Modules.active(Radar.class);

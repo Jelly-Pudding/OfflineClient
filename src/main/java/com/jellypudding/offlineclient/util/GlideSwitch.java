@@ -37,7 +37,6 @@ public final class GlideSwitch {
     private static final int SLOWEST = SharedConstants.TICKS_PER_SECOND;
     private static final int SLACK_TICKS = 2;
 
-    // How long a glide the server would not open is left alone.
     private static final int REFUSED_TICKS = SharedConstants.TICKS_PER_SECOND;
 
     private enum Wait {
@@ -57,7 +56,6 @@ public final class GlideSwitch {
         // The turn count as the first command left and the turns owed since.
         private int base;
         private int owed;
-        // The tick the first command left on and the tick the last one did.
         private int begun;
         private int last;
         private boolean timed;
@@ -74,7 +72,6 @@ public final class GlideSwitch {
             last = ticks;
         }
 
-        // The turns that have come back.
         private int seen() {
             return turns.get() - base;
         }
@@ -87,7 +84,6 @@ public final class GlideSwitch {
             return owed == 1;
         }
 
-        // Ticks since the last command left.
         private int waited() {
             return ticks - last;
         }
@@ -134,7 +130,6 @@ public final class GlideSwitch {
         return instance;
     }
 
-    // What the server last showed about the glide.
     public boolean serverGlides() {
         return serverGlides;
     }
@@ -192,7 +187,6 @@ public final class GlideSwitch {
         }
     }
 
-    // One more turn of the server's glide is on its way.
     private void turnOver() {
         if (!waiting()) {
             wait = Wait.WATCHING;
@@ -282,7 +276,6 @@ public final class GlideSwitch {
         }
     }
 
-    // A join or a respawn leaves nothing owed and the pause after a refusal runs down.
     private void startAfresh() {
         if (fresh) {
             fresh = false;

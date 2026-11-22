@@ -66,10 +66,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// Builds a painted pattern or a saved template or text where you aim and prints build files put
-// down in the world. One press of the use key starts a pattern or a template or text and the next
-// stops it. A file stays where a press or the build command put it and is printed whenever you
-// are near whilst the module is on. The placing itself is the work of SiteWorker.
+// A file stays where a press or the build command put it and is printed whenever you are near
+// whilst the module is on. The placing itself is the work of SiteWorker.
 public final class AutoBuild extends Module {
 
     public enum Source { PATTERN, TEMPLATE, TEXT, FILE }
@@ -78,9 +76,7 @@ public final class AutoBuild extends Module {
 
     private static final String PATTERN_NAME = "the pattern";
 
-    // Ticks with nothing placed before the player is told what the build is stuck on.
     private static final int STALL_TICKS = 100;
-    // Ticks before the same trouble is told again.
     private static final int TOLD_TICKS = 600;
 
     private final EnumSetting<Source> source = new EnumSetting<>("Source", "What gets built.", Source.PATTERN)
@@ -176,11 +172,9 @@ public final class AutoBuild extends Module {
             + " marked red.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.LINES, 120).under(show);
 
-    // Where a press would put a shape right now.
     private record Aim(String name, Blueprint blueprint, BuildFrame frame) {
     }
 
-    // A build being worked on or the one a press would start.
     private static final class Job {
 
         private final String name;
@@ -188,9 +182,7 @@ public final class AutoBuild extends Module {
         private final BuildGhost ghost = new BuildGhost();
         // Null for a build a press started.
         private final Placement placement;
-        // Whether nothing was left to do at the last full look that could tell.
         private boolean whole;
-        // How many blocks had landed when the player was last told it stands.
         private int toldLanded;
 
         private Job(String name, BuildSite site, Placement placement) {
@@ -210,19 +202,14 @@ public final class AutoBuild extends Module {
     private final Cooldowns<String> told = new Cooldowns<>();
 
     private Blueprint loaded;
-    // The loaded template with every block name taken off.
     private Blueprint loadedPlain;
-    // A template that failed to load and why when it could be read but not held. It is read
-    // again only for a new pick or a switch on or a use press.
+    // A failed template is read again only for a new pick or a switch on or a use press.
     private String unreadable;
     private String templateTrouble;
 
-    // The pattern as a shape and the cells and the lie it was boxed for.
     private Blueprint painted;
     private List<GridSetting.Cell> paintedFor;
     private boolean paintedFlat;
-    // The text as upright cells with the words and height they were written for and the shape
-    // boxed from them with the lie it was boxed for. The trouble says why it could not be boxed.
     private List<BuildTemplate.Entry> letters = List.of();
     private String lettersFor;
     private Blueprint written;
@@ -230,17 +217,12 @@ public final class AutoBuild extends Module {
     private boolean writtenFlat;
     private String writtenTrouble;
 
-    // The build a press started. Null whilst none runs.
     private Job quick;
-    // What a press would build right now. Drawn whilst idle.
     private Job preview;
-    // The files put down in this world as saved and the jobs of the shown ones by name.
     private List<Placement> saved = List.of();
     private int savedSeen = -1;
     private final Map<String, Job> placed = new LinkedHashMap<>();
-    // Files of this world whose trouble has been told.
     private final Set<String> troubleTold = new HashSet<>();
-    // The picks and placements the player was last told are all down.
     private String allDownTold;
     private int stalled;
     // True whilst the module switches itself on for a file. The words of a switch on by hand
@@ -353,7 +335,6 @@ public final class AutoBuild extends Module {
         };
     }
 
-    // Why there is nothing to build. Null once there is.
     private String missingShape() {
         return switch (source.getValue()) {
             case TEMPLATE -> loadChosen() ? null
@@ -376,8 +357,6 @@ public final class AutoBuild extends Module {
         return waiting == null ? null : BuildFiles.problem(waiting);
     }
 
-    // The first picked file that has no placement in this world. A press puts it down. Null once
-    // every picked file is down. More copies go down through the build command.
     private String fileToPlace() {
         for (String name : file.chosen()) {
             if (saved().stream().noneMatch(placement -> placement.file().equals(name))) {
@@ -387,8 +366,8 @@ public final class AutoBuild extends Module {
         return null;
     }
 
-    // The files put down in this world. Read again only after the list changed or the world did.
-    // A job whose placement moved or turned or went is dropped with the stale list.
+    // Read again only after the list changed or the world did. A job whose placement moved or
+    // turned or went is dropped with the stale list.
     private List<Placement> saved() {
         BuildPlacements store = BuildPlacements.get();
         if (store.version() != savedSeen) {
@@ -399,7 +378,6 @@ public final class AutoBuild extends Module {
         return saved;
     }
 
-    // Boxed again only once the painted cells or the lie change.
     private Blueprint paintedShape(boolean flat) {
         List<GridSetting.Cell> cells = pattern.cellsOn();
         if (!cells.equals(paintedFor) || flat != paintedFlat) {
@@ -415,7 +393,6 @@ public final class AutoBuild extends Module {
         return painted;
     }
 
-    // Written again only once the words or the height change. Empty for text with nothing to draw.
     private List<BuildTemplate.Entry> letters() {
         String wanted = letterHeight.getInt() + " " + text.getValue();
         if (!wanted.equals(lettersFor)) {
@@ -426,7 +403,6 @@ public final class AutoBuild extends Module {
         return letters;
     }
 
-    // Boxed again only once the letters or the lie change. Null for text too big to be one build.
     private Blueprint writtenShape(boolean flat) {
         List<BuildTemplate.Entry> cells = letters();
         if (!writtenBoxed || flat != writtenFlat) {
@@ -439,7 +415,6 @@ public final class AutoBuild extends Module {
         return written;
     }
 
-    // Loose cells as a build or else why they cannot be one.
     private record Boxed(Blueprint blueprint, String trouble) {
     }
 
@@ -460,7 +435,6 @@ public final class AutoBuild extends Module {
         return flat;
     }
 
-    // A fresh pick in the list swaps the template between builds.
     private boolean loadChosen() {
         Iterator<String> picked = template.chosen().iterator();
         if (!picked.hasNext()) {
@@ -482,7 +456,6 @@ public final class AutoBuild extends Module {
         return loaded != null;
     }
 
-    // The loaded template as it is built. With the saved blocks off every cell takes any block.
     private Blueprint templateShape() {
         if (savedBlocks.isOn()) {
             return loaded;
@@ -510,7 +483,7 @@ public final class AutoBuild extends Module {
     // Runs after Freecam and anything else that holds clicks back and before AirPlace.
     @Subscribe(priority = -5)
     private void onRightClick(RightClickEvent event) {
-        if (!inGame()) {
+        if (!inGame() || event.byModule()) {
             return;
         }
         boolean fresh = !useHeld;
@@ -563,8 +536,6 @@ public final class AutoBuild extends Module {
         mc.rightClickDelay = InputUtil.USE_DELAY;
     }
 
-    // Said once for each set of picks and placements. A press with nothing left to put down
-    // would otherwise do nothing without a word.
     private void tellAllDown() {
         String state = file.chosen() + " " + savedSeen;
         if (!state.equals(allDownTold)) {
@@ -574,9 +545,8 @@ public final class AutoBuild extends Module {
         }
     }
 
-    // Puts a file that has been read down in this world and says what went down. The build
-    // command comes through here as well. The module switches itself on for it. A file down in
-    // the world with nothing to draw or build it would be no use.
+    // The build command comes through here as well. The module switches itself on for the file
+    // because one down in the world with nothing to draw or build it would be no use.
     public void putDown(String fileName, BuildFiles.Loaded loaded, BuildFrame frame) {
         Blueprint blueprint = loaded.blueprint();
         Set<String> leftOut = loaded.leftOut();
@@ -597,15 +567,12 @@ public final class AutoBuild extends Module {
         }
     }
 
-    // The corners a build covers such as from 10 64 10 to 20 70 30.
     public static String reach(BuildFrame frame, Blueprint blueprint) {
         BoundingBox box = frame.box(blueprint);
         return "§7from §f" + box.minX() + " " + box.minY() + " " + box.minZ() + " §7to §f" + box.maxX() + " "
             + box.maxY() + " " + box.maxZ();
     }
 
-    // Where a press would put the chosen shape now. Null outside the world and for a file that
-    // is not read yet.
     private Aim aim() {
         BlockHitResult look = BlockUtil.look(Math.max(distance.getValue(), mc.player.blockInteractionRange()));
         boolean onBlock = look.getType() == HitResult.Type.BLOCK;
@@ -706,8 +673,6 @@ public final class AutoBuild extends Module {
         }
     }
 
-    // One tick of work unless something else needs the hand. A print runs for as long as the
-    // module is on and a meal or a fight in that time has to get its turn.
     private void work(List<BuildSite> sites, BuildSite.Rules rules) {
         if (handTaken()) {
             worker.standAside();
@@ -721,18 +686,14 @@ public final class AutoBuild extends Module {
         lightPortal(sites, rules);
     }
 
-    // True whilst a module eats or drinks or throws and whilst a combat module has something to
-    // fight. The same goes whilst the player uses what the main hand holds and whilst
-    // ShulkerPacker keeps count of every stack. A slot picked for a block would end the meal and
-    // restart the swing.
+    // A slot picked for a block would end a meal and restart a swing.
     private boolean handTaken() {
         return Hands.slotsTaken() || Modules.fighting()
             || mc.player.isUsingItem() && mc.player.getUsedItemHand() == InteractionHand.MAIN_HAND;
     }
 
-    // A new world or a death ends the build a press started. Both hand out a fresh inventory and
-    // a stack borrowed in the last one is nothing to give back. The files of the world left
-    // behind go and the ones of this world are read in on the next tick.
+    // A new world or a death hands out a fresh inventory and a stack borrowed in the last one is
+    // nothing to give back.
     private void leaveWork() {
         if (quick != null) {
             tell("stopped.");
@@ -745,8 +706,6 @@ public final class AutoBuild extends Module {
         troubleTold.clear();
     }
 
-    // True for a build with a block inside the chunks the client holds. One far off holds nothing
-    // to count or to work on.
     private boolean loadedNear(BuildSite site) {
         int view = (Modules.renderDistance() + 1) * SectionPos.SECTION_SIZE;
         BlockPos feet = mc.player.blockPosition();
@@ -761,7 +720,6 @@ public final class AutoBuild extends Module {
         return jobs;
     }
 
-    // The same aim keeps its ghost. A new one is looked over at once.
     private Job previewOf(Aim aim, BuildSite.Rules rules) {
         if (aim == null) {
             return null;
@@ -776,8 +734,6 @@ public final class AutoBuild extends Module {
         return fresh;
     }
 
-    // Keeps a job for every file put down in this world that is shown. A placement that moved
-    // or turned gets a fresh one. A file that cannot be read is told about once.
     private void syncPlaced() {
         for (Placement placement : saved()) {
             if (placement.hidden() || placed.containsKey(placement.name())) {
@@ -806,8 +762,6 @@ public final class AutoBuild extends Module {
         return listMode.getValue().admits(blocks.contains(block));
     }
 
-    // Says what holds the build up. A block the player lacks is told at once. Anything else
-    // only once nothing has gone down for a while.
     private void tell(boolean busy) {
         SiteWorker.HoldUp holdUp = worker.holdUp();
         if (busy || holdUp == null) {
@@ -820,7 +774,6 @@ public final class AutoBuild extends Module {
         tellOnce(words(holdUp));
     }
 
-    // The same trouble is not told again for a while.
     private void tellOnce(String words) {
         if (!told.contains(words)) {
             told.put(words, TOLD_TICKS);
@@ -848,7 +801,6 @@ public final class AutoBuild extends Module {
         };
     }
 
-    // A mistake the worker left standing is told once with the reason.
     private void tellLeft(SiteWorker.Left left) {
         if (left == null) {
             return;
@@ -861,8 +813,6 @@ public final class AutoBuild extends Module {
         });
     }
 
-    // A frame of obsidian the build has standing gets a fire in the bottom of it. The look for
-    // one runs every tick and the last block of a frame is still fresh when it is lit.
     private void lightPortal(List<BuildSite> sites, BuildSite.Rules rules) {
         if (lightPortals.isOn() && lighter.light(sites, rules, range.getValue(), !faceTarget.is(FaceMode.OFF))
             == PortalLighter.Outcome.NO_LIGHTER) {
@@ -875,8 +825,7 @@ public final class AutoBuild extends Module {
     }
 
     // A file put down in the world is news once it stands and blocks went down since it was last
-    // said to. A walk past it or a login beside it is not. The build a press started ends here
-    // and with Keep building on it gets fresh attempts for the next round.
+    // said to. A walk past it or a login beside it is not.
     private void finish() {
         for (Job job : placed.values()) {
             BuildSite.Census census = job.site.census();
@@ -922,8 +871,6 @@ public final class AutoBuild extends Module {
         }
     }
 
-    // The cells near the camera and the outline of the whole build. The outline shows how far a
-    // build reaches past the cells that are drawn. A file with nothing left to do needs neither.
     private void draw(DrawBatch batch, Job job) {
         job.ghost.draw(batch, style);
         if (!job.whole) {

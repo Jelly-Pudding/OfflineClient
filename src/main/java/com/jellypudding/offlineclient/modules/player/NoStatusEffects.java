@@ -21,8 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Drops the incoming effect packets for the effects you pick. A blocked effect keeps running
-// on the server copy of you whilst your client acts as though it were gone.
 public final class NoStatusEffects extends Module {
 
     private final BoolSetting blockAll = new BoolSetting("Block all",
@@ -44,7 +42,6 @@ public final class NoStatusEffects extends Module {
     // Read on the network thread and written on the main thread.
     private volatile int localId = -1;
 
-    // True whilst the tracked particle list is held empty.
     private boolean particlesHidden;
 
     public NoStatusEffects() {

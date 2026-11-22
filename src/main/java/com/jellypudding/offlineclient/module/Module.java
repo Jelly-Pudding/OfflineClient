@@ -27,9 +27,8 @@ public abstract class Module {
     private String[] tags = new String[0];
     private boolean enabled;
 
-    // Whether the Module list on the HUD writes the module. A module that ships switched on
-    // starts out of it. One that cannot be switched on is never written there and keeps the
-    // switch to itself.
+    // A module that ships switched on starts out of the list. One that cannot be switched on is
+    // never written there.
     private final class ListSwitch extends BoolSetting {
 
         private ListSwitch() {
@@ -84,35 +83,30 @@ public abstract class Module {
         this.tags = tags;
     }
 
-    // For the constructor of a module that is only wanted whilst its key is down. The key
-    // starts as a held one and the player can still make it a switch.
+    // The key starts as a held one and the player can still make it a switch.
     protected final void holdByDefault() {
         keybind.holdByDefault();
     }
 
-    // Higher scores match the query better. The name outranks a tag and a tag outranks the
-    // description. Only the strongest tag counts. The names of the module's own settings are
-    // searched as well and a half remembered setting still finds its module.
+    // The name outranks a tag and a tag outranks the description. Only the strongest tag counts.
     public int searchScore(String query) {
         List<String> settingNames = offered(getSettings()).stream().map(Setting::getName).toList();
         return SearchRank.best(query, name, SearchRank.strongest(query, List.of(tags)), description,
             SearchRank.strongest(query, settingNames));
     }
 
-    // The settings the module adds. A module whose rows come and go lists them here.
     public List<Setting<?>> getSettings() {
         return settingsView;
     }
 
-    // Every setting of the module. Its own come first and the switch for the Module list closes
-    // them. Whatever saves or shows or resets settings reads these.
+    // Whatever saves or shows or resets settings reads these.
     public final List<Setting<?>> allSettings() {
         List<Setting<?>> all = new ArrayList<>(getSettings());
         all.add(listed);
         return all;
     }
 
-    // The settings the player can list and type. The config still saves the internal ones.
+    // The config still saves the internal ones.
     public List<Setting<?>> playerSettings() {
         return offered(allSettings());
     }
@@ -121,7 +115,6 @@ public abstract class Module {
         return settings.stream().filter(setting -> !setting.isInternal()).toList();
     }
 
-    // The one setting of its own a player can type. Null for a module with none or with several.
     public Setting<?> onlySetting() {
         List<Setting<?>> own = offered(getSettings());
         return own.size() == 1 ? own.getFirst() : null;
@@ -131,7 +124,7 @@ public abstract class Module {
         return playerSettings().stream().map(Setting::id).toList();
     }
 
-    // Spaces and case are ignored. An internal setting is never found.
+    // An internal setting is never found.
     public Setting<?> getSetting(String settingName) {
         String wanted = Setting.idFor(settingName);
         for (Setting<?> setting : allSettings()) {
@@ -156,14 +149,12 @@ public abstract class Module {
         }
     }
 
-    // Switches the module for a held key. Nothing is written for it. The config holds a module
-    // that is only on whilst its key is down as off.
+    // Nothing is written for a held key. The config holds such a module as off.
     final void setHeld(boolean down) {
         switchTo(down);
     }
 
-    // True when the switch changed. Every way of switching a module on ends here and a locked
-    // module stays off whichever it was.
+    // Every way of switching a module on ends here and a locked module stays off.
     private boolean switchTo(boolean enabled) {
         if (this.enabled == enabled || enabled && Modules.lockRefuses(this)) {
             return false;
@@ -181,19 +172,15 @@ public abstract class Module {
         return true;
     }
 
-    // Null when the module clashes with nothing.
     public ExclusivityGroup getExclusivityGroup() {
         return null;
     }
 
-    // True when the two cannot run at once. Modules of one group clash unless one of them says
-    // otherwise.
     public boolean clashesWith(Module other) {
         ExclusivityGroup group = getExclusivityGroup();
         return group != null && group == other.getExclusivityGroup();
     }
 
-    // Every module switched off here is named in chat by the same rules as a key press.
     private void disableGroup() {
         ModuleManager manager = OfflineClient.INSTANCE.getModuleManager();
         if (manager == null) {
@@ -211,18 +198,15 @@ public abstract class Module {
         toggle();
     }
 
-    // False for a module whose key does something other than switch it on and off. Such a key
-    // cannot be a held one.
+    // False for a module whose key does something other than switch it on and off.
     public boolean keySwitches() {
         return isTogglable();
     }
 
-    // True for a key that keeps the module on only whilst it is down.
     public final boolean holdsKey() {
         return keySwitches() && keybind.isHold();
     }
 
-    // Joins a target name and a status word for the module list.
     protected static String suffix(String target, String status) {
         if (target == null) {
             return status;
@@ -234,13 +218,12 @@ public abstract class Module {
         return true;
     }
 
-    // True for modules that ship switched on when there is no saved state. Asked whilst the
-    // module is still being built and the answer never leans on a field of the module.
+    // Asked whilst the module is still being built and the answer never leans on a field of the
+    // module.
     public boolean enabledByDefault() {
         return false;
     }
 
-    // True whilst the Module list on the HUD writes the module when it is on.
     public final boolean isListed() {
         return listed.isOn();
     }
@@ -256,17 +239,14 @@ public abstract class Module {
     protected void onDisable() {
     }
 
-    // Extra info shown next to the name in the HUD list.
     public String getSuffix() {
         return null;
     }
 
-    // A suffix for how many things a module is tracking. Null whilst none.
     protected static String count(int n) {
         return n == 0 ? null : String.valueOf(n);
     }
 
-    // The same with a word after the number such as "3 fed".
     protected static String count(int n, String what) {
         return n == 0 ? null : n + " " + what;
     }
@@ -276,13 +256,11 @@ public abstract class Module {
         return suffix == null ? name : name + " §7[" + suffix + "]";
     }
 
-    // Tells the player why in chat and switches the module off.
     protected void disable(String reason) {
         ChatUtil.error(reason);
         setEnabled(false);
     }
 
-    // Tells the player something in chat under the module's name.
     protected final void tell(String words) {
         ChatUtil.tell(getName(), words);
     }

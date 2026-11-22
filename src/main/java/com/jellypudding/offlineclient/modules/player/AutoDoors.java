@@ -33,21 +33,14 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-// Opens doors and fence gates and trapdoors that stand in the way you are walking and
-// shuts them again once you are through. Only what the module opened is shut. An iron door
-// or trapdoor is worked through the button or lever that powers it.
 public final class AutoDoors extends Module {
 
-    // How far past your body the way ahead reaches.
     private static final double LOOK_AHEAD = 1;
 
-    // Ticks a door is left alone after each click. Nothing flaps open and shut.
     private static final int CLICK_COOLDOWN = 10;
 
-    // Your body grown by this much has to be clear of a door before it shuts.
     private static final double CLEARANCE = 0.5;
 
-    // A button or lever this many blocks from an iron door can still power it.
     private static final int SWITCH_REACH = 2;
 
     private final BoolSetting doors = new BoolSetting("Doors",
@@ -107,15 +100,12 @@ public final class AutoDoors extends Module {
         }
     }
 
-    // The space your body sweeps through over the next step. Whatever is low enough to
-    // step onto is left out.
     private AABB path(Vec3 heading) {
         AABB box = mc.player.getBoundingBox();
         AABB body = new AABB(box.minX, box.minY + mc.player.maxUpStep(), box.minZ, box.maxX, box.maxY, box.maxZ);
         return body.expandTowards(heading.x * LOOK_AHEAD, 0, heading.z * LOOK_AHEAD);
     }
 
-    // Clicks the first block in the way that would clear it by opening or shutting.
     private boolean openAhead(AABB path, Vec3 heading) {
         AABB middle = middleOf(path, heading);
         for (BlockPos pos : BlockPos.betweenClosed(path)) {
@@ -139,9 +129,7 @@ public final class AutoDoors extends Module {
         return false;
     }
 
-    // Puts one block back the way it was once you are clear of it. A block someone else
-    // moved or one left out of reach is forgotten. One whose click is still held may not show
-    // the server's answer yet and is kept.
+    // A block whose click is still held may not show the server's answer yet and is kept.
     private void shutBehind(AABB path) {
         AABB body = mc.player.getBoundingBox().inflate(CLEARANCE);
         Iterator<Map.Entry<BlockPos, Boolean>> entries = moved.entrySet().iterator();
@@ -214,9 +202,7 @@ public final class AutoDoors extends Module {
         return !(block instanceof TrapDoorBlock trapdoor) || trapdoor.getType().canOpenByHand();
     }
 
-    // The block to click to move the door or gate or trapdoor at the key. That is the block itself
-    // or for an iron one the nearest button or lever in reach that powers it. Only a lever
-    // shuts one again. Null when there is nothing to click.
+    // Only a lever shuts an iron door again. Null when there is nothing to click.
     private BlockPos clickFor(BlockPos key, BlockState state, boolean shutting) {
         if (opensByHand(state)) {
             return key;

@@ -8,15 +8,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// The module list TabGUI steers with the arrow keys. It is on whilst the TabGUI module is. The
-// module keeps the keys and the colours and this decides where the list sits and how big it is.
 public final class TabGuiElement extends HudElement {
 
     private static final int ROW = 11;
-    // The room round the rows inside the box.
     private static final int PAD = 3;
     private static final int MIN_WIDTH = 60;
-    // The faint bar behind the row you are on.
     private static final int CURSOR = 0x30FFFFFF;
 
     public TabGuiElement() {
@@ -29,7 +25,6 @@ public final class TabGuiElement extends HudElement {
         return !rows().isEmpty();
     }
 
-    // Empty whilst the module is off.
     private static List<TabGui.Row> rows() {
         TabGui tabGui = Modules.active(TabGui.class);
         return tabGui == null ? List.of() : tabGui.rows();

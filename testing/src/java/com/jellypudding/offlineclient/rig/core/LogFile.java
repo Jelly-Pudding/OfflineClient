@@ -14,7 +14,6 @@ import java.util.regex.Pattern;
 // both read the log through this.
 public final class LogFile {
 
-    // One logged event with the lines of its stack trace.
     public record Entry(String time, String thread, String level, String logger, String text) {
 
         public boolean isError() {
@@ -30,7 +29,6 @@ public final class LogFile {
             return end < 0 ? text : text.substring(0, end);
         }
 
-        // The first line and the cause when the entry carries a stack trace.
         public String brief() {
             String first = firstLine();
             int end = text.indexOf('\n');
@@ -54,7 +52,6 @@ public final class LogFile {
         this.path = path;
     }
 
-    // Every entry written since the last call.
     public List<Entry> readNew() {
         if (!Files.isRegularFile(path)) {
             return List.of();
@@ -77,7 +74,6 @@ public final class LogFile {
         }
     }
 
-    // Forgets what is in the log up to this moment.
     public void skipToEnd() {
         readNew();
     }

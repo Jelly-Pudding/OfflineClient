@@ -24,7 +24,6 @@ public final class TabChanges {
     public record Change(String name, boolean joined) {
     }
 
-    // One player the packets have named and whether the tab list shows them.
     private record Known(String name, boolean listed) {
     }
 
@@ -53,7 +52,7 @@ public final class TabChanges {
         }
     }
 
-    // Who a packet says has joined or left. Empty for any other packet. Called on the netty thread.
+    // Called on the netty thread.
     public List<Change> read(Packet<?> packet) {
         return switch (packet) {
             case ClientboundLoginPacket _ -> {

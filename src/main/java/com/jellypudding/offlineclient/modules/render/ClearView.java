@@ -101,7 +101,6 @@ public final class ClearView extends Module {
         return fire.isOn();
     }
 
-    // How far the flames are pushed down when they are kept.
     public double fireOffset() {
         return fire.isOn() ? 0 : lowerFire.getValue();
     }

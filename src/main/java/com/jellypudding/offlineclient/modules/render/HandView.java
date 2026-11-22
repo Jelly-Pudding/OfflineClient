@@ -74,7 +74,6 @@ public final class HandView extends Module {
         followServer(pose);
     }
 
-    // Turns the hand by the gap between the camera and the angle the server holds.
     private void followServer(PoseStack pose) {
         if (!serverRotations.isOn() || mc.player == null) {
             return;
@@ -83,7 +82,6 @@ public final class HandView extends Module {
         pose.rotate(Axis.YP.rotationDegrees(mc.player.getYRot() - RotationManager.serverYaw()));
     }
 
-    // How far through its swing the hand is drawn. Zero is the resting pose.
     public float adjustSwing(float progress, ItemStack mainItem, ItemStack offItem) {
         if (!isEnabled() || mc.player == null) {
             return progress;
@@ -112,7 +110,6 @@ public final class HandView extends Module {
         return isEnabled() && noEating.isOn();
     }
 
-    // The hand a hit swings. Only your own hits are changed.
     public InteractionHand swingHand(InteractionHand asked) {
         if (!isEnabled() || swingHand.is(SwingHand.NORMAL)) {
             return asked;
@@ -120,7 +117,6 @@ public final class HandView extends Module {
         return swingHand.is(SwingHand.OFF_HAND) ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
     }
 
-    // Ticks one swing lasts in first person.
     public int swingDuration(int vanilla) {
         if (!isEnabled() || !mc.options.getCameraType().isFirstPerson()) {
             return vanilla;
@@ -128,7 +124,6 @@ public final class HandView extends Module {
         return swingSpeed.getInt();
     }
 
-    // Scale and offset and turn for one drawn thing.
     private static final class Adjust {
 
         private final BoolSetting enabled;

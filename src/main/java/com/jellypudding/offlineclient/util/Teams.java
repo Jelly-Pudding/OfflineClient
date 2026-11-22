@@ -15,20 +15,18 @@ import java.util.Optional;
 // says both. Where a server only colours names the name in the player list stands in.
 public final class Teams {
 
-    // What a name has when nobody coloured it.
     private static final int PLAIN = 0xFFFFFF;
 
     private Teams() {
     }
 
-    // The switch of every render that can draw players in the colour of their side.
     public static BoolSetting colorSwitch() {
         return new BoolSetting("Team colours",
             "Draws each player in the colour the server gives their name. A player it gives none keeps"
                 + " the usual colour.", false);
     }
 
-    // The colour of the player's side or zero when the server gives them none.
+    // Zero when the server gives the player no side.
     public static int colorOf(Player player) {
         PlayerTeam team = player.getTeam();
         if (team != null && team.getColor().isPresent()) {
@@ -38,8 +36,7 @@ public final class Teams {
         return listed == PLAIN ? 0 : ColorUtil.withAlpha(listed, 255);
     }
 
-    // The colour of the player's own name inside the styled name the player list shows. A rank
-    // written in front of it may carry another. Plain when the name has none.
+    // A rank written in front of the name may carry another colour.
     private static int listedColor(Player player) {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         PlayerInfo info = connection == null ? null : connection.getPlayerInfo(player.getUUID());

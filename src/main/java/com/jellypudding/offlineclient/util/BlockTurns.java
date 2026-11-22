@@ -20,8 +20,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-// What an item turns a block into when it is used on it. A hoe and a shovel and an axe carry
-// their rules as data the server sends and a water bottle wets dirt by a rule of its own.
+// A hoe and a shovel and an axe carry their rules as data the server sends and a water bottle wets
+// dirt by a rule of its own.
 public final class BlockTurns {
 
     // A rule may ask for a random number. The game's own are left alone.
@@ -41,8 +41,7 @@ public final class BlockTurns {
     private BlockTurns() {
     }
 
-    // The state the block takes when the stack is used on that face of it. Null when the click
-    // changes nothing.
+    // Null when the click changes nothing.
     public static BlockState result(ItemStack stack, LevelAccessor level, BlockPos pos, Direction face) {
         if (isWater(stack)) {
             return wets(level.getBlockState(pos), face) ? Blocks.MUD.defaultBlockState() : null;
@@ -64,7 +63,6 @@ public final class BlockTurns {
         return null;
     }
 
-    // The same for the face of the block nearest the eyes which is the one a module clicks.
     public static BlockState result(ItemStack stack, BlockPos pos) {
         return result(stack, OfflineClient.MC.level, pos, BlockUtil.facingSide(pos));
     }
@@ -77,8 +75,7 @@ public final class BlockTurns {
             && (!wetOnly || staysWet(OfflineClient.MC.level, pos));
     }
 
-    // True when farmland at the spot would find the water that keeps it wet. The search is the
-    // one the farmland block makes itself.
+    // The search is the one the farmland block makes itself.
     public static boolean staysWet(BlockGetter level, BlockPos pos) {
         for (BlockPos near : BlockPos.betweenClosed(pos.offset(-WATER_REACH, 0, -WATER_REACH),
             pos.offset(WATER_REACH, 1, WATER_REACH))) {
@@ -121,12 +118,10 @@ public final class BlockTurns {
         return count;
     }
 
-    // True when a water bottle used on that face turns the block to mud.
     public static boolean wets(BlockState state, Direction face) {
         return face != Direction.DOWN && state.is(BlockTags.CONVERTIBLE_TO_MUD);
     }
 
-    // True for a bottle or a splash or lingering bottle of plain water.
     public static boolean isWater(ItemStack stack) {
         PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
         return stack.getItem() instanceof PotionItem && contents != null && contents.is(Potions.WATER);

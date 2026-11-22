@@ -34,7 +34,6 @@ public final class CheckedDownload extends HttpURLConnection {
     private final Proxy route;
     private final Gate gate;
     private final Map<String, String> headers = new LinkedHashMap<>();
-    // The connection of the hop that answered. Null until a hop has been opened.
     private HttpURLConnection hop;
     // A download that failed fails the same way every time it is asked again.
     private IOException failure;

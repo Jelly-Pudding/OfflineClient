@@ -12,7 +12,6 @@ import java.util.function.Predicate;
 // and the stack that slot held goes back into it once the owner is done.
 public final class HotbarRoom {
 
-    // A hotbar slot lent out and the backpack slot its stack went to.
     private record Lent(int hotbar, int index, ItemStack stack) {
     }
 
@@ -20,9 +19,8 @@ public final class HotbarRoom {
 
     private final List<Lent> lent = new ArrayList<>();
 
-    // Brings the stack at a backpack index into an empty hotbar slot. With none empty the first
-    // slot from the held one round whose stack the owner need not keep is lent. False when every
-    // slot has to be kept.
+    // With no slot empty the first slot from the held one round whose stack the owner need not keep
+    // is lent. False when every slot has to be kept.
     public boolean bring(int inventoryIndex, Predicate<ItemStack> keep) {
         int hotbar = InventoryUtil.freeHotbarSlot();
         if (hotbar == -1) {
@@ -36,8 +34,8 @@ public final class HotbarRoom {
         return true;
     }
 
-    // Puts every stack lent out back in its hotbar slot. One that has moved on since stays where
-    // it is. A stack that grew or shrank in the backpack still counts as the same.
+    // A stack that has moved on since stays where it is. One that grew or shrank in the backpack
+    // still counts as the same.
     public void giveBack() {
         if (MC.player != null && InventoryUtil.cursorFree()) {
             for (int i = lent.size() - 1; i >= 0; i--) {

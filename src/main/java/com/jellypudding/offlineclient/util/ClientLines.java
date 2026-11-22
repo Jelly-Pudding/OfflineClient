@@ -18,11 +18,9 @@ import java.util.function.Predicate;
 // of the chat. Every line is written and read on the game thread.
 public final class ClientLines {
 
-    // One line and when it came on the wall clock.
     public record Line(Component text, long at) {
     }
 
-    // Far more than any panel shows at once.
     private static final int KEPT = 100;
 
     // The newest first.
@@ -45,7 +43,6 @@ public final class ClientLines {
         }
     }
 
-    // True whilst a command or a later reply to one runs.
     public static boolean replying() {
         return commands > 0;
     }
@@ -79,7 +76,6 @@ public final class ClientLines {
         return text.visit((style, part) -> Optional.ofNullable(style.getClickEvent()), Style.EMPTY).isPresent();
     }
 
-    // Up to this many of the newest lines with the newest first.
     public static List<Line> newest(int count) {
         List<Line> newest = new ArrayList<>(Math.min(count, LINES.size()));
         for (Line line : LINES) {
@@ -91,7 +87,6 @@ public final class ClientLines {
         return newest;
     }
 
-    // Takes the newest line the test accepts out.
     public static void removeRecent(Predicate<String> text) {
         Iterator<Line> it = LINES.iterator();
         while (it.hasNext()) {

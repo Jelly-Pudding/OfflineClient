@@ -32,11 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// Uses whatever tool is in hand on the listed blocks in reach wherever the tool would change
-// the block. The game itself says what each tool does to each block.
+// The game itself says what each tool does to each block.
 public final class ToolAura extends BlockUseAura {
 
-    // A spot of the strip loop this far past the range is forgotten.
     private static final double LOOP_SLACK = 2;
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
@@ -61,7 +59,6 @@ public final class ToolAura extends BlockUseAura {
     private final Map<BlockPos, Block> stripped = new HashMap<>();
     // The kinds of block the axe has stripped. The loop puts no other kind back.
     private final Set<Block> strips = new HashSet<>();
-    // The stripped log being broken. Null whilst none is.
     private BlockPos breaking;
     private int used;
 
@@ -175,7 +172,7 @@ public final class ToolAura extends BlockUseAura {
         }
     }
 
-    // One step of the strip loop. True whilst it has a stripped log to break or a hole to fill.
+    // True whilst the loop has a stripped log to break or a hole to fill.
     private boolean looping(ItemStack held) {
         if (!loop.isOn() || !held.is(ItemTags.AXES)) {
             stopBreaking();
@@ -205,8 +202,6 @@ public final class ToolAura extends BlockUseAura {
         return true;
     }
 
-    // The nearest spot in reach that holds the log the axe stripped or the hole it left. A spot
-    // that came to hold anything else is forgotten.
     private BlockPos nextSpot() {
         double reach = range.getValue();
         stripped.entrySet().removeIf(spot -> !BlockUtil.reaches(spot.getKey(), reach + LOOP_SLACK)

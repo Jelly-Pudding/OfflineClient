@@ -39,7 +39,6 @@ import java.util.Map;
 // too soon goes again once the wait the service asked for is over.
 public final class Webhook extends Module {
 
-    // What a line is about. Each kind has a switch of its own.
     public enum Alert { FIND, ALARM, MENTION, CHAT, DAMAGE, DEATH, HUNGER, STOPPED, DISCONNECT }
 
     private static final int GAP_TICKS = 2 * SharedConstants.TICKS_PER_SECOND;
@@ -50,13 +49,10 @@ public final class Webhook extends Module {
     // The longest post the services take.
     private static final int MOST_CHARS = 2000;
 
-    // Lines of one kind a flood leaves waiting behind the posts. The eldest give way first.
     private static final int MOST_WAITING = 500;
 
-    // How long you stand on one spot before you count as stopped.
     private static final int STILL_TICKS = 30 * SharedConstants.TICKS_PER_SECOND;
 
-    // Shuffling about less than this from where you stopped is still standing.
     private static final double STILL_REACH = 0.5;
 
     private final TextSetting address = new TextSetting("Address",
@@ -126,7 +122,6 @@ public final class Webhook extends Module {
         playing = false;
     }
 
-    // Queues a line about one kind of alert whilst its switch is on. Colour codes are taken out.
     public void send(Alert alert, String text) {
         if (!switches.get(alert).isOn() || address.isBlank()) {
             return;
@@ -164,7 +159,6 @@ public final class Webhook extends Module {
         }
     }
 
-    // A chat line the way the chat shows it. Null for any other packet.
     private static Component shownLine(Packet<?> packet) {
         return switch (packet) {
             case ClientboundSystemChatPacket system when !system.overlay() -> system.content();
@@ -186,7 +180,6 @@ public final class Webhook extends Module {
         send(Alert.CHAT, text);
     }
 
-    // The server tells the player who died. Another player's death is no concern here.
     private void died(ClientboundPlayerCombatKillPacket death) {
         if (!deaths.isOn() || mc.player == null || death.playerId() != mc.player.getId()) {
             return;
@@ -224,7 +217,6 @@ public final class Webhook extends Module {
         watchStill();
     }
 
-    // Told once for each stop. Moving off the spot starts the count again.
     private void watchStill() {
         Vec3 here = mc.player.position();
         if (stillAt == null || stillAt.distanceTo(here) > STILL_REACH) {
@@ -259,8 +251,6 @@ public final class Webhook extends Module {
         post(text, false);
     }
 
-    // As many waiting lines as fit one post. Chat lines only join once every alert is out. The
-    // rest wait for the next post.
     private String joined() {
         StringBuilder text = new StringBuilder();
         take(alertLines, text);
@@ -301,7 +291,6 @@ public final class Webhook extends Module {
         });
     }
 
-    // The answer to a test is said in chat. Any other post that fails goes in the game log.
     private void answered(String text, boolean test, Web.Page answer) {
         posting--;
         if (test) {

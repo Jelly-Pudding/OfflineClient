@@ -20,14 +20,11 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-// Eats golden apples to hold buffs up.
 // Only the enchanted apple grants fire resistance.
 public final class AutoGap extends Module {
 
-    // Ticks to wait after a bite whilst the effects land. A laggy server needs a moment.
     private static final int SETTLE_TICKS = 20;
 
-    // Minimum ticks between two apples. A slow server has time to register one.
     private static final int MEAL_GAP = 100;
 
     public enum Choice { PLAIN_FIRST, PLAIN_ONLY, ENCHANTED_FIRST, ENCHANTED_ONLY }
@@ -61,7 +58,7 @@ public final class AutoGap extends Module {
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
         "Holds the combat modules back whilst you eat.", true);
 
-    private final Feeding feeding = new Feeding();
+    private final Feeding feeding = new Feeding(this, () -> true, pauseCombat::isOn);
     private boolean needsEnchanted;
     private int lastMeal = Integer.MIN_VALUE / 2;
 
@@ -70,14 +67,6 @@ public final class AutoGap extends Module {
         addSettings(always, health, choice, absorption, regeneration, fireResistance, expiry, hold,
             pauseCombat);
         searchTags("gapple", "golden apple", "egap");
-    }
-
-    public boolean isEating() {
-        return isBusy() && pauseCombat.isOn();
-    }
-
-    public boolean isBusy() {
-        return isEnabled() && feeding.isActive();
     }
 
     @Override
@@ -132,10 +121,8 @@ public final class AutoGap extends Module {
         feeding.begin(slot);
     }
 
-    // Another feeder has the use key or a bottle thrown at your feet may still bring what an apple
-    // gives. ShulkerPacker keeps count of every stack.
     private boolean handBusy() {
-        return Modules.feeding(this) || Modules.bottleLanding() || Modules.packing();
+        return Feeding.busy(this) || Feeding.bottleLanding() || Modules.packing();
     }
 
     private boolean wantsApple() {

@@ -20,7 +20,6 @@ public final class OwnDigs {
 
     public static final OwnDigs INSTANCE = new OwnDigs();
 
-    // Enough of the blocks you broke lately in one world to cover a long dig.
     private static final int KEPT = 4096;
 
     // By server and dimension. A full world forgets its oldest dig.
@@ -38,7 +37,6 @@ public final class OwnDigs {
         return INSTANCE.copyHere();
     }
 
-    // True when a block you broke in the world you are in lies inside the box.
     public static boolean anyIn(AABB box) {
         return INSTANCE.inside(box);
     }

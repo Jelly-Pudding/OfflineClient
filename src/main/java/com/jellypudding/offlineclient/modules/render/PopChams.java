@@ -120,7 +120,6 @@ public final class PopChams extends Module {
         }
     }
 
-    // Share of the copy's life that has passed. One or more once it is spent.
     private float ageOf(Ghost ghost, long now) {
         return (float) ((now - ghost.start) / (duration.getValue() * 1000));
     }

@@ -15,8 +15,6 @@ import net.minecraft.world.item.Item;
 
 import java.util.List;
 
-// The choice of which entities a render module marks. Players and mobs and dropped
-// items each have their own switch and can be narrowed to a picked list.
 public final class EntityFilter {
 
     public enum Pick { NONE, ALL, CHOSEN }
@@ -28,7 +26,6 @@ public final class EntityFilter {
     private final RegistryListSetting<Item> itemTypes;
     private final RegistryListSetting<EntityType<?>> others;
 
-    // False hides the dropped item rows for a module that only aims at or hits things.
     private final boolean withItems;
 
     // The verb reads as "Highlights" and the past form as "highlighted".
@@ -39,14 +36,12 @@ public final class EntityFilter {
             "Other kinds of entity that are " + past + " such as crystals and boats.");
     }
 
-    // A filter with no dropped item rows.
     public static EntityFilter living(String verb, String past, boolean playersDefault,
                                       Pick mobsDefault, List<EntityType<?>> othersDefault) {
         return new EntityFilter(verb, past, playersDefault, mobsDefault, Pick.NONE, othersDefault, false,
             "Other kinds of entity that are " + past + " such as crystals and boats.");
     }
 
-    // The same for a module whose work only reaches what has health such as a blast.
     public static EntityFilter mortal(String verb, String past, boolean playersDefault,
                                       Pick mobsDefault, List<EntityType<?>> othersDefault) {
         return new EntityFilter(verb, past, playersDefault, mobsDefault, Pick.NONE, othersDefault, false,

@@ -14,9 +14,6 @@ import net.minecraft.client.gui.screens.Screen;
 import java.util.List;
 import java.util.Locale;
 
-// The bare name toggles the overlay like any module and hudeditor alone opens the drag editor.
-// The word after hud opens the editor or puts every option of one piece back or adds and removes
-// a piece of a kind there can be several of. A reset leaves the piece switch as it is.
 public final class HudCommand extends Command {
 
     private static final String EDIT = "edit";
@@ -57,7 +54,6 @@ public final class HudCommand extends Command {
         resetAll(piece.getName(), piece.getOptions());
     }
 
-    // The overlay says what came and how to take it back.
     private static void add(String typed) {
         HudModule hud = Modules.get(HudModule.class);
         if (hud != null && !hud.families().add(typed)) {
@@ -66,7 +62,6 @@ public final class HudCommand extends Command {
         }
     }
 
-    // The overlay says what went and how to bring it back.
     private static void remove(String typed) {
         HudModule hud = Modules.get(HudModule.class);
         HudElement piece = piece(typed);
@@ -77,7 +72,6 @@ public final class HudCommand extends Command {
         }
     }
 
-    // Spaces and case are ignored. Null when no piece has the name.
     private static HudElement piece(String typed) {
         String wanted = Setting.idFor(typed);
         for (HudElement element : pieces()) {
@@ -88,7 +82,6 @@ public final class HudCommand extends Command {
         return null;
     }
 
-    // Empty whilst the HUD module has not been built yet.
     private static List<HudElement> pieces() {
         HudModule hud = Modules.get(HudModule.class);
         return hud == null ? List.of() : hud.getManager().all();

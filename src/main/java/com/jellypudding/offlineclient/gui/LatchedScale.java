@@ -5,18 +5,15 @@ import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.Window;
 
-// The ClickGUI scale held still whilst the pointer is down. Dragging the scale
-// slider would otherwise move the slider out from under the pointer dragging it.
+// Dragging the scale slider would otherwise move the slider out from under the pointer.
 public final class LatchedScale {
 
     private float value = guiScale();
     private boolean held;
 
-    // Everything in the GUI is drawn through this and every pointer position
-    // is divided by it to match. The font is a bitmap and goes soft between
-    // whole pixels. The chosen size therefore lands on the nearest step the
-    // game's own scale allows. It never outgrows the largest scale the game
-    // would pick for the window and the GUI always fits.
+    // The font is a bitmap and goes soft between whole pixels. The chosen size lands on the nearest
+    // step the game's own scale allows and never outgrows the largest scale the game would pick for
+    // the window.
     public static float guiScale() {
         float wanted = Modules.get(ClickGuiModule.class).scale();
         Window window = OfflineClient.MC.getWindow();
@@ -28,7 +25,7 @@ public final class LatchedScale {
         return Math.clamp(Math.round(vanilla * wanted), 1, largest) / (float) vanilla;
     }
 
-    // Once a frame. A new scale is only picked up whilst nothing is held.
+    // A new scale is only picked up whilst nothing is held.
     public void refresh() {
         if (!held) {
             value = guiScale();

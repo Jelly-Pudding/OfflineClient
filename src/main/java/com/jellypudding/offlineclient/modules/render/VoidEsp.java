@@ -50,7 +50,6 @@ public final class VoidEsp extends Module {
     private final JoinedCells<Hole> joined = new JoinedCells<>(
         hole -> BlockPos.asLong(hole.x(), hole.y(), hole.z()));
 
-    // The scan settings the cached chunks were built with.
     private int lastLayers = -1;
     private boolean lastOpen;
     private boolean lastRoof;

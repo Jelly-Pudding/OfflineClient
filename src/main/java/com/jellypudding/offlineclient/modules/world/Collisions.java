@@ -26,7 +26,6 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
 
-// Gives a full cube to blocks that normally let you walk straight through them.
 public final class Collisions extends Module {
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",

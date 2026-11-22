@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
-// Lets the crosshair pass through entities and nether portals. CrosshairClip asks about portals.
+// CrosshairClip asks about portals.
 public final class NoMiningTrace extends Module {
 
     private final RegistryListSetting<EntityType<?>> exempt = new RegistryListSetting<>("Exempt",
@@ -50,7 +50,6 @@ public final class NoMiningTrace extends Module {
         return isTool(mc.player.getMainHandItem()) || isTool(mc.player.getOffhandItem());
     }
 
-    // True for a block the crosshair passes through.
     public boolean looksThrough(BlockState state) {
         return isEnabled() && portals.isOn() && state.getBlock() instanceof NetherPortalBlock;
     }

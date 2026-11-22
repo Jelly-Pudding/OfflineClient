@@ -17,8 +17,8 @@ import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.function.Predicate;
 
-// Flint and steel and fire charges. The modules that set blocks or sulfur cubes alight share
-// the order the two are tried in and the rule that spares a flint and steel about to snap.
+// The modules that set blocks or sulfur cubes alight share the order the two lighters are tried in
+// and the rule that spares a flint and steel about to snap.
 public final class Ignition {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -48,7 +48,6 @@ public final class Ignition {
         return new Setting<?>[] {order, antiBreak};
     }
 
-    // Shows both rows only whilst the parent holds the value.
     public <E extends Enum<E>> Ignition under(EnumSetting<E> parent, E value) {
         Setting.under(settings(), parent, value);
         return this;
@@ -60,7 +59,6 @@ public final class Ignition {
         return this;
     }
 
-    // True for a lighter the list allows that is not about to snap.
     public boolean usable(ItemStack stack) {
         for (Flame flame : order.ranked()) {
             if (stack.is(flame.item)) {
@@ -72,14 +70,12 @@ public final class Ignition {
 
     public static final String NO_LIGHTER = "Nothing in your offhand or hotbar can start a fire.";
 
-    // True whilst the offhand or the hotbar holds a lighter that may be used.
     public boolean atHand() {
         return usable(MC.player.getOffhandItem()) || InventoryUtil.hotbarSlot(this::usable) != -1;
     }
 
-    // Puts the favourite lighter to hand and runs the click with the hand that holds it. One in
-    // the offhand needs no swap. A hotbar slot stays selected for the caller to give back.
-    // False when no lighter is at hand or the click was refused.
+    // A hotbar slot stays selected for the caller to give back. False when no lighter is at hand or
+    // the click was refused.
     public boolean use(InventoryUtil.SlotSwap slots, Predicate<InteractionHand> click) {
         for (Flame flame : order.ranked()) {
             Predicate<ItemStack> fits = stack -> stack.is(flame.item) && intact(stack);
@@ -99,14 +95,11 @@ public final class Ignition {
         return !antiBreak.isOn() || !ItemUtil.nearlyBroken(stack);
     }
 
-    // True when fire would take in the cell. It has to be empty with something under it or
-    // beside it that holds fire.
     public static boolean fireFits(BlockPos cell) {
         return MC.level.isInWorldBounds(cell)
             && BaseFireBlock.canBePlacedAt(MC.level, cell, MC.player.getDirection());
     }
 
-    // The click that puts fire into the empty cell from the block on the given side of it.
     // A lighter sets its fire in front of the face it clicks.
     public static BlockHitResult fireClick(BlockPos cell, Direction from) {
         BlockPos against = cell.relative(from);
@@ -114,8 +107,8 @@ public final class Ignition {
         return new BlockHitResult(BlockUtil.hitPoint(against, face), face, against, false);
     }
 
-    // Clicks with the lighter in the hand whilst sneaking. A chest or a door or TNT under the
-    // click stays shut or unlit and the fire goes down. True when the game took the click.
+    // Clicks whilst sneaking. A chest or a door or TNT under the click stays shut or unlit and the
+    // fire goes down.
     public static boolean strike(BlockHitResult hit, InteractionHand hand, boolean rotate) {
         if (rotate) {
             BlockUtil.faceVector(hit.getLocation());
@@ -127,8 +120,8 @@ public final class Ignition {
         return used;
     }
 
-    // Fire only goes into an empty space. Grass or a flower in the cell is broken first and the
-    // fire follows on a later tick. True whilst the cell is being cleared.
+    // Grass or a flower in the cell is broken first and the fire follows on a later tick. True
+    // whilst the cell is being cleared.
     public static boolean clear(BlockPos cell) {
         if (!BreakTime.clearsInOneHit(cell)) {
             return false;
@@ -141,7 +134,6 @@ public final class Ignition {
         return BlockUtil.state(cell).getBlock() instanceof BaseFireBlock;
     }
 
-    // Punches out the fire in the cell. One hit puts it out. False when the cell holds none.
     public static boolean putOut(BlockPos cell) {
         if (!isFire(cell)) {
             return false;

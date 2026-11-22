@@ -29,13 +29,11 @@ public final class InventoryUtil {
 
     public static final int HOTBAR_SIZE = 9;
 
-    // The hotbar slots named the way the number keys pick them.
     public static final List<String> HOTBAR_NAMES = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9");
 
     // The main grid starts here in inventory index and network slot order alike.
     public static final int MAIN_START = HOTBAR_SIZE;
 
-    // Every slot of the survival inventory.
     public static final int WHOLE_INVENTORY = 36;
 
     // Network slots of the survival inventory. The hotbar sits after the main grid
@@ -65,7 +63,6 @@ public final class InventoryUtil {
     }
 
     public enum Swap {
-        // Nothing moved.
         REFUSED,
         // The item moved and the cursor came away empty.
         DONE,
@@ -91,9 +88,9 @@ public final class InventoryUtil {
             && !(MC.gui.screen() instanceof AbstractContainerScreen<?> shown && shown.getMenu() == live);
     }
 
-    // Moves the stack at an inventory index into the offhand. An open container takes the swap
-    // key in its own menu whether its screen shows or not. The survival inventory goes by cursor
-    // clicks the stranded stack can put right. False when nothing moved.
+    // An open container takes the swap key in its own menu whether its screen shows or not. The
+    // survival inventory goes by cursor clicks the stranded stack can put right. False when nothing
+    // moved.
     public static boolean toOffhand(int inventoryIndex, StrandedStack cursor) {
         if (MC.player.containerMenu != MC.player.inventoryMenu) {
             return swapToOffhand(inventoryIndex);
@@ -129,8 +126,7 @@ public final class InventoryUtil {
             && carried().isEmpty();
     }
 
-    // True whilst a chest or furnace or any other container is open. Your own inventory
-    // and the creative screen do not count.
+    // Your own inventory and the creative screen do not count.
     public static boolean containerOpen() {
         Screen screen = MC.gui.screen();
         return screen instanceof AbstractContainerScreen && !(screen instanceof InventoryScreen)
@@ -155,7 +151,6 @@ public final class InventoryUtil {
         return keeps(menu) || menu.menuType == MenuType.HOPPER || menu.menuType == MenuType.GENERIC_3x3;
     }
 
-    // Plain storage that keeps what it is given. Only these take items a module puts away.
     public static boolean keeps(AbstractContainerMenu menu) {
         return keeps(menu.menuType);
     }
@@ -174,7 +169,6 @@ public final class InventoryUtil {
         return MC.player.containerMenu.getCarried();
     }
 
-    // Clicks are allowed and nothing sits on the cursor.
     public static boolean cursorFree() {
         return canClick() && carried().isEmpty();
     }
@@ -193,13 +187,11 @@ public final class InventoryUtil {
         return carried().isEmpty() ? Swap.DONE : Swap.STRANDED;
     }
 
-    // True for a worn piece the game will not let you take off. Only a creative player may.
     public static boolean stuckOn(ItemStack worn) {
         return !MC.player.isCreative()
             && EnchantmentHelper.has(worn, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE);
     }
 
-    // A pickup click on the survival inventory container.
     public static void click(int networkSlot) {
         if (MC.player == null || MC.gameMode == null) {
             return;
@@ -217,8 +209,7 @@ public final class InventoryUtil {
         MenuClicks.click(MC.player.inventoryMenu, networkSlot, 1, ContainerInput.THROW);
     }
 
-    // Throws the whole stack at an inventory index through the menu that is live. A chest or a
-    // furnace shows the hotbar as well. False whilst no menu can take the click.
+    // A chest or a furnace shows the hotbar as well. False whilst no menu can take the click.
     public static boolean throwFrom(int inventoryIndex) {
         if (cursorFree()) {
             throwStack(networkSlot(inventoryIndex));
@@ -237,7 +228,6 @@ public final class InventoryUtil {
         return MC.player.getInventory().getSelectedSlot();
     }
 
-    // The first index up to the limit that passes the test. Minus one when none does.
     public static int findSlot(Predicate<ItemStack> test, int limit) {
         for (int i = 0; i < limit; i++) {
             if (test.test(MC.player.getInventory().getItem(i))) {
@@ -251,7 +241,6 @@ public final class InventoryUtil {
         return findSlot(stack -> stack.is(item), limit);
     }
 
-    // How many of an item the first slots up to the limit hold between them.
     public static int count(Item item, int limit) {
         return count(stack -> stack.is(item), limit);
     }
@@ -267,7 +256,6 @@ public final class InventoryUtil {
         return total;
     }
 
-    // The same with the offhand counted as well.
     public static int countWithOffhand(Item item, int limit) {
         return countWithOffhand(stack -> stack.is(item), limit);
     }
@@ -277,7 +265,6 @@ public final class InventoryUtil {
         return count(test, limit) + (test.test(offhand) ? offhand.getCount() : 0);
     }
 
-    // How many slots of the hotbar and the main grid hold nothing.
     public static int emptySlots() {
         int empty = 0;
         for (int i = 0; i < WHOLE_INVENTORY; i++) {
@@ -288,7 +275,7 @@ public final class InventoryUtil {
         return empty;
     }
 
-    // The slot already in hand wins. Minus one when nothing matches.
+    // The slot already in hand wins.
     public static int hotbarSlot(Predicate<ItemStack> test) {
         int selected = selectedSlot();
         if (test.test(MC.player.getInventory().getItem(selected))) {
@@ -302,7 +289,7 @@ public final class InventoryUtil {
         return -1;
     }
 
-    // The network slot of the arrow a bow fires first or minus one. The offhand beats everything.
+    // A network slot. The offhand beats everything.
     public static int firstArrowSlot() {
         if (MC.player.getOffhandItem().is(ItemTags.ARROWS)) {
             return OFFHAND_SLOT;
@@ -311,7 +298,6 @@ public final class InventoryUtil {
         return slot == -1 ? -1 : networkSlot(slot);
     }
 
-    // An empty hotbar slot or minus one when every one is taken.
     public static int freeHotbarSlot() {
         return freeHotbarSlot(-1);
     }
@@ -325,8 +311,7 @@ public final class InventoryUtil {
         return whenFull;
     }
 
-    // Creative only. Puts a copy of the stack in an empty hotbar slot and holds it. A full hotbar
-    // lends the held slot. Null outside creative.
+    // A full hotbar lends the held slot. Null outside creative.
     public static Conjured conjure(ItemStack stack) {
         if (MC.player == null || MC.gameMode == null || !MC.player.hasInfiniteMaterials()) {
             return null;
@@ -345,10 +330,8 @@ public final class InventoryUtil {
         MC.gameMode.handleCreativeModeItemAdd(stack, networkSlot(slot));
     }
 
-    // A stack conjured into a hotbar slot. What the slot held before comes back on request.
     public record Conjured(int slot, ItemStack before, int held) {
 
-        // Puts back what the slot held and the slot you had in hand.
         public void giveBack() {
             if (MC.player == null || MC.gameMode == null) {
                 return;
@@ -373,11 +356,9 @@ public final class InventoryUtil {
         private int lentFrom = -1;
         private int lentTo = -1;
 
-        // The hotbar slot the loan last selected and the loan whose stack sat there then.
         private int chosen = -1;
         private HotbarLoan chosenOver;
 
-        // The loan whose stack the lent one pushed out of the hotbar.
         private HotbarLoan lentOver;
 
         // A give back came whilst the stack could not go home. A loan lent over it sends it home
@@ -388,8 +369,8 @@ public final class InventoryUtil {
         // hands out another. Held weakly to keep no closed connection alive.
         private WeakReference<ClientPacketListener> session = new WeakReference<>(null);
 
-        // Selects the given inventory index and borrows it into the hotbar when
-        // it is not already there. False when the swap could not be made.
+        // Borrows the index into the hotbar when it is not already there. False when the swap could
+        // not be made.
         public boolean select(int inventorySlot) {
             return select(inventorySlot, -1);
         }
@@ -410,14 +391,13 @@ public final class InventoryUtil {
             return true;
         }
 
-        // Brings the given inventory index into the hotbar and leaves the held slot as it is. The
-        // hotbar slot it sits in or minus one when the swap could not be made.
+        // Leaves the held slot as it is. Hands back the hotbar slot the stack sits in or minus one
+        // when the swap could not be made.
         public int borrow(int inventorySlot) {
             return borrow(inventorySlot, -1);
         }
 
-        // The same with a slot spared as select spares it. A give back still selects the slot
-        // held before the loan.
+        // A give back still selects the slot held before the loan.
         public int borrow(int inventorySlot, int spared) {
             if (MC.player == null || inventorySlot < 0) {
                 return -1;
@@ -460,7 +440,6 @@ public final class InventoryUtil {
             return slot;
         }
 
-        // Puts the item in the main hand from the slots below the limit. True once it is there.
         public boolean hold(Item item, int limit) {
             if (MC.player == null) {
                 return false;
@@ -468,13 +447,11 @@ public final class InventoryUtil {
             return MC.player.getMainHandItem().is(item) || select(findSlot(item, limit));
         }
 
-        // True whilst the player is still on the slot the loan picked and no later loan covers it.
         public boolean stillMine() {
             forgetAfterLeave();
             return chosen != -1 && MC.player != null && selectedSlot() == chosen && !covered();
         }
 
-        // Returns a borrowed stack and goes back to the slot the player had held.
         public void giveBack() {
             giveBack(true);
         }
@@ -544,32 +521,26 @@ public final class InventoryUtil {
             return true;
         }
 
-        // True whilst a stack is still out of its home slot.
         public boolean isLent() {
             forgetAfterLeave();
             return lentFrom != -1;
         }
 
-        // True whilst a later loan's stack sits in the slot this one picked.
         private boolean covered() {
             forgetAfterLeave();
             return coveredSince(chosen, chosenOver, this);
         }
 
-        // True whilst another loan's stack sits where this one lent its own.
         private boolean lendCovered() {
             HotbarLoan over = lentFrom == -1 ? null : lentInto(lentTo);
             return over != null && over != this;
         }
 
-        // True whilst the slot holds the stack of a loan that is neither the taker nor the one whose
-        // stack sat there when the slot was taken.
         private static boolean coveredSince(int slot, HotbarLoan atTake, HotbarLoan taker) {
             HotbarLoan over = slot == -1 ? null : lentInto(slot);
             return over != null && over != atTake && over != taker;
         }
 
-        // The open loan whose stack sits in the hotbar slot. Null whilst none does.
         private static HotbarLoan lentInto(int slot) {
             HotbarLoan loan = LENT[slot];
             return loan != null && loan.lentTo == slot && loan.session.get() == MC.getConnection() ? loan : null;
@@ -613,7 +584,6 @@ public final class InventoryUtil {
 
         private int previous = -1;
 
-        // The slot this module last selected and the loan whose stack sat there then.
         private int taken = -1;
         private HotbarLoan takenOver;
 
@@ -637,7 +607,6 @@ public final class InventoryUtil {
             sync();
         }
 
-        // Picks the slot held before again unless a later loan covers the slot taken.
         public void restore() {
             if (previous != -1 && MC.player != null && !covered()) {
                 MC.player.getInventory().setSelectedSlot(previous);
@@ -648,17 +617,14 @@ public final class InventoryUtil {
             takenOver = null;
         }
 
-        // True whilst the player is still on the slot this module chose and no later loan covers it.
         public boolean stillMine() {
             return MC.player != null && taken != -1 && selectedSlot() == taken && !covered();
         }
 
-        // True whilst a loan made after the select lends its stack into the slot taken.
         public boolean covered() {
             return HotbarLoan.coveredSince(taken, takenOver, null);
         }
 
-        // Gives the slot back only if the player has not picked another since.
         public void restoreIfMine() {
             if (stillMine()) {
                 restore();
@@ -687,7 +653,6 @@ public final class InventoryUtil {
             takenOver = null;
         }
 
-        // The slot the player had before the first select. Minus one whilst none.
         public int previousSlot() {
             return previous;
         }
@@ -703,12 +668,10 @@ public final class InventoryUtil {
 
         private int slot = -1;
 
-        // Records where a stack left on the cursor belongs.
         public void hold(int networkSlot) {
             slot = networkSlot;
         }
 
-        // A swap that remembers the displaced stack when it had nowhere to go.
         public Swap swap(int fromNetworkSlot, int toNetworkSlot) {
             Swap result = InventoryUtil.swap(fromNetworkSlot, toNetworkSlot);
             if (result == Swap.STRANDED) {

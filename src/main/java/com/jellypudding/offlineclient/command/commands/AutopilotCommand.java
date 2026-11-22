@@ -19,7 +19,6 @@ public final class AutopilotCommand extends Command {
     private static final String AREA = "area";
     private static final String RESUME = "resume";
     private static final String STOP = "stop";
-    // The word and the two corners of an area.
     private static final int AREA_WORDS = 5;
 
     public AutopilotCommand() {
@@ -94,7 +93,6 @@ public final class AutopilotCommand extends Command {
             return List.of();
         }
         boolean area = tokens.length > 1 && tokens[1].equalsIgnoreCase(AREA);
-        // After the word area come two corners of an x and a z each.
         int axis = area ? index - 2 : index - 1;
         if (area ? index > AREA_WORDS : index > 2) {
             return List.of();

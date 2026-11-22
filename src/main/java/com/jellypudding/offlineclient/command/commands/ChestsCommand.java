@@ -17,10 +17,8 @@ import net.minecraft.world.item.Items;
 
 import java.util.List;
 
-// With no item named it looks for what you hold.
 public final class ChestsCommand extends Command {
 
-    // More rows than this push the nearest ones out of chat.
     private static final int MOST_ROWS = 10;
 
     public ChestsCommand() {

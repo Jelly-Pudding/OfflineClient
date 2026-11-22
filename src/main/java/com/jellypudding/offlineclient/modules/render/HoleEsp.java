@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Finds one block wide holes walled in bedrock or obsidian. Those survive crystal blasts.
 public final class HoleEsp extends Module {
 
     private enum Kind {
@@ -159,7 +158,6 @@ public final class HoleEsp extends Module {
         return bedrock == walls.size() ? Kind.BEDROCK : bedrock == 0 ? Kind.OBSIDIAN : Kind.MIXED;
     }
 
-    // The block and the ones above it must have no collision.
     private boolean isOpen(BlockPos pos) {
         int needed = minHeight.getInt();
         BlockPos.MutableBlockPos cursor = probe;
@@ -179,7 +177,6 @@ public final class HoleEsp extends Module {
         return true;
     }
 
-    // Null for blocks that do not survive a crystal.
     private Kind wallAt(BlockPos pos) {
         return switch (Holes.wallOf(mc.level.getBlockState(pos))) {
             case UNBREAKABLE -> Kind.BEDROCK;

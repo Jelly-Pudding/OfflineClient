@@ -20,18 +20,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-// Named setups saved under offlineclient/profiles. A profile holds any parts of the setup and a
-// load brings back the parts asked for and leaves the rest of the client as it is. A profile
-// tied to a server loads by itself on joining it.
 public final class Profiles {
 
-    // The parts a profile holds are listed in its file under this name.
     private static final String PARTS = "parts";
 
     private final ConfigManager config;
     private final Path folder = DataFiles.path("profiles");
 
-    // The profile each server loads on joining filed under the key of the server.
     private final Map<String, String> joins = new TreeMap<>();
 
     // True from the login packet of a join until the profile of the server is in. A dormant
@@ -46,8 +41,6 @@ public final class Profiles {
         return DataFiles.jsonNames(folder);
     }
 
-    // The parts named by the words from the given one on. Empty when there are none and null
-    // after telling the player that a word names no part.
     public static Set<Part> partsNamed(String[] words, int from) {
         Set<Part> parts = EnumSet.noneOf(Part.class);
         for (int i = from; i < words.length; i++) {
@@ -70,7 +63,6 @@ public final class Profiles {
         return words;
     }
 
-    // The parts as a player reads them such as binds and settings.
     public static String worded(Collection<Part> parts) {
         List<String> words = new ArrayList<>();
         for (Part part : parts) {
@@ -83,9 +75,8 @@ public final class Profiles {
         return "The profile " + name + " was saved by an older version. Load it whole once and save it again.";
     }
 
-    // Saves under the name and tells the player. With no part named the profile becomes what the
-    // config itself holds. Macros and waypoints only go in when named. Named parts go into the
-    // profile that is there and every other part it holds stays.
+    // With no part named the profile becomes what the config itself holds. Macros and waypoints
+    // only go in when named.
     public void save(String name, Set<Part> parts) {
         Set<Part> held = EnumSet.noneOf(Part.class);
         JsonObject root = new JsonObject();
@@ -114,9 +105,7 @@ public final class Profiles {
         }
     }
 
-    // Brings back the parts the profile holds and says what came back. With no part named it
-    // brings back every part in the profile. False when nothing was loaded and the player has
-    // been told why. A profile saved below this version reads right only as a whole.
+    // A profile saved below this version reads right only as a whole.
     public boolean load(String name, Set<Part> wanted) {
         JsonObject root = ConfigManager.read(file(name)).orElse(null);
         if (root == null) {
@@ -159,7 +148,6 @@ public final class Profiles {
         return held;
     }
 
-    // False when there was no profile of that name to remove. A removed profile is tied to no server.
     public boolean delete(String name) {
         try {
             if (!Files.deleteIfExists(file(name))) {
@@ -179,12 +167,10 @@ public final class Profiles {
         return Files.exists(file(name));
     }
 
-    // The profile the server loads on joining. Null for none.
     public String joinProfile(String server) {
         return joins.get(server);
     }
 
-    // The servers that load the profile on joining.
     public List<String> joinServers(String name) {
         List<String> servers = new ArrayList<>();
         joins.forEach((server, profile) -> {
@@ -195,8 +181,6 @@ public final class Profiles {
         return servers;
     }
 
-    // Ties the server to the profile. A null profile unties the server. A server loads one
-    // profile at most.
     public void setJoinProfile(String server, String name) {
         if (name == null) {
             joins.remove(server);
@@ -206,7 +190,6 @@ public final class Profiles {
         config.saveSoon();
     }
 
-    // Unties every server. The caller saves.
     void forgetJoins() {
         joins.clear();
     }
@@ -228,7 +211,6 @@ public final class Profiles {
             return;
         }
         joinWaits = false;
-        // The player left before the client woke.
         if (OfflineClient.MC.player == null) {
             return;
         }

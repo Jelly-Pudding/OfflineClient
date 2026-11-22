@@ -159,7 +159,6 @@ public final class SecretChat extends Module {
         }
     }
 
-    // The line with every run sealed under the key swapped for its text. Anything else is untouched.
     public Component reveal(Component message) {
         if (!isEnabled() || !SEALED.matcher(message.getString()).find()) {
             return message;
@@ -190,7 +189,6 @@ public final class SecretChat extends Module {
         return opened[0] ? rebuilt : message;
     }
 
-    // True for text that holds a ping sealed under the key. Nothing is marked or answered.
     public boolean isPing(String text) {
         SecretKey opening = isEnabled() ? key() : null;
         if (opening == null) {
@@ -210,7 +208,6 @@ public final class SecretChat extends Module {
         return !text.isEmpty() && (text.charAt(0) == ASKS || text.charAt(0) == ANSWERS);
     }
 
-    // A ping reads as the spot it carries. Any other text shows as it was written.
     private Component shown(String text, Style style) {
         Spot spot = Spot.read(text);
         if (spot == null) {
@@ -222,8 +219,7 @@ public final class SecretChat extends Module {
             .append(Component.literal(" in the " + ServerInfo.dimensionName(spot.dimension()) + ".").setStyle(style));
     }
 
-    // A friend's ping moves the waypoint named after them and may get your spot back. Your own
-    // whispers come back to you as well and do nothing.
+    // Your own whispers come back to you as well and do nothing.
     private void heard(Spot spot) {
         if (mc.player == null || spot.name().equalsIgnoreCase(mc.player.getGameProfile().name())
             || !OfflineClient.INSTANCE.getFriendManager().isFriend(spot.name())) {
@@ -237,8 +233,7 @@ public final class SecretChat extends Module {
         }
     }
 
-    // Queues a whisper of your spot to that player or to every friend online when the name is
-    // null. Hands back a few words about it.
+    // A null name pings every friend online. Hands back a few words about it.
     public String ping(String target) {
         if (!inGame()) {
             return "Join a world first";
@@ -294,9 +289,6 @@ public final class SecretChat extends Module {
         }
     }
 
-    // Sends the first whisper still worth sending. A player who has left or whose name cannot stand
-    // as one word of a command is passed over. A whisper the server would count towards a kick for
-    // spam waits for a later tick.
     private void whisperNext() {
         SecretKey sealing = key();
         if (sealing == null) {
@@ -331,7 +323,7 @@ public final class SecretChat extends Module {
         }
     }
 
-    // Null whilst the key is blank. Stretching is slow and runs once for each key typed.
+    // Stretching is slow and runs once for each key typed.
     private SecretKey key() {
         String typed = sharedKey.getValue();
         if (typed.isBlank()) {
@@ -369,7 +361,6 @@ public final class SecretChat extends Module {
         return bytes;
     }
 
-    // The text cut into pieces that each fit one line. A cut falls on a space where there is one.
     private static List<String> pieces(String text) {
         List<String> pieces = new ArrayList<>();
         int start = 0;
@@ -429,7 +420,6 @@ public final class SecretChat extends Module {
         return new BigInteger(packed).toString(RADIX);
     }
 
-    // Null unless the run was sealed under this key. The text comes back exactly as it was sealed.
     private static String open(SecretKey opening, String run) {
         byte[] packed = new BigInteger(run, RADIX).toByteArray();
         if (packed.length <= HEADER_BYTES + TAG_BYTES || packed[0] != LEAD) {
@@ -445,14 +435,12 @@ public final class SecretChat extends Module {
         }
     }
 
-    // What a ping carries. Asks is set when the sender wants a spot back.
     private record Spot(String name, String dimension, BlockPos pos, boolean asks) {
 
         static Spot yours(boolean asks) {
             return new Spot(mc.player.getGameProfile().name(), ServerInfo.dimension(), mc.player.blockPosition(), asks);
         }
 
-        // Null unless the text is a ping. Colour codes are dropped as in any other secret.
         static Spot read(String text) {
             if (!startsPing(text)) {
                 return null;

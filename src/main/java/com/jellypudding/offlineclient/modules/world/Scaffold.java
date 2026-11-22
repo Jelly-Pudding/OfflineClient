@@ -36,13 +36,12 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
-// Keeps a floor under the player's feet or a roof over their head. Targets come from the
-// current position and where the speed puts the player over the next few ticks.
+// Targets come from the current position and where the speed puts the player over the next few
+// ticks.
 public final class Scaffold extends Module {
 
     public enum Layer { FLOOR, ROOF }
 
-    // Ticks a placed block stays drawn whilst it fades out.
     private static final int FADE_TICKS = 8;
 
     // A roof block with nothing to lean on borrows a neighbour above or beside it. Below is the gap.
@@ -112,14 +111,13 @@ public final class Scaffold extends Module {
 
     private final SlotSwap slots = new SlotSwap();
 
-    // Blocks placed lately and the ticks each has left to show.
     private final List<Placed> placed = new ArrayList<>();
 
     private boolean descending;
+    private boolean waiting;
 
     private boolean rotatedThisTick;
 
-    // Running out is told once and again only after a block has gone down since.
     private final ChatWarning warning = new ChatWarning();
 
     // The layer's level whilst you last stood on the ground. Keep level builds there mid jump.
@@ -137,12 +135,18 @@ public final class Scaffold extends Module {
 
     // PlayerMixin lifts the sneak edge clamp whilst this is true.
     public boolean isDescending() {
-        return isEnabled() && descending;
+        return isEnabled() && descending && !waiting;
+    }
+
+    // Read by LocalPlayerMixin. The player stands at the end of the bridge until the hand is free.
+    public boolean holdsAtEdge() {
+        return isEnabled() && waiting;
     }
 
     @Override
     protected void onDisable() {
         descending = false;
+        waiting = false;
         keptY = Integer.MAX_VALUE;
         warning.clear();
         placed.clear();
@@ -152,6 +156,7 @@ public final class Scaffold extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         descending = false;
+        waiting = false;
         rotatedThisTick = false;
         agePlaced();
         if (Hands.tied() || mc.player.isPassenger()) {
@@ -206,7 +211,6 @@ public final class Scaffold extends Module {
         }
     }
 
-    // The level the layer goes on this tick. Keep level holds it whilst airborne unless you drop below it.
     private int levelY(boolean towering) {
         int natural = layer.is(Layer.FLOOR)
             ? Mth.floor(mc.player.getY()) - (descending ? 2 : 1)
@@ -248,7 +252,6 @@ public final class Scaffold extends Module {
         }
     }
 
-    // The spot under or over you now and where your speed takes you over the next ticks.
     private List<BlockPos> path(Vec3 pos, Vec3 velocity, int y) {
         int ahead = lookAhead.getInt();
         List<BlockPos> result = new ArrayList<>(ahead + 1);
@@ -263,7 +266,6 @@ public final class Scaffold extends Module {
         return result;
     }
 
-    // The platform around the path nearest first and then each deeper layer in the same order.
     // A deeper block leans on the one just placed over or under it.
     private List<BlockPos> extras(List<BlockPos> path, Vec3 pos, int y) {
         List<BlockPos> level = new ArrayList<>(path);
@@ -280,7 +282,6 @@ public final class Scaffold extends Module {
         return extras;
     }
 
-    // Every spot on the level within the radius of the player. Nearest first.
     private void addPlatform(List<BlockPos> result, Vec3 pos, int y) {
         double range = radius.getValue();
         List<BlockPos> ring = new ArrayList<>();
@@ -317,7 +318,6 @@ public final class Scaffold extends Module {
         return nearest != null && placeWith(nearest, BlockUtil.findPlaceSupport(nearest));
     }
 
-    // Against a neighbour or straight into the air with Air place. A spot with neither waits.
     private boolean placeSupported(BlockPos target) {
         if (airPlace.isOn()) {
             return placeWith(target, null);
@@ -326,8 +326,6 @@ public final class Scaffold extends Module {
         return support != null && placeWith(target, support);
     }
 
-    // The supported spot within reach that sits closest to the target.
-    // Used in open air where even the neighbours have nothing to lean on.
     private BlockPos nearestSupported(BlockPos target) {
         double range = reach.getValue();
         if (range <= 0) {
@@ -352,10 +350,12 @@ public final class Scaffold extends Module {
         return best;
     }
 
-    // Places at the spot against the support or straight into the air without one. A click the
-    // server would not reach is never sent.
     private boolean placeWith(BlockPos target, Direction support) {
         if (!BlockUtil.serverReaches(support == null ? target : target.relative(support))) {
+            return false;
+        }
+        if (waitsForHand()) {
+            waiting = true;
             return false;
         }
         InteractionHand hand = handFor(target);
@@ -381,8 +381,12 @@ public final class Scaffold extends Module {
         return done;
     }
 
-    // The main hand when it holds an allowed block and then the offhand. Auto switch takes one
-    // from the hotbar when neither does. Null when there is nothing to place.
+    // A block laid now would cut a meal short. A player on the ground can be held at the end of
+    // the bridge until it is over. One in the air would fall and gets the block.
+    private boolean waitsForHand() {
+        return Hands.slotsTaken() && (!layer.is(Layer.FLOOR) || mc.player.onGround());
+    }
+
     private InteractionHand handFor(BlockPos target) {
         if (holdsAllowed(mc.player.getMainHandItem(), target)) {
             return InteractionHand.MAIN_HAND;
@@ -421,8 +425,7 @@ public final class Scaffold extends Module {
             || listMode.getValue().admits(blocks.contains(block));
     }
 
-    // True for a stack of blocks this would build with whilst it is on. AutoDrop leaves such a
-    // stack alone. Cobblestone is junk to it and a bridge to this.
+    // AutoDrop leaves such a stack alone. Cobblestone is junk to it and a bridge to this.
     public boolean buildsWith(ItemStack stack) {
         return isEnabled() && stack.getItem() instanceof BlockItem item && listed(item.getBlock());
     }

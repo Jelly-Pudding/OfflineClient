@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// The macros under way. One runs line by line. A wait or a repeat holds the lines after it back
-// and a line for the server holds until the server will take it at the pace of a macro. A
-// cycling macro runs one line a press and remembers where it stands in its list.
+// A wait or a repeat holds the lines after it back and a line for the server holds until the server
+// will take it at the pace of a macro. A cycling macro runs one line a press and remembers where it
+// stands in its list.
 public final class MacroRuns {
 
     // The most steps one macro takes in a tick. A long list of lines would stall the game.
@@ -24,9 +24,7 @@ public final class MacroRuns {
         private final String name;
         private final List<String> lines;
         private int next;
-        // Ticks before the next line may run.
         private int wait;
-        // The line being sent and how many more times it goes. Null between lines.
         private MacroLine.Repeat sending;
         private int sendsLeft;
         private boolean over;
@@ -45,7 +43,6 @@ public final class MacroRuns {
 
     private final List<Run> runs = new ArrayList<>();
 
-    // How many presses each cycling macro has had.
     private final Map<String, Integer> turns = new HashMap<>();
 
     // Starts the macro once the delay in ticks is over. A dormant client runs none because
@@ -76,7 +73,7 @@ public final class MacroRuns {
         return runs.stream().anyMatch(run -> run.name.equalsIgnoreCase(name));
     }
 
-    // Ends the run of that macro or every run for a null name. Hands back how many ended.
+    // A null name ends every run. Hands back how many ended.
     public int stop(String name) {
         int stopped = 0;
         for (Run run : List.copyOf(runs)) {
@@ -88,7 +85,6 @@ public final class MacroRuns {
         return stopped;
     }
 
-    // A cycling macro whose lines changed starts from its first line again.
     public void restartCycle(String name) {
         turns.remove(key(name));
     }
@@ -130,7 +126,6 @@ public final class MacroRuns {
         }
     }
 
-    // Reads the next line of the run. A plain line is sent like a repeat of one.
     private void take(Run run) {
         if (run.next >= run.lines.size()) {
             finish(run);
@@ -151,9 +146,8 @@ public final class MacroRuns {
         }
     }
 
-    // Runs a line of our own as it was typed or sends one to the server with its live values
-    // filled in. False whilst the server would not take another line yet. A command of ours may
-    // send either kind and fills in live values itself where it takes them.
+    // False whilst the server would not take another line yet. A command of ours fills in live
+    // values itself where it takes them.
     private static boolean send(String text) {
         if (!ours(text)) {
             return ChatPace.MACRO.say(text, SentLine::live);

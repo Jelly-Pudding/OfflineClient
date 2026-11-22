@@ -10,25 +10,19 @@ import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
 
-// Keeps a piece that arrives at its starting place off everything already on the screen. One the
-// player switches on there or puts back there that would lie over another piece or over the
-// game's own bars takes the nearest free place and keeps it like a piece the player dragged.
-// Nothing else ever moves.
+// A piece the player switches on or puts back at its starting place that would lie over another
+// takes the nearest free place. Nothing else ever moves.
 final class Newcomers {
 
     private final HudManager manager;
-    // The pieces that were on in the frame before. A piece taken off the overlay stays known
-    // whilst an undo can still bring it back and leaves once nothing holds it.
+    // A piece taken off the overlay stays known whilst an undo can still bring it back.
     private final Set<HudElement> known = Collections.newSetFromMap(new WeakHashMap<>());
-    // False until a frame has taken every piece that is on as it stands.
     private boolean seeded;
 
     Newcomers(HudManager manager) {
         this.manager = manager;
     }
 
-    // The next frame takes every piece that is on as it stands. The first frame of a session
-    // does and one that follows values applied in bulk.
     void takeAllAsTheyStand() {
         seeded = false;
     }
@@ -38,7 +32,7 @@ final class Newcomers {
         known.add(piece);
     }
 
-    // Once a frame. A piece switched on with nothing to show yet waits here until it shows.
+    // A piece switched on with nothing to show yet waits here until it shows.
     void seat(Font font, int screenWidth, int screenHeight, boolean hidden) {
         List<HudElement> arrived = new ArrayList<>();
         for (HudElement element : manager.all()) {
@@ -57,8 +51,6 @@ final class Newcomers {
         }
     }
 
-    // Moves each of the pieces that lies over something to the nearest free place the way a drag
-    // would. An earlier piece has its place before a later one.
     void makeRoom(List<HudElement> pieces, Font font, int screenWidth, int screenHeight, boolean hidden) {
         List<Box> taken = new ArrayList<>();
         for (Placement other : manager.others(pieces, font, screenWidth, screenHeight, hidden)) {
@@ -90,9 +82,6 @@ final class Newcomers {
         }
     }
 
-    // The place nearest the box where it clears everything taken and stays on the screen. Null
-    // when the screen has none. The nearest place always lines up with the box itself or lies
-    // flush against the screen edge or something taken.
     private static Box nearestFree(Box box, List<Box> taken, int screenWidth, int screenHeight, int margin) {
         List<Integer> lefts = stops(box.left(), box.width(), screenWidth, margin, taken, true);
         List<Integer> tops = stops(box.top(), box.height(), screenHeight, margin, taken, false);
@@ -113,7 +102,7 @@ final class Newcomers {
         return best;
     }
 
-    // Where the box may start along one axis. Its own place comes first and wins a tie.
+    // Its own place comes first and wins a tie.
     private static List<Integer> stops(int own, int size, int room, int margin, List<Box> taken, boolean across) {
         int last = Math.max(margin, room - size - margin);
         List<Integer> stops = new ArrayList<>();
@@ -132,7 +121,6 @@ final class Newcomers {
         return stops;
     }
 
-    // True when the two are nearer than the clearance on both axes.
     private static boolean crowds(Box one, Box other) {
         int gap = HudManager.CLEARANCE;
         return one.left() < other.left() + other.width() + gap && other.left() < one.left() + one.width() + gap

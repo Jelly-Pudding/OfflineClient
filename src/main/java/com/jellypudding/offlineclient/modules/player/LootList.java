@@ -41,18 +41,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-// The list is built again every tick a container screen is open and drawn beside it. A click
-// on a row moves that stack across. A click on a heading takes the whole group out of the
-// container or puts it in when only you hold it.
 public final class LootList extends Module {
 
     public enum Side { LEFT, RIGHT }
 
-    // One line of the list. Its slots are what a click moves and what the highlight paints.
+    // The slots are what a click moves and what the highlight paints.
     private record Row(Component text, ItemStack icon, List<Integer> slots, boolean heading) {
     }
 
-    // The rows under one heading.
     private record Group(String name, List<Row> rows) {
     }
 
@@ -79,11 +75,9 @@ public final class LootList extends Module {
     // use since item components are bound after the classes load.
     private static final Map<GearKind, ItemStack> SAMPLES = new EnumMap<>(GearKind.class);
 
-    // Drinkable then splash then lingering.
     private static final List<Item> POTION_KINDS = List.of(Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION);
     private static final List<String> POTION_GROUPS = List.of("Potions", "Splash potions", "Lingering potions");
 
-    // Letters of each enchantment name written after a piece of gear and after a book.
     private static final int GEAR_LETTERS = 3;
     private static final int BOOK_LETTERS = 20;
 
@@ -93,7 +87,6 @@ public final class LootList extends Module {
     private static final float ICON_SCALE = 0.5f;
     private static final int PADDING = 3;
     private static final int GAP = 4;
-    // Narrower than this the list is not worth drawing.
     private static final int MIN_WIDTH = 60;
 
     private static final int BACKGROUND = 0xC0101010;
@@ -117,10 +110,9 @@ public final class LootList extends Module {
         "Size of the list.", 1, 0.5, 2, 0.05).min(0.25);
 
     private List<Row> rows = List.of();
-    // The width of the widest row in the list's own units. Measured whenever the rows are built.
     private int widest;
     private int scroll;
-    // Where the list was drawn last in screen units. A width of nought means it was not drawn.
+    // In screen units. A width of nought means the list was not drawn.
     private int left;
     private int top;
     private int width;
@@ -154,7 +146,6 @@ public final class LootList extends Module {
         widest = measure(rows);
     }
 
-    // The groups by rank with each heading above its rows.
     private List<Row> build(AbstractContainerMenu menu) {
         Map<Integer, Group> groups = new TreeMap<>();
         for (Slot slot : menu.slots) {
@@ -181,7 +172,6 @@ public final class LootList extends Module {
         return built;
     }
 
-    // The width of the widest row in the list's own units.
     private int measure(List<Row> listed) {
         int most = 0;
         for (Row row : listed) {
@@ -207,7 +197,6 @@ public final class LootList extends Module {
             .rows().add(new Row(text, stack.copy(), List.of(slot), false));
     }
 
-    // Where a stack is listed. Minus one for anything that is no enchanted gear or book or potion.
     private static int rank(ItemStack stack) {
         if (stack.is(Items.ENCHANTED_BOOK)) {
             return BOOKS + bookRank(stack);
@@ -274,8 +263,6 @@ public final class LootList extends Module {
         return MIXED_BOOKS.getOrDefault(rank, "other gear");
     }
 
-    // Called once the container is drawn. The list sits beside it and scrolls when it runs
-    // past the bottom of the screen.
     public void draw(GuiGraphicsExtractor context, Font font, int leftPos, int topPos, int imageWidth,
                      int mouseX, int mouseY) {
         width = 0;
@@ -327,7 +314,6 @@ public final class LootList extends Module {
         pose.popMatrix();
     }
 
-    // The index of the row under the pointer or minus one.
     private int rowAt(double mouseX, double mouseY) {
         if (width == 0 || mouseX < left || mouseX >= left + width || mouseY < top) {
             return -1;
@@ -336,7 +322,7 @@ public final class LootList extends Module {
         return row < Math.min(rows.size(), scroll + visible) ? row : -1;
     }
 
-    // A click on a row moves its stacks across. True when the click landed on the list.
+    // True when the click landed on the list.
     public boolean click(double mouseX, double mouseY, AbstractContainerMenu menu) {
         int row = rowAt(mouseX, mouseY);
         if (row < 0 || !menu.getCarried().isEmpty()) {
@@ -348,7 +334,6 @@ public final class LootList extends Module {
         return true;
     }
 
-    // True when the wheel turned over the list.
     public boolean scroll(double mouseX, double mouseY, double amount) {
         if (width == 0 || mouseX < left || mouseX >= left + width || mouseY < top) {
             return false;
@@ -357,7 +342,6 @@ public final class LootList extends Module {
         return true;
     }
 
-    // The slot paint for the row under the pointer. Nought for every other slot.
     public int paintFor(Slot slot) {
         return isEnabled() && highlight.isOn() && hovered != null && hovered.slots().contains(slot.index)
             ? SLOT_PAINT : 0;

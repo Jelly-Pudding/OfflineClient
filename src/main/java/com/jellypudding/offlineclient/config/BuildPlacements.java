@@ -12,9 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-// Build files put down in the world. Each placement remembers the file and where its anchor
-// went and how it is turned along with the server and the dimension it was made in. They are
-// kept in offlineclient/builds.json and outlast a relog or a death.
+// Kept in offlineclient/builds.json. They outlast a relog or a death.
 public final class BuildPlacements {
 
     public record Placement(String name, String file, BlockPos origin, Rotation rotation, Mirror mirror,
@@ -58,7 +56,6 @@ public final class BuildPlacements {
         return version;
     }
 
-    // The placements of the dimension the player stands in.
     public List<Placement> here() {
         String server = ServerInfo.key();
         String dimension = ServerInfo.dimension();
@@ -71,7 +68,6 @@ public final class BuildPlacements {
         return matching;
     }
 
-    // Null when no placement here answers to the name.
     public Placement find(String name) {
         for (Placement placement : here()) {
             if (placement.name().equalsIgnoreCase(name)) {
@@ -81,8 +77,7 @@ public final class BuildPlacements {
         return null;
     }
 
-    // Puts a file down here. The placement is named after the file with a number behind it when
-    // the plain name is taken.
+    // Named after the file with a number behind it when the plain name is taken.
     public Placement add(String fileName, BuildFrame frame) {
         String stem = DataFiles.safeName(BuildFiles.stem(fileName));
         String name = stem;
@@ -96,7 +91,6 @@ public final class BuildPlacements {
         return placement;
     }
 
-    // Takes the place of the placement of the same name in the same world.
     public void update(Placement placement) {
         placements.replaceAll(saved -> same(saved, placement) ? placement : saved);
         changed();

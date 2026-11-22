@@ -31,22 +31,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Makes the map of a printed picture. An empty map is used in the middle of the map square and
-// held until it shows the whole picture. It is then locked at the cartography table and stored
-// in the chest for finished maps.
+// An empty map is used in the middle of the map square and held until it shows the whole picture.
+// It is then locked at the cartography table and stored in the chest for finished maps.
 public final class MapMaking {
 
     private static final Minecraft MC = OfflineClient.MC;
     private static final int SIDE = MapPicture.SIDE;
 
-    // Ticks the empty map gets to turn into a map.
     private static final int MAP_TICKS = 40;
-    // Ticks with no pixel filled before the walk moves towards the blank part. Sixteen ticks
-    // draw every column of a map once.
+    // Sixteen ticks draw every column of a map once.
     private static final int STILL_TICKS = 60;
-    // The longest a map may take to fill.
     private static final int FILL_TICKS = 6000;
-    // Ticks the cartography table gets to hand over the locked map.
     private static final int LOCK_TICKS = 60;
 
     private final Printer printer;
@@ -64,7 +59,6 @@ public final class MapMaking {
     private BlockPos fillSpot;
     private int lockWait;
     private boolean resultTaken;
-    // Ticks since the locked map was shift clicked into the chest. Minus one before.
     private int storeWait = -1;
 
     public MapMaking(Printer printer, StationStock stock, Trip trip, InventoryUtil.HotbarLoan loan) {
@@ -74,7 +68,6 @@ public final class MapMaking {
         this.loan = loan;
     }
 
-    // Every file starts its map afresh.
     public void reset() {
         mapWait = 0;
         mapTries = 0;
@@ -111,8 +104,6 @@ public final class MapMaking {
         return printer.station().corner().offset(SIDE / 2, 0, SIDE / 2);
     }
 
-    // Fetches one of each item that none is carried of from the chest of empty maps. True whilst
-    // something is still to fetch.
     private boolean fetchMapItems(List<Item> wanted) {
         if (wanted.stream().allMatch(item -> InventoryUtil.count(item, InventoryUtil.WHOLE_INVENTORY) > 0)) {
             return false;
@@ -139,7 +130,6 @@ public final class MapMaking {
         return true;
     }
 
-    // Holds the empty map and uses it. The server swaps it for a map of the square.
     private void useEmptyMap() {
         if (mapWait > 0) {
             Integer made = newMap(mapsBefore);
@@ -167,7 +157,6 @@ public final class MapMaking {
         mapWait = 1;
     }
 
-    // A map just made gets the whole of its time to fill.
     private void resetFill() {
         lastBlank = Integer.MAX_VALUE;
         stillTicks = 0;
@@ -175,8 +164,7 @@ public final class MapMaking {
         fillSpot = null;
     }
 
-    // Holds the map until every pixel the picture covers shows something. With nothing new for
-    // a while the walk heads for the blank part. The server only draws what it has loaded.
+    // The server only draws what it has loaded.
     private void fillMap(int slot) {
         if (!loan.select(slot)) {
             return;
@@ -206,7 +194,6 @@ public final class MapMaking {
         }
     }
 
-    // Pixels of the square the picture covers that show nothing yet.
     private int blankPixels(MapItemSavedData data) {
         int blank = 0;
         for (int cell : printer.covered()) {
@@ -231,7 +218,6 @@ public final class MapMaking {
         return nearest == -1 ? null : printer.cellPos(nearest);
     }
 
-    // The inventory slot of the map with that id. Minus one when none is carried.
     private int slotOfMap(int id) {
         if (id == MapStations.NO_MAP) {
             return -1;
@@ -241,7 +227,6 @@ public final class MapMaking {
             InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // The ids of every map carried.
     private Set<Integer> mapIds() {
         Set<Integer> ids = new HashSet<>();
         for (int slot = 0; slot < InventoryUtil.WHOLE_INVENTORY; slot++) {
@@ -253,7 +238,6 @@ public final class MapMaking {
         return ids;
     }
 
-    // A map carried that was not carried before and is not the one being made. Null for none.
     private Integer newMap(Set<Integer> before) {
         for (int id : mapIds()) {
             if (!before.contains(id) && id != printer.station().map()) {
@@ -263,8 +247,6 @@ public final class MapMaking {
         return null;
     }
 
-    // A map that went missing is made again from a fresh empty map. A few lost of one file stop
-    // the printer.
     private void remakeMap(String why) {
         Station station = printer.station();
         if (++mapsLost >= Printer.TRIES) {
@@ -280,9 +262,9 @@ public final class MapMaking {
         resetFill();
     }
 
-    // Locks the map at the cartography table with a glass pane. The server sets the result and
-    // a locked copy with an id of its own comes out. A copy taken just before the printer was
-    // let go of or cut off is found by the maps carried before it was taken.
+    // The server sets the result and a locked copy with an id of its own comes out. A copy taken
+    // just before the printer was let go of or cut off is found by the maps carried before it was
+    // taken.
     public void lock() {
         if (printer.visiting()) {
             return;
@@ -368,7 +350,6 @@ public final class MapMaking {
         return Step.MORE;
     }
 
-    // Puts the locked map into the chest for finished maps.
     public void store() {
         if (printer.visiting()) {
             return;

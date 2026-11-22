@@ -22,39 +22,26 @@ import org.joml.Matrix3x2fStack;
 import java.util.ArrayList;
 import java.util.List;
 
-// Your keys and mouse buttons as a small keyboard that lights up under your fingers. A key of
-// the game reads the binding it stands for and follows a rebind. A key of your own is typed one
-// to a row with what it says.
 public final class KeystrokesElement extends HudElement {
 
     private static final int KEY = 24;
     private static final int GAP = 2;
     private static final int ACROSS = 3;
     private static final int WIDTH = ACROSS * KEY + (ACROSS - 1) * GAP;
-    // The jump bar and every row of small keys are half as tall as a key.
     private static final int BAR_HEIGHT = 12;
-    // Kept clear between a label and the sides of its key.
     private static final int LABEL_ROOM = 1;
-    // Between the name of a button and its clicks a second under it.
     private static final int LINE_GAP = 3;
-    // A key at rest lets the game show through more than a held one.
     private static final float RESTING_OPACITY = 0.5f;
     private static final float HELD_OPACITY = 0.85f;
-    // How many keys of your own there are rows for. Four rows of three.
     private static final int OWN_KEYS = 12;
 
-    // One key with its place and size before any stretch. Rate is what it writes under its name
-    // and null for a key that writes nothing there. A key that is not known never lights up.
     private record Key(String label, boolean held, String rate, boolean known, int x, int y, int width, int height) {
     }
 
-    // The settings for one key of your own. The key row folds its label away.
     private static final class OwnKey {
 
         private final TextSetting key;
         private final TextSetting label;
-        // The typed key as it was last read and the bind it names. The bind is null for a name
-        // that is no key.
         private String read = "";
         private Bind bind;
 
@@ -68,8 +55,7 @@ public final class KeystrokesElement extends HudElement {
                 .under(key, () -> slot < count.getInt());
         }
 
-        // The typed key is read again only once it changes. A name that is no key is told in chat
-        // whilst the player is the one changing it.
+        // A name that is no key is told in chat only whilst the player is the one changing it.
         private void reread(boolean tell) {
             String typed = key.getValue().trim();
             if (typed.equals(read)) {
@@ -82,12 +68,10 @@ public final class KeystrokesElement extends HudElement {
             }
         }
 
-        // False whilst nothing is typed or the key typed is none.
         private boolean draws() {
             return !read.isEmpty() && (bind == null || bind.isBound());
         }
 
-        // A name that is no key is drawn in red as it was typed.
         private Key cap(int x, int y, int width) {
             if (bind == null) {
                 return new Key(read, false, null, false, x, y, width, BAR_HEIGHT);
@@ -138,8 +122,6 @@ public final class KeystrokesElement extends HudElement {
         return isActive() && !layout().isEmpty();
     }
 
-    // The chosen keys laid out from the top left. The walking keys sit over the jump bar with
-    // sneak and sprint under it. The mouse buttons follow and then the rows of small keys.
     private List<Key> layout() {
         Options options = OfflineClient.MC.options;
         List<Key> laid = new ArrayList<>();
@@ -175,7 +157,6 @@ public final class KeystrokesElement extends HudElement {
         return laid;
     }
 
-    // The keys of your own in rows of three. A row that draws nothing takes no room.
     private void layOwnKeys(List<Key> laid, int y) {
         List<OwnKey> drawn = new ArrayList<>();
         for (int i = 0; i < ownCount.getInt(); i++) {
@@ -194,8 +175,6 @@ public final class KeystrokesElement extends HudElement {
         }
     }
 
-    // Lays the keys side by side across the full width. A lone key takes all of it and no keys
-    // take no room. Hands back where the next row starts.
     private int row(List<Key> laid, int y, int height, boolean button, List<KeyMapping> mappings) {
         int count = mappings.size();
         if (count == 0) {
@@ -207,17 +186,14 @@ public final class KeystrokesElement extends HudElement {
         return y + height + GAP;
     }
 
-    // How wide each of that many keys in one row is.
     private static int share(int count) {
         return (WIDTH - (count - 1) * GAP) / count;
     }
 
-    // The last key ends flush with the side whatever the division left over.
     private static int left(int index, int count) {
         return index == count - 1 ? WIDTH - share(count) : index * (share(count) + GAP);
     }
 
-    // A key of the game. A button can write its clicks a second.
     private Key cap(KeyMapping mapping, int x, int y, int width, int height, boolean button) {
         int rate = button && clicks.isOn() ? clicksOf(mapping) : -1;
         return new Key(nameOf(mapping), InputUtil.physicallyHeld(mapping), rate < 0 ? null : rate + " CPS", true,
@@ -242,8 +218,7 @@ public final class KeystrokesElement extends HudElement {
         }
     }
 
-    // Centred on its key with its middle at the given height and never wider than the key. The
-    // writing grows with the smaller stretch and keeps its shape. A glyph advances one pixel past its ink.
+    // A glyph advances one pixel past its ink.
     private void label(GuiGraphicsExtractor context, Font font, String text, Key key, float middle, int color) {
         float across = (float) scaleX();
         float down = (float) scaleY();
@@ -258,7 +233,6 @@ public final class KeystrokesElement extends HudElement {
         pose.popMatrix();
     }
 
-    // The bound key or button the way the client names every bind.
     private static String nameOf(KeyMapping mapping) {
         return mapping.isUnbound() ? "" : Bind.of(mapping.key).name();
     }

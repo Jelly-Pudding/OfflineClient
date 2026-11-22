@@ -36,13 +36,11 @@ public final class SentLine {
         return command.contains(LinePattern.PLAYER) ? command : command + " " + LinePattern.PLAYER;
     }
 
-    // The row a module that whispers keeps the command for it in.
     public static TextSetting whisperWith() {
         return new TextSetting("Whisper with",
             "The command that whispers to a player on this server such as /msg or /w or /tell.", "/msg");
     }
 
-    // The row with its live words filled in at whatever length that comes to.
     public static String filled(String row) {
         return build(row);
     }
@@ -125,8 +123,6 @@ public final class SentLine {
         return out.append(row, at, row.length()).toString();
     }
 
-    // The value given for a word in braces or else its live value. A word nothing knows stays
-    // as it was typed.
     private static String valueOf(String word, String[] pairs) {
         String key = word.substring(1, word.length() - 1);
         for (int i = 0; i + 1 < pairs.length; i += 2) {

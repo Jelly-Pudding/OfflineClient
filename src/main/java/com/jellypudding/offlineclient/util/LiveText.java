@@ -66,7 +66,7 @@ public final class LiveText {
     private static final char OPEN = '{';
     private static final char CLOSE = '}';
 
-    // A Minecraft day in ticks and the ticks in one of its hours. Day starts at six.
+    // Day starts at six.
     private static final long DAY_TICKS = 24000;
     private static final long HOUR_TICKS = 1000;
     private static final long SIX_AM = 6 * HOUR_TICKS;
@@ -77,21 +77,17 @@ public final class LiveText {
     // A number holds about this many digits. Decimals past them are noise.
     private static final int MOST_DECIMALS = 15;
 
-    // How {clock} and {date} read until the player gives a form of their own.
     private static final String CLOCK_FORM = "HH:mm";
     private static final String DATE_FORM = "d MMM yyyy";
-    // Forms are typed by hand. Only this many are kept ready.
     private static final int MOST_FORMS = 32;
 
     // Words that read as text are cut to this many characters. A server names items and mobs and
     // dimensions and its resource pack names blocks and biomes. Nothing stops either sending a book.
     private static final int LONGEST_TEXT = 64;
 
-    // A walk slower than this many blocks a second has no time of arrival worth giving.
     private static final double SLOWEST_WALK = 0.5;
 
-    // What a word holds right now. The number is what a rule compares and is not a number for
-    // plain text.
+    // The number is what a rule compares and is not a number for plain text.
     public record Reading(String text, double number) {
 
         private static Reading text(String text) {
@@ -106,13 +102,11 @@ public final class LiveText {
             return !Double.isNaN(number);
         }
 
-        // True for a word whose argument cannot be read.
         public boolean unreadable() {
             return this == UNREADABLE;
         }
     }
 
-    // A word with nothing to say right now and one whose argument cannot be read.
     private static final Reading NOTHING = Reading.text("");
     private static final Reading UNREADABLE = Reading.text("?");
 
@@ -133,7 +127,6 @@ public final class LiveText {
     private record Group(String name, List<Word> words) {
     }
 
-    // One line of the help the words command prints.
     public record Help(String group, String name, String pattern, String says, boolean figure) {
     }
 
@@ -287,7 +280,6 @@ public final class LiveText {
             (player, argument) -> argument == null ? read.apply(player) : UNREADABLE);
     }
 
-    // A word that is plain text.
     private static Word text(String name, String says, Function<LocalPlayer, String> read) {
         return bare(name, says, player -> Reading.text(bounded(read.apply(player))));
     }
@@ -339,7 +331,6 @@ public final class LiveText {
             (player, argument) -> argument == null ? UNREADABLE : read.read(player, argument));
     }
 
-    // Minus one for anything but a whole number from nought up.
     private static int decimals(String argument) {
         try {
             int places = Integer.parseInt(argument);
@@ -353,8 +344,6 @@ public final class LiveText {
         return String.format(Locale.ROOT, "%." + decimals + "f", value);
     }
 
-    // The answer worked out at most once a tick however many texts ask for it and however
-    // many frames are drawn in that tick.
     private static Reading kept(LocalPlayer player, String key, Supplier<Reading> work) {
         long tick = (long) player.getId() << Integer.SIZE | Integer.toUnsignedLong(player.tickCount);
         if (tick != keptTick) {
@@ -364,7 +353,6 @@ public final class LiveText {
         return KEPT.computeIfAbsent(key, asked -> work.get());
     }
 
-    // Every word in the order the help lists them.
     public static List<Help> help() {
         List<Help> help = new ArrayList<>();
         for (Group group : GROUPS) {
@@ -375,9 +363,8 @@ public final class LiveText {
         return help;
     }
 
-    // The text with every word in braces swapped for its value right now. Braces that hold no
-    // word stay as they were typed. Each character is looked at once and a value is never read
-    // again.
+    // Braces that hold no word stay as they were typed. Each character is looked at once and a
+    // value is never read again.
     public static String fill(String text) {
         if (text.indexOf(OPEN) < 0 || text.indexOf(CLOSE) < 0) {
             return text;
@@ -409,15 +396,13 @@ public final class LiveText {
         return TextMarkup.LINE_BREAK.splitAsStream(text).map(LiveText::fill).toList();
     }
 
-    // The live value of one word without its braces such as biome or count ender_pearl. Empty
-    // for a word it does not know.
+    // Empty for a word it does not know.
     public static String value(String key) {
         Reading held = held(MC.player, key);
         return held == null ? "" : held.text();
     }
 
-    // What one word without its braces holds right now with the number behind it such as the
-    // 17.4 behind a health that reads 17. Null for a word it does not know.
+    // Null for a word it does not know.
     public static Reading read(String key) {
         return held(MC.player, key);
     }
@@ -427,7 +412,7 @@ public final class LiveText {
         return BY_NAME.get((space < 0 ? key : key.substring(0, space)).toLowerCase(Locale.ROOT));
     }
 
-    // Null for a word it does not know. Outside a world every word says nothing.
+    // Outside a world every word says nothing.
     private static Reading held(LocalPlayer player, String typed) {
         String key = typed.trim();
         Word word = wordOf(key);
@@ -442,12 +427,11 @@ public final class LiveText {
         return held == null ? NOTHING : held;
     }
 
-    // Null for text that names nothing in the registry. Spaces read as the underscores of an id.
+    // Spaces read as the underscores of an id.
     private static Identifier idOf(String argument) {
         return Identifier.tryParse(argument.toLowerCase(Locale.ROOT).replace(' ', '_'));
     }
 
-    // What you carry of an item in your bag and your other hand.
     private static Reading carried(LocalPlayer player, String argument) {
         Identifier id = idOf(argument);
         if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
@@ -457,15 +441,13 @@ public final class LiveText {
             InventoryUtil.countWithOffhand(BuiltInRegistries.ITEM.getValue(id), InventoryUtil.WHOLE_INVENTORY)));
     }
 
-    // Null for an argument that names no effect.
     private static Holder<MobEffect> effectNamed(String argument) {
         Identifier id = idOf(argument);
         return id == null ? null : BuiltInRegistries.MOB_EFFECT.get(id).orElse(null);
     }
 
-    // The time left as the inventory writes it with the seconds behind it. An effect that never
-    // ends reads as the sign for it and compares as longer than any number. One you do not
-    // have says nothing.
+    // An effect that never ends compares as longer than any number. One you do not have says
+    // nothing.
     private static Reading effectTime(LocalPlayer player, String argument) {
         Holder<MobEffect> effect = effectNamed(argument);
         if (effect == null) {
@@ -511,7 +493,7 @@ public final class LiveText {
             setting instanceof NumberSetting number ? number.getValue() : Double.NaN);
     }
 
-    // The time and the seconds behind it. An autopilot flight comes before a goto walk.
+    // An autopilot flight comes before a goto walk.
     private static Reading timeLeft() {
         Autopilot autopilot = Modules.active(Autopilot.class);
         OptionalDouble flight = autopilot == null ? OptionalDouble.empty() : autopilot.secondsLeft();
@@ -527,7 +509,7 @@ public final class LiveText {
         return new Reading(ChatUtil.shortAge(Math.round(seconds * TimeUnit.SECONDS.toMillis(1))), seconds);
     }
 
-    // The time now in the form given. A form the clock cannot read gives a question mark.
+    // A form the clock cannot read gives a question mark.
     private static Reading dated(String argument, String usual) {
         String typed = argument == null ? usual : argument;
         Optional<DateTimeFormatter> form = FORMS.computeIfAbsent(typed, LiveText::formOf);
@@ -549,7 +531,6 @@ public final class LiveText {
         }
     }
 
-    // One coordinate of the matching block in the other dimension. Nothing in the End.
     private static Reading otherSide(LocalPlayer player, Direction.Axis axis) {
         BlockPos other = Dimension.acrossPortal(player.position(), ServerInfo.dimension());
         return other == null ? null : Reading.whole(other.get(axis));
@@ -559,7 +540,6 @@ public final class LiveText {
         return MC.gameRenderer.mainCamera().position();
     }
 
-    // The biome at your feet by the name the game gives it.
     private static String biome(LocalPlayer player) {
         return player.level().getBiome(player.blockPosition()).unwrapKey()
             .map(key -> Component.translatableWithFallback(Util.makeDescriptionId("biome", key.identifier()),
@@ -567,7 +547,6 @@ public final class LiveText {
             .orElse("");
     }
 
-    // Empty for an empty hand.
     private static String nameOf(ItemStack stack) {
         return stack.isEmpty() ? "" : stack.getHoverName().getString();
     }
@@ -586,7 +565,6 @@ public final class LiveText {
         return mode == null ? "" : mode.getPlayerMode().getShortDisplayName().getString();
     }
 
-    // The name of the block or entity under the crosshair. Empty when it points at nothing.
     private static String lookingAt() {
         HitResult hit = MC.hitResult;
         if (hit instanceof EntityHitResult entityHit) {
@@ -598,7 +576,6 @@ public final class LiveText {
         return "";
     }
 
-    // Where the block or entity under the crosshair is. Null when it points at nothing.
     private static Vec3 lookedAt() {
         HitResult hit = MC.hitResult;
         if (hit instanceof EntityHitResult entityHit) {

@@ -5,26 +5,21 @@ import net.minecraft.SharedConstants;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// One line of a macro read for what it asks. A line whose first word is wait or repeat is an
-// instruction and never goes to the server. Anything else is sent or run as it stands.
+// A line whose first word is wait or repeat is an instruction and never goes to the server.
 public sealed interface MacroLine {
 
     String WAIT = "wait";
     String REPEAT = "repeat";
 
-    // A line for the server or a command of the client's own.
     record Send(String text) implements MacroLine {
     }
 
-    // Nothing runs for that many ticks.
     record Wait(int ticks) implements MacroLine {
     }
 
-    // The same line that many times with a gap in ticks between one and the next.
     record Repeat(int times, int gap, String text) implements MacroLine {
     }
 
-    // An instruction with something missing or wrong. The problem says what it should look like.
     record Unreadable(String problem) implements MacroLine {
     }
 
@@ -49,7 +44,7 @@ public sealed interface MacroLine {
         return new Repeat(times.getAsInt(), gap.getAsInt(), words[3].trim());
     }
 
-    // A whole number of ticks or seconds marked with an s such as 20 or 2s or 0.5s.
+    // Ticks or seconds marked with an s such as 20 or 2s or 0.5s.
     static OptionalInt ticks(String text) {
         String typed = text.toLowerCase(Locale.ROOT);
         boolean seconds = typed.endsWith("s");

@@ -28,7 +28,6 @@ public abstract class LightningBoltRendererMixin {
         args.set(2, ARGB.blue(colour) / 255f);
     }
 
-    // Zero when nothing is being recoloured.
     @Unique
     private static int offlineclient$colour() {
         Ambience ambience = Modules.get(Ambience.class);

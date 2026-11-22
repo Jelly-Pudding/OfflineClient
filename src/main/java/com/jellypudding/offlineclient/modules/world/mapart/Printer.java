@@ -34,13 +34,11 @@ public interface Printer {
     // file that went missing and for presses a lever did not show.
     int TRIES = 3;
 
-    // Whether a cell passes. The position is where the cell lies.
     @FunctionalInterface
     interface CellTest {
         boolean test(int cell, BlockPos pos);
     }
 
-    // What one tick of a walk came to.
     enum Walk {
         // There or as near as the walk gets.
         THERE,
@@ -57,7 +55,6 @@ public interface Printer {
     // The cells of the map square the picture covers in walk order. The map draws these.
     int[] covered();
 
-    // Every kind of block the picture needs.
     Set<Item> pictureItems();
 
     BlockPos cellPos(int cell);
@@ -66,13 +63,12 @@ public interface Printer {
     // the first wins.
     int nearestCell(IntIterable cells, CellTest test);
 
-    // The first cell in order that passes the test. Minus one when none does.
+    // Minus one when none passes.
     int firstCell(IntIterable cells, CellTest test);
 
     // Where a picture goes. The map square and the row north of it at the height of the picture.
     BoundingBox footprint();
 
-    // Ticks the printer has run for.
     int ticks();
 
     FaceMode faceTarget();
@@ -82,17 +78,14 @@ public interface Printer {
     // stopped. Nothing more of the tick may run then.
     boolean visiting();
 
-    // Starts a visit with a fresh count of the clicks it may make.
     void openVisit(BlockPos pos, String name, Predicate<BlockState> fits, StationVisit.Work work);
 
-    // Sets what runs once the visit under way is done.
     void afterVisit(Runnable then);
 
     // Counts a click of the visit under way. False once the visit has made as many as a double
     // chest has slots and more. A server that keeps throwing a move back ends the visit that way.
     boolean mayClick();
 
-    // One tick of the walk to stand near the column of the spot.
     Walk goTo(BlockPos spot);
 
     void arrived();
@@ -105,7 +98,6 @@ public interface Printer {
     // moved would be printed again and stops the printer.
     void cleared();
 
-    // Tells the player why in chat and switches the printer off.
     void disable(String reason);
 
     static boolean storage(BlockState state) {

@@ -13,20 +13,16 @@ public final class AxisWalker {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Standing further than this above or below the floor counts as having left it.
     private static final double OFF_FLOOR = 1.5;
 
-    // How hard a tick pushes the player back onto the held lane.
     private static final double CENTRE_PULL = 0.2;
     private static final double MAX_CENTRE_PUSH = 0.1;
 
-    // The push stops once the player is this close to the lane.
     public static final double ON_LANE = 0.05;
 
     // A block no further ahead than this is beside you. Walking on brings it no nearer.
     public static final double BESIDE = 0.5;
 
-    // The way the line runs. Null whilst no line is held.
     private CompassPoint heading;
     private BlockPos origin;
     private int floorY;
@@ -45,7 +41,6 @@ public final class AxisWalker {
         lock(false);
     }
 
-    // Takes the line from where the player faces snapped to the nearest eighth turn when asked.
     public void lock(boolean allowDiagonal) {
         origin = MC.player.blockPosition();
         floorY = origin.getY();
@@ -80,7 +75,6 @@ public final class AxisWalker {
         return diagonal;
     }
 
-    // Reads as north east for a diagonal and north for a straight line.
     public String heading() {
         return heading.words();
     }
@@ -93,7 +87,6 @@ public final class AxisWalker {
         return offFloor(floorY);
     }
 
-    // For a line whose floor changes height along the way.
     public boolean offFloor(int floor) {
         return Math.abs(MC.player.getY() - floor) > OFF_FLOOR;
     }
@@ -107,7 +100,6 @@ public final class AxisWalker {
         return width - 1 + leftLane(width);
     }
 
-    // Keeps the view and the footing on the line the work started on.
     public void holdAxis() {
         holdAxis(true);
     }
@@ -116,7 +108,6 @@ public final class AxisWalker {
         heldLane = lane;
     }
 
-    // Keeps the footing on the held lane. The view follows the line only when asked.
     public void holdAxis(boolean steerView) {
         if (heading == null || MC.player == null) {
             return;
@@ -133,7 +124,6 @@ public final class AxisWalker {
         MC.player.setDeltaMovement(velocity.x + rightX * push, velocity.y, velocity.z + rightZ * push);
     }
 
-    // True once the player stands close enough to the lane for the pull to stop.
     public boolean onLane(double lane) {
         return Math.abs(acrossOf(MC.player.getX(), MC.player.getZ()) - lane) < ON_LANE;
     }
@@ -150,7 +140,6 @@ public final class AxisWalker {
             alongZ * speed + rightZ * across);
     }
 
-    // Blocks moved along the line since it was taken. Zero when unlocked.
     public double travelled() {
         if (heading == null || MC.player == null) {
             return 0;
@@ -158,12 +147,10 @@ public final class AxisWalker {
         return alongOf(MC.player.getX(), MC.player.getZ());
     }
 
-    // Distance along the line from the origin to a point.
     public double alongOf(double x, double z) {
         return (x - origin.getX() - 0.5) * alongX + (z - origin.getZ() - 0.5) * alongZ;
     }
 
-    // Distance to the right of the line to a point.
     public double acrossOf(double x, double z) {
         return (x - origin.getX() - 0.5) * rightX + (z - origin.getZ() - 0.5) * rightZ;
     }
@@ -177,7 +164,6 @@ public final class AxisWalker {
         return acrossOf(pos.getX() + 0.5, pos.getZ() + 0.5);
     }
 
-    // Blocks along the line from the origin to a position on a straight line.
     public int depthOf(BlockPos pos) {
         return depthOf(pos.getX() + 0.5, pos.getZ() + 0.5);
     }
@@ -194,21 +180,17 @@ public final class AxisWalker {
             origin.getZ() + (int) Math.round(alongZ * depth + rightZ * lane));
     }
 
-    // A point at a depth along the line. The outline of a diagonal is drawn from these.
     public Vec3 pointAt(double depth, double lane, double up) {
         return new Vec3(origin.getX() + 0.5 + alongX * depth + rightX * lane,
             floorY + up,
             origin.getZ() + 0.5 + alongZ * depth + rightZ * lane);
     }
 
-    // Where the eyes of a player standing on a lane at a point along the line would be.
     public Vec3 eyeAt(double along, double lane, int floor) {
         Vec3 spot = pointAt(along, lane, 0);
         return new Vec3(spot.x, floor + MC.player.getEyeHeight(), spot.z);
     }
 
-    // True when a player could stand on a lane at a point along the line. The floor holds them
-    // and the two blocks above it let them in unharmed.
     public boolean standable(double along, double lane, int floor) {
         BlockPos feet = BlockPos.containing(pointAt(along, lane, 0)).atY(floor);
         return BlockUtil.isSolid(feet.below()) && passable(feet) && passable(feet.above());

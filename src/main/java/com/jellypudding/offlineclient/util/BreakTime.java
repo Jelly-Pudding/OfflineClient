@@ -13,7 +13,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
-// How fast a block breaks by the vanilla dig speed maths and when the server takes it as broken.
 public final class BreakTime {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -38,8 +37,7 @@ public final class BreakTime {
         return BlockUtil.state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
     }
 
-    // Grass or a flower or snow or anything else in the way that one hit clears. Flowers
-    // cannot be built over like grass but still break in one hit.
+    // Flowers cannot be built over like grass but still break in one hit.
     public static boolean clearsInOneHit(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         return !state.isAir() && (state.canBeReplaced() || state.is(BlockTags.FLOWERS))
@@ -55,7 +53,6 @@ public final class BreakTime {
         return BlockUtil.state(pos).getDestroyProgress(MC.player, MC.level, pos) >= SERVER_ACCEPTS;
     }
 
-    // Progress one tick of mining with this tool would make by the vanilla dig speed maths.
     // The tool need not be held and a packet miner can time one it swapped away.
     public static float breakDelta(ItemStack tool, BlockPos pos) {
         return breakDelta(tool, BlockUtil.state(pos), pos);

@@ -16,7 +16,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 
-// Swaps the chest slot between an elytra and a chestplate on one key.
 // AutoArmor leaves a worn elytra alone whilst its Keep elytra is on.
 public final class ChestSwap extends Module {
 
@@ -100,7 +99,6 @@ public final class ChestSwap extends Module {
         }
     }
 
-    // Swaps a worn elytra for a chestplate. Any other chest piece stays on.
     public void takeOffElytra() {
         if (canSwap() && isElytra(worn())) {
             equipChestplate();
@@ -129,8 +127,7 @@ public final class ChestSwap extends Module {
         return true;
     }
 
-    // The chestplate the Chestplate row picks or minus one. A cursed piece would never come off
-    // again for the elytra.
+    // A cursed piece would never come off again for the elytra.
     private int chosenChestplate() {
         int found = -1;
         double bestScore = 0;
@@ -154,7 +151,6 @@ public final class ChestSwap extends Module {
         return found;
     }
 
-    // True when no later piece can beat this one.
     private boolean settles(double score) {
         return switch (chestplate.getValue()) {
             case STRONGEST -> false;

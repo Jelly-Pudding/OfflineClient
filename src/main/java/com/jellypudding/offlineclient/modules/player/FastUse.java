@@ -24,8 +24,8 @@ import net.minecraft.world.item.WindChargeItem;
 
 import java.util.List;
 
-// Cuts the four tick pause the game puts between right clicks. Blocks
-// are left to FastPlace which shares the same delay cap.
+// The game puts a four tick pause between right clicks. Blocks are left to FastPlace which shares
+// the same delay cap.
 public final class FastUse extends Module {
 
     public enum Mode { ALL_ITEMS, CHOSEN_ONLY }

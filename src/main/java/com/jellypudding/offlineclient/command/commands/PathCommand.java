@@ -10,7 +10,6 @@ import net.minecraft.client.player.LocalPlayer;
 
 import java.util.List;
 
-// Draws the way the pathfinder would walk to a place and leaves the walking to the player.
 public final class PathCommand extends PlaceCommand {
 
     private static final String CLEAR = "clear";

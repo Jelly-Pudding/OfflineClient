@@ -28,17 +28,13 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 
-// Digs a straight tunnel and walks along it.
-// The axis is taken from the facing when it starts.
 public final class Tunneller extends Module {
 
     private static final int TUNNEL_COLOR = 0xFF40C0FF;
     private static final int CURRENT_COLOR = 0xFFFF5030;
 
-    // Depths looked at in one tick. Keeps a long clear stretch cheap.
     private static final int SCAN_DEPTHS = 8;
 
-    // How far over the roof falling sand or gravel is watched for.
     private static final int FALL_WATCH = 16;
 
     private final NumberSetting width = new NumberSetting("Width",
@@ -66,7 +62,6 @@ public final class Tunneller extends Module {
     private int cleared;
     private int lastTorch;
     private BlockPos current;
-    // True once chat has named a block this run left out of reach.
     private boolean toldLeft;
 
     public Tunneller() {
@@ -193,13 +188,11 @@ public final class Tunneller extends Module {
         return !mc.level.getEntitiesOfClass(FallingBlockEntity.class, stretch).isEmpty();
     }
 
-    // The slice you stand in counted from where the tunnel began.
     private int standingDepth() {
         return (int) Math.floor(walker.travelled());
     }
 
-    // The nearest block in reach in the first slice still to dig. A slice you stand in with nothing
-    // left in reach is given up. Chat names the first block a run leaves.
+    // A slice you stand in with nothing left in reach is given up.
     private BlockPos nextBlock() {
         double reach = mc.player.blockInteractionRange();
         // Sand or gravel that dropped into the stretch already dug comes out first. Nothing else
@@ -237,10 +230,8 @@ public final class Tunneller extends Module {
         return null;
     }
 
-    // A hole in the floor of the stretch ahead gets a block before you walk onto it. True when
-    // a block went down this tick or the server has to catch up first. The tunnel ends at a hole
-    // right ahead in the lane you walk with nothing in the hotbar to fill it. A hole beside that
-    // lane is left open then.
+    // True when a block went down this tick or the server has to catch up first. The tunnel ends at
+    // a hole right ahead in the lane you walk with nothing in the hotbar to fill it.
     private boolean fillHole() {
         double reach = mc.player.blockInteractionRange();
         int here = Math.max(1, standingDepth());
@@ -278,8 +269,6 @@ public final class Tunneller extends Module {
         return false;
     }
 
-    // A liquid touching the stretch just dug or about to be dug gets a block over it.
-    // True when a block went down this tick.
     private boolean sealLiquid() {
         double reach = mc.player.blockInteractionRange();
         for (int depth = Math.max(1, cleared); depth <= cleared + 1; depth++) {
@@ -329,7 +318,6 @@ public final class Tunneller extends Module {
         return AxisWalker.rightLane(width.getInt());
     }
 
-    // Puts a torch on the floor of the left lane at a set spacing.
     private void placeTorch() {
         if (!torches.isOn()) {
             return;

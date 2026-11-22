@@ -19,27 +19,23 @@ import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.function.IntSupplier;
 
-// The two corners of a box marked one click at a time. Whilst its owner is on the picker says
-// what to click next and shows the box that click would close and hands each clicked block over.
+// Whilst its owner is on the picker says what to click next and shows the box that click would
+// close and hands each clicked block over.
 public final class CornerPicker {
 
-    // A module that takes its box one corner at a time. A corner typed in a command goes in the
-    // same way as a clicked one.
+    // A corner typed in a command goes in the same way as a clicked one.
     public interface Taker {
         void markCorner(BlockPos pos);
     }
 
-    // The colour of the marks in the corners and of the block the next click would mark.
     public static final int COLOR = 0xFFFFD040;
 
     // The most blocks any box may hold. A module that walks every block of a larger one would
     // stall the game.
     public static final int MOST_BLOCKS = 1 << 20;
 
-    // The words under the crosshair turn this colour over a box past the limit.
     private static final int REFUSED_COLOR = 0xFFFF6060;
 
-    // A corner mark sits this far inside its block and the box this far outside the blocks.
     private static final double MARK_INSET = 0.3;
     private static final double BOX_MARGIN = 0.005;
 
@@ -67,13 +63,11 @@ public final class CornerPicker {
         this.purpose = purpose;
     }
 
-    // For an owner that wants one more block clicked after the box.
     public CornerPicker thenClick(String what) {
         lastClick = what;
         return this;
     }
 
-    // The row that caps the box of a module that works through every block in it.
     public static NumberSetting maxBlocks() {
         return new NumberSetting("Max blocks", "The most blocks one box may hold.", 4096, 64, 16384, 64).min(1);
     }
@@ -90,7 +84,6 @@ public final class CornerPicker {
         clear();
     }
 
-    // The first free corner takes the spot.
     public void mark(BlockPos pos) {
         if (first == null) {
             first = pos;
@@ -116,7 +109,6 @@ public final class CornerPicker {
         return second;
     }
 
-    // What the next click marks. Null once nothing more is wanted.
     private String wanted() {
         if (first == null) {
             return FIRST;
@@ -124,7 +116,6 @@ public final class CornerPicker {
         return second == null ? OPPOSITE : lastClick;
     }
 
-    // What the owner shows beside its name in the module list whilst a click is wanted.
     public String waitingFor() {
         String wanted = wanted();
         return wanted == null ? null : "pick " + wanted;
@@ -141,8 +132,7 @@ public final class CornerPicker {
             * (Math.abs(from.getZ() - to.getZ()) + 1);
     }
 
-    // True whilst the closed box holds no more blocks than the limit. A larger box is turned down
-    // in chat and its second corner is taken back.
+    // A larger box is turned down in chat and its second corner is taken back.
     public boolean withinLimit() {
         long volume = volume();
         if (volume <= limit.getAsInt()) {
@@ -157,19 +147,16 @@ public final class CornerPicker {
         return "That box holds " + volume + " blocks and the limit is " + limit.getAsInt();
     }
 
-    // True for a block inside the closed box with both edges counted.
     public boolean contains(BlockPos pos) {
         return BoundingBox.fromCorners(first, second).isInside(pos);
     }
 
-    // The key that marks as a sentence names it. The game's use key reads as its controls show it.
     private static String key() {
         KeyMapping use = OfflineClient.MC.options.keyUse;
         return use.isUnbound() ? "the use key you have yet to bind in the controls"
             : use.getTranslatedKeyMessage().getString();
     }
 
-    // Chat words that ask for a click on something.
     public static String press(String what) {
         return "press §f" + key() + "§7 on " + what;
     }
@@ -191,8 +178,6 @@ public final class CornerPicker {
         }
     }
 
-    // The block the next click would mark. Null whilst no click is wanted or a screen is open or
-    // the crosshair rests on no block.
     private BlockPos aimed() {
         if (wanted() == null || OfflineClient.MC.player == null || OfflineClient.MC.gui.screen() != null) {
             return null;
@@ -215,13 +200,9 @@ public final class CornerPicker {
         }
     }
 
-    // The words under the crosshair and their colour.
     private record Prompt(String words, int color) {
     }
 
-    // What the next click does. Over the block that would close the box the words say how large
-    // the box would be or that the limit turns it down. Null whilst no click is wanted or a
-    // screen is open.
     private Prompt prompt() {
         String wanted = wanted();
         if (wanted == null || OfflineClient.MC.gui.screen() != null) {
@@ -246,8 +227,6 @@ public final class CornerPicker {
         }
     }
 
-    // The box in its style with a mark in each corner that is down. Whilst a click is wanted the
-    // block it would mark is outlined and an open box reaches as far as that block.
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();

@@ -1,12 +1,11 @@
 package com.jellypudding.offlineclient.hud;
 
+import com.jellypudding.offlineclient.render.ClientFonts;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// An element that is a block of text rows one under another. Each row lines up with the side the
-// element is anchored to.
 public abstract class RowsElement extends HudElement {
 
     protected RowsElement(String name, String description, boolean on, double startX, double startY) {
@@ -15,6 +14,11 @@ public abstract class RowsElement extends HudElement {
 
     // Asked several times a frame. Rows that take long to work out belong in a RowCache.
     protected abstract List<TextRow> rows(Font font);
+
+    @Override
+    public boolean visible() {
+        return isActive() && !rows(ClientFonts.hud()).isEmpty();
+    }
 
     @Override
     public final void render(GuiGraphicsExtractor context, Font font) {

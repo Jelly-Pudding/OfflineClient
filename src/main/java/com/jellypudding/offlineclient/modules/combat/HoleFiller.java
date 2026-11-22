@@ -28,8 +28,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// A hole with somebody already in it cannot be filled since the server
-// refuses a block inside a player. HoleFiller seals a hole before an enemy reaches it.
+// The server refuses a block inside a player and a hole has to be sealed before an enemy reaches
+// it.
 public final class HoleFiller extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -124,7 +124,9 @@ public final class HoleFiller extends Module {
             return;
         }
         collectHoles(everything);
-        rounds.place(holes, blocks, SwingMode.of(swing.isOn()));
+        if (!Hands.slotsTaken()) {
+            rounds.place(holes, blocks, SwingMode.of(swing.isOn()));
+        }
     }
 
     private void collectEnemies() {
@@ -147,7 +149,6 @@ public final class HoleFiller extends Module {
         }
     }
 
-    // True when the player already stands in a one block hole that is blast proof on every side.
     private boolean walledIn(Player player) {
         return !Holes.hole(player.blockPosition(), this::blastProof, this::open, false).isEmpty();
     }
@@ -179,12 +180,10 @@ public final class HoleFiller extends Module {
             <= BlockUtil.reachFor(Vec3.upFromBottomCenterOf(pos, 1), range.getValue(), wallsRange.getValue());
     }
 
-    // Open and empty. A hole with a player in it is not open.
     private boolean open(BlockPos pos) {
         return BlockUtil.state(pos.above()).isAir() && BlockUtil.blockFits(pos);
     }
 
-    // True when the spot is really a hole.
     private boolean floored(BlockPos pos) {
         if (!genuineOnly.isOn()) {
             return BlockUtil.isSolid(pos.below());
@@ -207,7 +206,6 @@ public final class HoleFiller extends Module {
         return false;
     }
 
-    // True when a moving enemy will be standing on the spot shortly.
     private boolean headedFor(BlockPos pos) {
         if (!predict.isOn()) {
             return false;

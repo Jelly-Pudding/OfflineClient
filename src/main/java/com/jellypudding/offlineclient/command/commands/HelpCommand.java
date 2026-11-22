@@ -60,7 +60,6 @@ public final class HelpCommand extends Command {
             .append(Component.literal("§7.")));
     }
 
-    // One name in the list. The hover carries the usage and the click types it in.
     private static Component entry(String prefix, Command command) {
         Component hover = Component.literal("§b" + prefix + command.getUsage() + "\n§7"
             + command.getDescription());

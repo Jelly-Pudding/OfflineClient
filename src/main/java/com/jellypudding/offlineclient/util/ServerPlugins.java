@@ -23,7 +23,6 @@ public final class ServerPlugins {
     // The server's own namespaces. They name no plugin.
     private static final Set<String> SERVER_OWN = Set.of("minecraft", "bukkit", "spigot", "paper");
 
-    // What a player types to have the version command offer the plugin names.
     private static final String ASK = "bukkit:version ";
 
     // The chat screen counts its requests up from nought. A negative id never meets its answers.
@@ -35,7 +34,7 @@ public final class ServerPlugins {
     private ServerPlugins() {
     }
 
-    // The names of the commands the server sent in lower case. Empty off a server. Game thread only.
+    // Empty off a server. Game thread only.
     public static List<String> roots() {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         List<String> names = new ArrayList<>();
@@ -48,7 +47,7 @@ public final class ServerPlugins {
         return names;
     }
 
-    // The plugin names the commands carry before a colon. Game thread only.
+    // Game thread only.
     public static Set<String> fromCommands() {
         Set<String> names = new TreeSet<>();
         for (String root : roots()) {
@@ -60,8 +59,8 @@ public final class ServerPlugins {
         return names;
     }
 
-    // Asks the server once for the names the version command offers. Empty when the server
-    // keeps them from you or does not answer in time. Completes on the game thread.
+    // Empty when the server keeps the names from you or does not answer in time. Completes on the
+    // game thread.
     public static CompletableFuture<List<String>> ask() {
         ClientPacketListener connection = OfflineClient.MC.getConnection();
         if (connection == null) {

@@ -150,7 +150,6 @@ public final class AutoArmor extends Module {
                 if (keepsGold(slot)) {
                     sayIfNoGold(worn);
                 }
-                // Nothing better to wear. A shattering piece still comes off.
                 if (wornOut(worn) && stow(armorNetworkSlot)) {
                     return;
                 }
@@ -164,7 +163,6 @@ public final class AutoArmor extends Module {
         }
     }
 
-    // Moves a worn out piece into the first free inventory slot.
     private boolean stow(int armorNetworkSlot) {
         int free = InventoryUtil.findSlot(ItemStack::isEmpty, InventoryUtil.WHOLE_INVENTORY);
         if (free == -1) {
@@ -195,14 +193,11 @@ public final class AutoArmor extends Module {
         }
     }
 
-    // Read by ChestSwap through Modules. The inventory slot of the chestplate this module would put
-    // on an empty chest or minus one.
+    // Read by ChestSwap through Modules.
     public int bestChestplate() {
         return bestUpgrade(ItemStack.EMPTY, EquipmentSlot.CHEST);
     }
 
-    // The inventory slot of the piece that beats the worn one or minus one.
-    // An elytra or a worn out piece scores nothing. Anything real replaces it.
     private int bestUpgrade(ItemStack worn, EquipmentSlot slot) {
         int best = -1;
         double bestScore = worn.is(Items.ELYTRA) || wornOut(worn) ? -1 : score(worn, slot);

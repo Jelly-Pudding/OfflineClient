@@ -82,7 +82,6 @@ public final class BowAimbot extends Module implements Targeting {
         return target == null ? null : EntityUtil.displayNameOf(target);
     }
 
-    // What a draw is aimed at. Null between draws.
     @Override
     public Entity getFought() {
         return target;
@@ -139,9 +138,7 @@ public final class BowAimbot extends Module implements Targeting {
         aim(target, speed);
     }
 
-    // Speed the arrow would leave with right now or zero when no ranged weapon is ready.
-    // A crossbow counts whilst it is drawn too. BowSpam's rapid fire holds one drawn and
-    // the client seldom sees it loaded.
+    // BowSpam's rapid fire holds a crossbow drawn and the client seldom sees it loaded.
     private double launchSpeed() {
         if (mc.player.isUsingItem()) {
             ItemStack using = mc.player.getUseItem();
@@ -182,7 +179,6 @@ public final class BowAimbot extends Module implements Targeting {
         return walls.isOn() || mc.player.hasLineOfSight(entity);
     }
 
-    // Turns the player towards the point the arrow needs to fly through.
     private void aim(Entity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 aimPoint = visiblePoint(entity, eye);
@@ -243,7 +239,6 @@ public final class BowAimbot extends Module implements Targeting {
         return (1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks)) / (1 - ProjectileUtil.AIR_DRAG);
     }
 
-    // A word under the crosshair that says when to let go.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         if (!readout.isOn() || target == null || !inGame()) {

@@ -17,8 +17,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// Two buttons in the corners of the header either side of the title. Last server joins the
-// server you were on last and Clean up opens the screen that thins the list out.
 @Mixin(JoinMultiplayerScreen.class)
 public abstract class JoinMultiplayerScreenMixin extends Screen {
 
@@ -45,7 +43,6 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
         super(title);
     }
 
-    // Both buttons are always built. Whether they show is worked out each time the screen is laid out.
     @Inject(method = "init()V", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         JoinMultiplayerScreen screen = (JoinMultiplayerScreen) (Object) this;
@@ -60,7 +57,6 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
         offlineclient$place();
     }
 
-    // The screen you come back to after a join or a kick is laid out again without being built again.
     @Inject(method = "repositionElements()V", at = @At("TAIL"))
     private void onReposition(CallbackInfo ci) {
         offlineclient$place();

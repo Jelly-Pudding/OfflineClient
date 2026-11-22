@@ -33,8 +33,7 @@ public final class Panic extends Module {
     // Kept until a restore or the next panic that finds something to switch off. Never saved.
     private final List<Module> switchedOff = new ArrayList<>();
 
-    // Set by a dormant press of the key and cleared by the next. Only the key starts it and the
-    // key is the way back. Never saved and a restart wakes the client. Read through isAsleep.
+    // Never saved and a restart wakes the client. Read through isAsleep.
     private boolean asleep;
 
     public Panic() {
@@ -75,14 +74,12 @@ public final class Panic extends Module {
         return asleep && dormant.isOn() && getKeybind().isBound();
     }
 
-    // True for a module the press that wakes the client will switch back on. The config holds
-    // such a module as on and a game closed whilst asleep loses nothing.
+    // The config holds such a module as on and a game closed whilst asleep loses nothing.
     public boolean bringsBack(Module module) {
         return isAsleep() && switchedOff.contains(module);
     }
 
-    // True whilst the client sleeps and nothing of it may hear the key. A press of the Panic key
-    // is the one thing that gets through. It wakes the client.
+    // A press of the Panic key is the one thing that gets through and it wakes the client.
     public static boolean sleepsThrough(Bind input, int action) {
         Panic panic = Modules.get(Panic.class);
         if (panic == null || !panic.asleep) {
@@ -116,7 +113,6 @@ public final class Panic extends Module {
         setEnabled(false);
     }
 
-    // How many modules went off. They are remembered for the restore.
     private int switchOffAll() {
         List<Module> off = new ArrayList<>();
         for (Module module : toSwitchOff()) {
@@ -137,7 +133,6 @@ public final class Panic extends Module {
         return off.size();
     }
 
-    // Every module that is on and can be switched off. Empty before the client has started.
     private List<Module> toSwitchOff() {
         ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
         List<Module> on = new ArrayList<>();

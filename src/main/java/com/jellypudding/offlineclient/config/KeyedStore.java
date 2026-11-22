@@ -12,8 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 
-// Entries saved to a file under a name with an optional key. Names match whatever their
-// case and an entry replaces the one already saved under its name.
+// Names match whatever their case and an entry replaces the one already saved under its name.
 public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
 
     public interface Keyed<T> {
@@ -24,7 +23,6 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         T withKey(Bind key);
     }
 
-    // Builds an entry from its name and key and the rest of what was saved for it.
     protected interface Reader<T> {
         T read(String name, Bind key, JsonObject saved);
     }
@@ -59,7 +57,6 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         return removed;
     }
 
-    // Null when nothing answers to that name.
     public T find(String name) {
         for (T entry : entries) {
             if (entry.name().equalsIgnoreCase(name)) {
@@ -69,13 +66,12 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         return null;
     }
 
-    // The key of whatever is saved under the name. Saving over an entry keeps its key.
+    // Saving over an entry keeps its key.
     public Bind keyOf(String name) {
         T entry = find(name);
         return entry == null ? Bind.NONE : entry.key();
     }
 
-    // Every entry the press sets off.
     public List<T> pressedBy(KeyPressEvent event) {
         List<T> pressed = new ArrayList<>();
         if (event.getAction() != InputConstants.PRESS) {
@@ -89,7 +85,6 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         return pressed;
     }
 
-    // An entry that cannot be read is left out.
     private static <E> List<E> decode(JsonElement root, Reader<E> reader, String fileName) {
         return DataFiles.entries(root, element -> {
             JsonObject object = element.getAsJsonObject();
@@ -98,7 +93,6 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         }, "entries of " + fileName);
     }
 
-    // Every entry the way the file holds them. A profile keeps a copy.
     public JsonArray toJson() {
         JsonArray root = new JsonArray();
         for (T entry : entries) {
@@ -111,8 +105,6 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
         return root;
     }
 
-    // Swaps every entry for the saved ones. Saved text that is no list leaves the store as it is
-    // and an entry that cannot be read is left out.
     public void replaceWith(JsonElement saved) {
         List<T> decoded = decode(saved, reader, file.getFileName().toString());
         entries.clear();

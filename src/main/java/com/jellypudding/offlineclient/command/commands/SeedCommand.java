@@ -23,9 +23,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalLong;
 
-// Keeps the world seed of each server. OreSight and locate and the slime chunk marks work from
-// it. A server that keeps its seed secret still shows its bedrock and a seed cracker can work
-// the seed out from that.
+// A server that keeps its seed secret still shows its bedrock and a seed cracker can work the seed
+// out from that.
 public final class SeedCommand extends Command {
 
     private static final String BEDROCK = "bedrock";
@@ -104,8 +103,7 @@ public final class SeedCommand extends Command {
         }
     }
 
-    // Writes every bedrock block of one height in the chunks around you as a line of x y z and
-    // the word Bedrock. That is the form the seed crackers take.
+    // The seed crackers take lines of x y z and the word Bedrock.
     private void bedrock(String[] args) {
         String side = args.length == 1 ? FLOOR : args[1].toLowerCase(Locale.ROOT);
         if (args.length > 2 || !side.equals(FLOOR) && !side.equals(ROOF)) {

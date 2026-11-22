@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-// Hologram texts saved under a name. Names match whatever their case and are listed from A to Z.
-// A player with nothing saved yet starts with one example.
 public final class HologramPresets {
 
     private static final String EXAMPLE_NAME = "welcome";
@@ -32,7 +30,6 @@ public final class HologramPresets {
         return instance;
     }
 
-    // Null when nothing is saved under the name.
     public String find(String name) {
         return presets.get(name);
     }
@@ -41,7 +38,6 @@ public final class HologramPresets {
         return List.copyOf(presets.keySet());
     }
 
-    // A preset of the same name is replaced and takes the case typed this time.
     public void save(String name, String text) {
         presets.remove(name);
         presets.put(name, text);
@@ -56,7 +52,6 @@ public final class HologramPresets {
         return deleted;
     }
 
-    // Puts the example back as it shipped. The other presets stay.
     public String restoreExample() {
         save(EXAMPLE_NAME, EXAMPLE_TEXT);
         return EXAMPLE_NAME;

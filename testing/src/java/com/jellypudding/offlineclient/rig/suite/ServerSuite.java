@@ -16,7 +16,6 @@ import java.util.Set;
 // second player sees of it are the two things no single player world can show.
 public final class ServerSuite implements Suite {
 
-    // One thing to prove with both players on the server.
     @FunctionalInterface
     interface Play {
         void run(Rig rig, Duo duo) throws Exception;

@@ -23,12 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// The crafting recipes your recipe book knows and the grid cells each one fills.
 public final class Recipes {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // A known recipe for an item.
     public record Craft(RecipeDisplayEntry entry, ItemStack result, List<Ingredient> ingredients) {
 
         // The recipe book may place the result itself as an ingredient and craft nothing.
@@ -44,7 +42,6 @@ public final class Recipes {
     private Recipes() {
     }
 
-    // Every crafting recipe the recipe book knows whose result passes the test. Grouped by result.
     public static Map<Item, List<Craft>> known(Predicate<Item> wanted) {
         ContextMap context = SlotDisplayContext.fromLevel(MC.level);
         Map<Item, List<Craft>> byResult = new HashMap<>();
@@ -66,14 +63,12 @@ public final class Recipes {
         return byResult;
     }
 
-    // What your inventory holds counted the way a recipe asks for its ingredients.
     public static StackedItemContents carried() {
         StackedItemContents contents = new StackedItemContents();
         MC.player.getInventory().fillStackedContents(contents);
         return contents;
     }
 
-    // The grid slot of each ingredient in the order the recipe lists them.
     // Null when the recipe needs a bigger grid than this one.
     public static int[] gridCells(Craft craft, AbstractCraftingMenu menu) {
         int gridWidth = menu.getGridWidth();
@@ -100,8 +95,6 @@ public final class Recipes {
         return cells;
     }
 
-    // The first recipe for the item that fits the grid and that the contents can pay for. Null
-    // when there is none.
     public static Craft craftable(List<Craft> crafts, AbstractCraftingMenu menu, StackedItemContents contents) {
         for (Craft craft : crafts) {
             if (gridCells(craft, menu) != null && craft.entry().canCraft(contents)) {
@@ -111,7 +104,6 @@ public final class Recipes {
         return null;
     }
 
-    // Asks the server to fill the grid with one set of the recipe's ingredients.
     public static void placeOne(AbstractCraftingMenu menu, Craft craft) {
         MC.gameMode.handlePlaceRecipe(menu.containerId, craft.entry().id(), false);
     }

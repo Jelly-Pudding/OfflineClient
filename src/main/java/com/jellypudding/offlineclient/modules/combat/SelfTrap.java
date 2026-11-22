@@ -52,7 +52,7 @@ public final class SelfTrap extends Module {
     private final SlotSwap slots = new SlotSwap();
     private boolean placed;
 
-    // The spots the last tick found. The unobstructed test walks the entity list.
+    // The unobstructed test walks the entity list.
     private List<BlockPos> pending = List.of();
 
     public SelfTrap() {

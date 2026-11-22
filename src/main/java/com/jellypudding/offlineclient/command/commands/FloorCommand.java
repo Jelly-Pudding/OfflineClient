@@ -15,13 +15,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.OptionalInt;
 
-// Takes the player through the ceiling or the floor to the next place to stand. Whatever
-// the player steers goes with them.
 public final class FloorCommand extends Command {
 
-    // A floor this close to the last one found is the same floor.
     private static final double SAME_FLOOR = 0.5;
-    // Places the height of a move is written to.
     private static final int HEIGHT_PLACES = 1;
 
     private enum Search { UP, DOWN, TOP }
@@ -78,7 +74,6 @@ public final class FloorCommand extends Command {
             + ChatUtil.decimal(Math.abs(spot.y - mover.getY()), HEIGHT_PLACES) + " §7blocks.");
     }
 
-    // The chosen floor in the direction of travel. Null when the world runs out first.
     private Vec3 findFloor(Entity mover, int floors) {
         int direction = search == Search.UP ? 1 : -1;
         double feet = mover.getY();
@@ -101,7 +96,6 @@ public final class FloorCommand extends Command {
         return null;
     }
 
-    // The first place to stand coming down from the top of the world. It may be a tree top.
     private static Vec3 highest(Entity mover) {
         double feet = mover.getY();
         int top = Math.min(mover.level().getMaxY(), Mth.floor(feet) + Hop.MAX_TRIP);
@@ -114,9 +108,7 @@ public final class FloorCommand extends Command {
         return null;
     }
 
-    // Where the box comes to rest when dropped from the given height by up to one block.
-    // NaN when it has no room there or nothing to land on or it would land in lava or
-    // sink into powder snow.
+    // NaN when there is no room or nothing to land on or the landing is lava or powder snow.
     private static double floorUnder(Entity mover, double y) {
         Level level = mover.level();
         AABB box = mover.getBoundingBox().move(0, y - mover.getY(), 0);

@@ -13,7 +13,6 @@ public enum CompassPoint {
     EAST("E", "east", "+X"),
     SOUTH_EAST("SE", "south east", null);
 
-    // Degrees of yaw from one point to the next.
     public static final int STEP = 45;
 
     private static final CompassPoint[] ALL = values();
@@ -43,12 +42,10 @@ public enum CompassPoint {
         return axis;
     }
 
-    // The yaw in degrees that faces this point.
     public int yaw() {
         return ordinal() * STEP;
     }
 
-    // The point nearest a yaw in degrees.
     public static CompassPoint nearest(float yaw) {
         return ALL[Math.floorMod(Math.round(yaw / STEP), ALL.length)];
     }

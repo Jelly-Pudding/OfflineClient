@@ -39,39 +39,31 @@ import net.minecraft.world.phys.BlockHitResult;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-// The two ends of a stasis chamber. A pearl thrown into a chamber waits there until its
-// trapdoor is flipped and then brings its thrower home. The player out in the world whispers
-// a word to the account at base. That account walks to the chamber the word names and flips
-// its trapdoor and puts it back.
+// A pearl thrown into a chamber waits there until its trapdoor is flipped and then brings its
+// thrower home. The player out in the world whispers a word to the account at base. That account
+// walks to the chamber the word names and flips its trapdoor and puts it back.
 public final class Stasis extends Module {
 
     public enum Role { AWAY, AT_BASE }
 
-    // What the account at base is doing for the call it serves.
     private enum Step { IDLE, WALKING, FLIPPING, HOLDING, RESTORING, RETURNING }
 
-    // One call for a pull and the chamber it is for.
     private record Call(String caller, Chamber chamber) {
     }
 
-    // How many chambers one account can work.
     private static final int SLOTS = 8;
 
-    // How close to the trapdoor the walk ends. A click reaches further than this.
+    // A click reaches further than this.
     private static final double WALK_NEAR = 2;
 
-    // Clicks tried before a trapdoor that will not move is given up on.
     private static final int FLIP_TRIES = 3;
 
-    // Calls that wait whilst one is served. Anything past this is turned away.
     private static final int MAX_WAITING = 8;
 
     private static final int STAY_AWAKE_TICKS = 30 * SharedConstants.TICKS_PER_SECOND;
 
-    // A call the server would have counted as spam is tried again this much later.
     private static final int RETRY_TICKS = SharedConstants.TICKS_PER_SECOND;
 
-    // The rows of one chamber.
     private final class Chamber {
 
         final int number;
@@ -117,7 +109,6 @@ public final class Stasis extends Module {
             return word.getValue().trim();
         }
 
-        // Null whilst no place is typed in.
         BlockPos place() {
             return BlockUtil.parse(trapdoor.getValue());
         }
@@ -180,10 +171,8 @@ public final class Stasis extends Module {
     private final Trip trip = new Trip();
     private final WorldWatch world = new WorldWatch();
     private final Deque<Call> waiting = new ArrayDeque<>();
-    // The call being served. Null between calls and on the walk back.
     private Call serving;
     private Step step = Step.IDLE;
-    // Where the account stood before it set out. Null whilst it stands there.
     private BlockPos home;
     private boolean headingHome;
     private boolean wasOpen;
@@ -191,7 +180,6 @@ public final class Stasis extends Module {
     private int tries;
     private int awakeIn;
     private int askWait;
-    // The role on the last tick. Null as the module goes on.
     private Role roleWas;
 
     public Stasis() {
@@ -211,7 +199,6 @@ public final class Stasis extends Module {
         searchTags("stasis chamber", "pearl", "pull", "teleport home", "trapdoor", "second account", "alt");
     }
 
-    // Who you call whilst away and who is being pulled at base.
     @Override
     public String getSuffix() {
         if (role.is(Role.AWAY)) {
@@ -252,7 +239,6 @@ public final class Stasis extends Module {
         standDown();
     }
 
-    // Drops every call and stops walking.
     private void standDown() {
         trip.stop();
         waiting.clear();
@@ -288,7 +274,6 @@ public final class Stasis extends Module {
         }
     }
 
-    // The reasons are read on every tick. One that came and went whilst it waited is not kept.
     private void tickAway() {
         if (askWait > 0) {
             askWait--;
@@ -300,7 +285,6 @@ public final class Stasis extends Module {
         }
     }
 
-    // A pop is acted on as it is heard of.
     @Subscribe
     private void onTotemPop(TotemPopEvent event) {
         Condition pop = callOn.popped(event);
@@ -324,8 +308,7 @@ public final class Stasis extends Module {
         }
     }
 
-    // False when nothing went out. A call for help goes at the pace of an escape and may go where a
-    // rule of Triggers may not. A name that cannot stand as one word of a command gets nothing.
+    // A call for help goes at the pace of an escape and may go where a rule of Triggers may not.
     private boolean whisper(String to, String text, ChatPace pace) {
         if (whisperWith.isBlank()) {
             ChatUtil.error("Stasis has no command to whisper with. Type one such as /msg into Whisper with.");
@@ -351,8 +334,8 @@ public final class Stasis extends Module {
         }
     }
 
-    // A call is the word and nothing else from a player who may call. A whisper is only taken
-    // where its sender cannot be forged. Open chat counts where the server sends real player chat.
+    // A whisper is only taken where its sender cannot be forged. Open chat counts where the server
+    // sends real player chat.
     private void onLine(Packet<?> packet) {
         if (!isEnabled() || !inGame() || !role.is(Role.AT_BASE)) {
             return;
@@ -389,7 +372,6 @@ public final class Stasis extends Module {
         return callers.isEmpty() ? OfflineClient.INSTANCE.getFriendManager().isFriend(name) : callers.holds(name);
     }
 
-    // A chamber already called for is not called for twice.
     private void take(Call call) {
         boolean known = serving != null && serving.chamber() == call.chamber()
             || waiting.stream().anyMatch(other -> other.chamber() == call.chamber());
@@ -457,8 +439,7 @@ public final class Stasis extends Module {
         }
     }
 
-    // The trapdoor of the call being served whilst one stands at the saved place and can be
-    // worked by hand. Null after saying why not.
+    // Null after saying why the trapdoor cannot be worked.
     private BlockState trapdoorState() {
         BlockPos spot = serving.chamber().place();
         BlockState state = spot == null ? null : BlockUtil.state(spot);
@@ -473,8 +454,7 @@ public final class Stasis extends Module {
         return state;
     }
 
-    // Clicks the trapdoor until it shows the given way. True once it does. A click is given
-    // time to reach the server and come back before the next one.
+    // A click is given time to reach the server and come back before the next one.
     private boolean turnTo(BlockState state, boolean open) {
         if (state.getValue(TrapDoorBlock.OPEN) == open) {
             return true;
@@ -541,7 +521,6 @@ public final class Stasis extends Module {
         step = Step.RETURNING;
     }
 
-    // Tells the caller and the chat why the pull did not happen and goes back.
     private void fail(String why) {
         ChatUtil.error("Stasis could not pull " + serving.caller() + " because " + why + ".");
         answer("No pull because " + why + ".");

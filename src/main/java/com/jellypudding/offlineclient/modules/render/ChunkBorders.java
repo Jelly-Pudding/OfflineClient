@@ -26,15 +26,12 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.OptionalLong;
 
-// Every line shows through walls and far ends are pulled in along the view.
 public final class ChunkBorders extends Module {
 
     private static final int REGION_BLOCKS = ChunkPos.REGION_SIZE * SectionPos.SECTION_SIZE;
 
-    // A slime chunk mark sits this far inside the chunk and stays clear of the grid lines.
     private static final int SLIME_INSET = 2;
 
-    // The slime chunks around one chunk for one seed.
     private record SlimeMarks(long seed, long centre, int radius, long[] chunks) {
 
         private boolean fits(long seed, long centre, int radius) {
@@ -76,7 +73,6 @@ public final class ChunkBorders extends Module {
         "The height the squares sit at.", 64, -64, 320, 1)
         .min(DimensionType.MIN_Y).unless(followHeight);
 
-    // Null whilst no slime chunk is marked.
     private SlimeMarks slimeMarks;
     // The missing seed is pointed out once on each server.
     private final ServerWatch told = new ServerWatch();
@@ -162,7 +158,6 @@ public final class ChunkBorders extends Module {
         }
     }
 
-    // One long line for each chunk edge that crosses the grid.
     private void drawGrid(DrawBatch batch, ChunkPos here, double y) {
         int radius = gridRadius.getInt();
         int color = gridColor.getColor();
@@ -178,7 +173,6 @@ public final class ChunkBorders extends Module {
         }
     }
 
-    // A smaller square inside each slime chunk.
     private void drawSlimeMarks(DrawBatch batch, double y) {
         int color = slimeColor.getColor();
         for (long chunk : slimeMarks.chunks()) {
@@ -188,7 +182,6 @@ public final class ChunkBorders extends Module {
         }
     }
 
-    // A square at the given height with a post up each corner.
     private static void drawBox(DrawBatch batch, int x, int z, int size, double y, double bottom, double top,
                                 int color) {
         drawSquare(batch, x, z, size, y, color);

@@ -5,7 +5,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
-// Which target a module picks when several are in range. Lower scores win.
+// Lower scores win.
 public enum TargetPriority {
     NEAREST, FURTHEST, LOW_HEALTH, HIGH_HEALTH, CLOSEST_ANGLE, ANGLE_AND_DISTANCE;
 

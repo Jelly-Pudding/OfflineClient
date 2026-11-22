@@ -21,7 +21,6 @@ import net.minecraft.world.entity.Entity;
 
 import java.util.List;
 
-// Runs at whatever it is set on and hits it until one of you is dead.
 public final class FightBot extends Module implements Targeting {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -63,7 +62,6 @@ public final class FightBot extends Module implements Targeting {
         return target == null ? null : EntityUtil.displayNameOf(target);
     }
 
-    // What it runs after and hits. Null between fights and whilst it holds off.
     @Override
     public Entity getFought() {
         return target;

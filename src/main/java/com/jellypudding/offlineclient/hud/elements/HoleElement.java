@@ -20,8 +20,6 @@ import org.joml.Matrix3x2fStack;
 import java.util.ArrayList;
 import java.util.List;
 
-// A small plan of what surrounds your feet. Shows at a glance whether a crystal can
-// reach you and whether someone is breaking a way in.
 public final class HoleElement extends HudElement {
 
     private static final int CELL = 8;
@@ -29,17 +27,14 @@ public final class HoleElement extends HudElement {
     private static final int PLAN = 3 * CELL + 2 * GAP;
     private static final int YOU = 0x60FFFFFF;
     private static final int CRACK = 0xB0FF2020;
-    // A crack runs through ten stages from nought to nine.
     private static final int CRACK_STAGES = 10;
-    // An item is drawn sixteen pixels across and has to fit a cell.
     private static final float ICON_SCALE = CELL / 16f;
-    // How far someone has broken the front of the sample hole.
     private static final int SAMPLE_CRACK = 6;
 
     // The column and row of each side in the order sides gives them. The front is at the top.
     private static final int[][] PLACES = {{1, 0}, {0, 1}, {2, 1}, {1, 2}};
 
-    // What one side is made of and how far someone has broken it. Minus one is untouched.
+    // Minus one is untouched.
     private record Side(BlockState state, Holes.Wall wall, int crack) {
 
         static Side of(BlockState state, int crack) {
@@ -47,8 +42,6 @@ public final class HoleElement extends HudElement {
         }
     }
 
-    // An obsidian hole with someone breaking its front stands in whilst the editor is open and
-    // nothing is round you. Its word reads In a hole.
     private static final List<Side> SAMPLE = List.of(Side.of(Blocks.OBSIDIAN.defaultBlockState(), SAMPLE_CRACK),
         Side.of(Blocks.BEDROCK.defaultBlockState(), -1), Side.of(Blocks.OBSIDIAN.defaultBlockState(), -1),
         Side.of(Blocks.OBSIDIAN.defaultBlockState(), -1));
@@ -80,8 +73,6 @@ public final class HoleElement extends HudElement {
         return isActive() && OfflineClient.MC.player != null;
     }
 
-    // The front then the left then the right then the back. North is the front unless the plan
-    // turns with the view.
     private List<Side> sides() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
@@ -102,7 +93,7 @@ public final class HoleElement extends HudElement {
         return sides;
     }
 
-    // The weakest block beside the body on one side. Somebody across an edge has two there.
+    // Somebody across an edge has two blocks beside the body on one side.
     private static Side weakest(List<BlockPos> body, Direction way) {
         Side weakest = null;
         for (BlockPos block : body) {
@@ -128,8 +119,7 @@ public final class HoleElement extends HudElement {
         };
     }
 
-    // The word follows the one hole rule of the client whatever the plan shows. Empty sides mean
-    // there is no player to ask about.
+    // The word follows the one hole rule of the client whatever the plan shows.
     private static String verdict(List<Side> sides) {
         boolean safe = sides == SAMPLE || !sides.isEmpty() && Holes.playerInHole();
         return safe ? "In a hole" : "Out in the open";
@@ -146,7 +136,6 @@ public final class HoleElement extends HudElement {
             Side side = sides.get(i);
             int x = PLACES[i][0] * (CELL + GAP);
             int y = PLACES[i][1] * (CELL + GAP);
-            // The colour shows round the edges of an icon drawn on top.
             context.fill(x, y, x + CELL, y + CELL, colorOf(side.wall()));
             if (icons.isOn()) {
                 icon(context, side.state(), x, y);

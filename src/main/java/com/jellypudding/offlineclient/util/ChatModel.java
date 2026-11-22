@@ -18,16 +18,14 @@ import java.util.stream.Collectors;
 // messages are sent. Services disagree on what a length cap is called.
 public final class ChatModel {
 
-    // One chat line as the model reads it.
     public record Said(String name, String text) {
     }
 
-    // A reply or the problem that stopped one. The key counts as refused when the service
-    // turned away the key it got or asked for one it never got.
+    // The key counts as refused when the service turned away the key it got or asked for one it
+    // never got.
     public record Answer(String reply, String problem, boolean keyRefused) {
     }
 
-    // Where the shape is posted. An address that stops short of it has it added.
     private static final String ENDPOINT = "/chat/completions";
     // Most model servers take the shape under this path. An address with nothing after the host
     // that finds nothing at its root is tried again with it.
@@ -39,7 +37,6 @@ public final class ChatModel {
     // Some models think aloud between these tags before they answer.
     private static final Pattern THINKING = Pattern.compile("(?is)<think>.*?(</think>|$)");
 
-    // The most of a service's own words about a failure that are worth showing.
     private static final int LONGEST_PROBLEM = 200;
 
     private static final int UNAUTHORISED = 401;
@@ -49,7 +46,6 @@ public final class ChatModel {
     private ChatModel() {
     }
 
-    // The host of a web address in lower case. Null for anything else.
     public static String host(String address) {
         try {
             String host = URI.create(address.trim()).getHost();
@@ -100,8 +96,6 @@ public final class ChatModel {
         return new Answer(null, problem, false);
     }
 
-    // The address as typed with the version and the chat path added when it stops short of
-    // them. A query after a question mark stays at the end.
     private static String endpoint(String address, String version) {
         String typed = address.strip();
         int query = typed.indexOf('?');
@@ -113,7 +107,6 @@ public final class ChatModel {
         return (path.endsWith(ENDPOINT) ? path : path + version + ENDPOINT) + rest;
     }
 
-    // True for a web address with nothing after the host and port.
     private static boolean bare(String address) {
         try {
             String path = URI.create(address.strip()).getPath();
@@ -130,8 +123,7 @@ public final class ChatModel {
         return message;
     }
 
-    // The first line of the first choice once any thinking is taken out. Empty when the model
-    // wrote nothing and null when the body is no chat reply at all.
+    // Empty when the model wrote nothing and null when the body is no chat reply at all.
     private static String replyIn(String body) {
         try {
             JsonElement content = JsonParser.parseString(body).getAsJsonObject().getAsJsonArray("choices")
@@ -144,8 +136,6 @@ public final class ChatModel {
         }
     }
 
-    // What the service said went wrong whether it nests the words under error or not. Null
-    // when it gave no words.
     private static String serviceWords(String body) {
         try {
             JsonObject root = JsonParser.parseString(body).getAsJsonObject();

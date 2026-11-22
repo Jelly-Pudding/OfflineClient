@@ -30,11 +30,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Drinks or throws a potion when health drops or you catch fire or an effect you keep is
-// missing or about to end. Bottles anywhere in the inventory count.
 public final class AutoPotion extends Module {
 
-    // Ticks to wait after a drink or a throw whilst the effect and the health land.
     private static final int SETTLE_TICKS = 10;
 
     // An effect still wanted this long after a bottle went for it gets another one. A splash that
@@ -62,10 +59,8 @@ public final class AutoPotion extends Module {
         "Seconds of effect left before topping up.", 10, 1, 60, 1, "s")
         .under(topUp);
 
-    private final Feeding feeding = new Feeding();
-    // Effects a bottle went for lately to keep them up or top them up.
+    private final Feeding feeding = new Feeding(this);
     private final Cooldowns<MobEffect> tried = new Cooldowns<>();
-    // Kept effects already reported as having no bottle. Each is told once.
     private final Set<MobEffect> told = new HashSet<>();
 
     public AutoPotion() {
@@ -74,14 +69,6 @@ public final class AutoPotion extends Module {
         addSettings(health, potions, splash, fire, keep, topUp, topUpAt);
         searchTags("potion", "auto drink", "strength", "fire resistance", "keep effects", "ominous bottle",
             "bad omen");
-    }
-
-    public boolean isBusy() {
-        return isEnabled() && feeding.isActive();
-    }
-
-    public boolean bottleLanding() {
-        return isEnabled() && feeding.isLanding();
     }
 
     @Override
@@ -119,7 +106,7 @@ public final class AutoPotion extends Module {
         }
         // Another feeder has the use key or a bottle thrown at your feet may still bring what is wanted.
         // ShulkerPacker keeps count of every stack.
-        if (Modules.feeding(this) || Modules.bottleLanding() || Modules.packing()) {
+        if (Feeding.busy(this) || Feeding.bottleLanding() || Modules.packing()) {
             return;
         }
         serveWants();
@@ -142,8 +129,6 @@ public final class AutoPotion extends Module {
         }
     }
 
-    // Throws a splash bottle or drinks one that gives what is wanted. A splash goes first whilst
-    // allowed. True once one has gone or begun.
     private boolean serve(Predicate<MobEffect> wanted) {
         if (splash.isOn()) {
             int thrown = find(stack -> stack.is(Items.SPLASH_POTION), wanted);
@@ -160,7 +145,6 @@ public final class AutoPotion extends Module {
         return true;
     }
 
-    // One bottle at a time for the first kept effect you lack.
     private boolean keepUp() {
         for (MobEffect effect : keep.resolved()) {
             if (has(effect)) {
@@ -225,7 +209,6 @@ public final class AutoPotion extends Module {
         return effect == MobEffects.INSTANT_HEALTH.value() || effect == MobEffects.REGENERATION.value();
     }
 
-    // Splash and lingering bottles are thrown and not drunk.
     private boolean isPotion(ItemStack stack) {
         return potions.contains(stack.getItem())
             && stack.has(DataComponents.POTION_CONTENTS)

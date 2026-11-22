@@ -5,19 +5,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.DoubleSupplier;
 
-// Works out a typed sum. It knows plus and minus and times and divide and the remainder and
-// powers and brackets and a handful of named functions. Times and divide bind tighter than
-// plus and minus and a power tighter still.
+// Times and divide bind tighter than plus and minus and a power tighter still.
 public final class Calculator {
 
-    // What a sum came to. The problem is null for one that could be worked out.
+    // The problem is null for a sum that could be worked out.
     public record Answer(double value, String problem) {
     }
 
     // A sum read from a file may nest without end. Each bracket and each power of a power costs a call.
     private static final int DEEPEST = 64;
 
-    // How much of the sum a complaint quotes.
     private static final int QUOTED = 16;
 
     private static final String BY_NOUGHT = "Nothing can be divided by nought.";
@@ -234,7 +231,6 @@ public final class Calculator {
         }
     }
 
-    // Names the spot where the sum stopped making sense.
     private Unreadable lost() {
         return new Unreadable(at >= text.length() ? "The sum stops too soon."
             : "The sum cannot be read from " + quoted(text.substring(at)) + ".");

@@ -17,7 +17,6 @@ public final class ItemPhysics extends Module {
     // A hair off the ground. The drop must not fight the floor for depth.
     private static final float LIFT = 0.001f;
 
-    // Each drop turns by up to this many degrees from its own seed.
     private static final int SPREAD = 90;
 
     private final BoolSetting randomRotation = new BoolSetting("Random rotation",
@@ -30,7 +29,6 @@ public final class ItemPhysics extends Module {
         searchTags("item", "drop", "physics");
     }
 
-    // How far up the model goes to rest on the floor.
     public float groundOffset(ItemEntityRenderState state) {
         AABB box = state.item.getModelBoundingBox();
         return (float) (isFlat(box) ? -box.minZ : -box.minY) + LIFT;

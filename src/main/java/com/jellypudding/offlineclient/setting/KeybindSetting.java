@@ -7,7 +7,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 
 public final class KeybindSetting extends Setting<Bind> {
 
-    // The default key of a setting that starts with none.
     public static final int UNBOUND = 0;
 
     private static final String SAVED_HOLD = "hold";
@@ -16,7 +15,6 @@ public final class KeybindSetting extends Setting<Bind> {
     private boolean hold;
     private boolean holdsByDefault;
 
-    // True for a key inside a module that is listened for whilst the module is off too.
     private boolean heardWhilstOff;
 
     public KeybindSetting(String name, String description, int defaultKey) {
@@ -31,7 +29,6 @@ public final class KeybindSetting extends Setting<Bind> {
         return value.isBound();
     }
 
-    // True when the press a screen was handed is the one this key answers.
     public boolean answers(KeyEvent event) {
         return value.answers(Bind.of(event));
     }
@@ -59,7 +56,6 @@ public final class KeybindSetting extends Setting<Bind> {
         return heardWhilstOff;
     }
 
-    // Makes the key a held one until the player chooses otherwise.
     public KeybindSetting holdByDefault() {
         hold = true;
         holdsByDefault = true;

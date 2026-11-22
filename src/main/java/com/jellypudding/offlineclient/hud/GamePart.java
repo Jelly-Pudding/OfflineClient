@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.hud;
 
-// The pieces of the game's own HUD that the editor can move. Each is laid out the
-// way the game lays it out. The numbers are read from the game's own layout code.
+// The numbers are read from the game's own layout code.
 public enum GamePart {
     // Whether the game draws it most of the time. Then across from the middle of the screen
     // and up from its bottom edge and the size.
@@ -17,7 +16,6 @@ public enum GamePart {
     ITEM_NAME("Item name", "The name that shows above the hotbar when you pick another item.",
         false, -60, 61, 120, 13);
 
-    // What the switch of every part does. It follows what the part is.
     private static final String SWITCH = " Switch it on to move or resize or hide it. Off leaves it as the game"
         + " draws it.";
 
@@ -53,8 +51,7 @@ public enum GamePart {
         return description + SWITCH;
     }
 
-    // True for a part that is on the screen most of the time. One that only comes and goes
-    // takes no room whilst the game draws it itself.
+    // One that only comes and goes takes no room whilst the game draws it itself.
     public boolean steady() {
         return steady;
     }
@@ -67,7 +64,6 @@ public enum GamePart {
         return height;
     }
 
-    // Where the game draws this part with nothing moved.
     public Box home(int screenWidth, int screenHeight) {
         return new Box(screenWidth / 2 + fromMiddle, screenHeight - fromBottom, width, height);
     }
@@ -82,7 +78,6 @@ public enum GamePart {
         return tenths(HudManager.shareOf(home.top(), height, USUAL_HEIGHT));
     }
 
-    // A share of the screen as a percentage to one decimal place.
     private static double tenths(double share) {
         return Math.round(share * 1000) / 10.0;
     }

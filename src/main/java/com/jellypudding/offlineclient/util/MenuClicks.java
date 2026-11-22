@@ -44,13 +44,11 @@ public final class MenuClicks {
         return menu.slots.get(slot).getItem().isEmpty();
     }
 
-    // The first slot of the player's own backpack or hotbar that passes. Minus one when none does.
     // Armour and the offhand never count.
     public static int firstInventorySlot(AbstractContainerMenu menu, Predicate<ItemStack> test) {
         return firstSlot(menu, MenuClicks::isInventorySlot, test);
     }
 
-    // The first slot of whatever the menu was opened on that passes. Minus one when none does.
     public static int firstContainerSlot(AbstractContainerMenu menu, Predicate<ItemStack> test) {
         return firstSlot(menu, MenuClicks::isContainerSlot, test);
     }
@@ -60,12 +58,11 @@ public final class MenuClicks {
             && slot.getContainerSlot() < InventoryUtil.WHOLE_INVENTORY;
     }
 
-    // A slot of whatever the menu was opened on. A crafter's result is only shown and never counts.
+    // A crafter's result is only shown and never counts.
     public static boolean isContainerSlot(Slot slot) {
         return slot.container != MC.player.getInventory() && !slot.isFake();
     }
 
-    // Indexes of the slots that belong to whatever the menu was opened on.
     public static List<Integer> containerSlots(AbstractContainerMenu menu) {
         return slotsWhere(menu, MenuClicks::isContainerSlot);
     }
@@ -75,7 +72,6 @@ public final class MenuClicks {
         return containerSlots(menu).stream().map(slot -> menu.slots.get(slot).getItem().copy()).toList();
     }
 
-    // Indexes of the player's own backpack and hotbar slots in the menu.
     public static List<Integer> inventorySlots(AbstractContainerMenu menu) {
         return slotsWhere(menu, MenuClicks::isInventorySlot);
     }
@@ -99,8 +95,7 @@ public final class MenuClicks {
         return -1;
     }
 
-    // How many more of the stack the slots could take between them. A shift click fills the
-    // same stacks first and then the empty slots that accept the item.
+    // A shift click fills the same stacks first and then the empty slots that accept the item.
     public static int room(AbstractContainerMenu menu, List<Integer> slots, ItemStack stack) {
         int room = 0;
         for (int index : slots) {
@@ -115,8 +110,6 @@ public final class MenuClicks {
         return room;
     }
 
-    // A slot holding the same item with room left or else an empty one that takes it. Minus one
-    // when none of them can.
     public static int landing(AbstractContainerMenu menu, List<Integer> slots, ItemStack stack) {
         int empty = -1;
         for (int index : slots) {
@@ -134,8 +127,7 @@ public final class MenuClicks {
         return empty;
     }
 
-    // The menu slot that shows an index of the player's inventory. Minus one when the menu
-    // has none such as armour in a chest.
+    // Minus one when the menu shows no such slot such as armour in a chest.
     public static int slotOf(AbstractContainerMenu menu, int inventoryIndex) {
         for (Slot slot : menu.slots) {
             if (slot.container == MC.player.getInventory() && slot.getContainerSlot() == inventoryIndex) {
@@ -166,7 +158,6 @@ public final class MenuClicks {
         }
     }
 
-    // The number key that reaches a slot. Minus one unless it is your own hotbar or offhand.
     private static int swapKey(AbstractContainerMenu menu, int slot) {
         Slot target = menu.slots.get(slot);
         if (target.container != MC.player.getInventory()) {

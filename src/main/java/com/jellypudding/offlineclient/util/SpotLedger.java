@@ -12,7 +12,6 @@ import java.util.function.Predicate;
 // enough. One that is gone by itself or has waited far too long is forgotten.
 public final class SpotLedger {
 
-    // Ticks a spot waits to be undone once it is due before it is left as it is.
     private static final int GIVE_UP = 100;
 
     private final Map<BlockPos, Integer> spots = new LinkedHashMap<>();
@@ -29,8 +28,7 @@ public final class SpotLedger {
         return spots.isEmpty();
     }
 
-    // Undoes the oldest spot that has waited the given ticks and is still there. Spots that are
-    // gone or out of date are dropped on the way. True when one was undone.
+    // Spots that are gone or out of date are dropped on the way. True when one was undone.
     public boolean undoDue(int wait, Predicate<BlockPos> stillThere, Predicate<BlockPos> undo) {
         int now = OfflineClient.MC.player.tickCount;
         Iterator<Map.Entry<BlockPos, Integer>> it = spots.entrySet().iterator();

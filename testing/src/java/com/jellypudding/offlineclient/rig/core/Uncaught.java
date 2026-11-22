@@ -31,7 +31,6 @@ public final class Uncaught {
         SEEN.clear();
     }
 
-    // Hands over what was seen and forgets it.
     public static List<String> drain() {
         synchronized (SEEN) {
             List<String> seen = new ArrayList<>(SEEN);

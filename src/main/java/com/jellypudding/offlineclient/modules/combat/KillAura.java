@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityKind;
 import com.jellypudding.offlineclient.util.EntitySpecies;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
@@ -193,14 +194,11 @@ public final class KillAura extends Module implements Targeting {
         return targets.isEmpty() ? range.getValueString() : EntityUtil.displayNameOf(targets.getFirst());
     }
 
-    // The first of the things being hit right now. Null between fights.
     @Override
     public Entity getFought() {
         return targets.isEmpty() ? null : targets.getFirst();
     }
 
-    // The first living thing being hit right now. Null between fights and whilst only crystals
-    // or boats are in reach.
     @Override
     public LivingEntity getTarget() {
         for (Entity target : targets) {
@@ -211,8 +209,6 @@ public final class KillAura extends Module implements Targeting {
         return null;
     }
 
-    // The neutral rule judges the mobs of both big switches and any neutral kind on the
-    // Also hit list. Its rows show whilst one of those gives it something to judge.
     private boolean neutralRuleActs() {
         return hostile.isOn() || passive.isOn() || extraMobs.resolved().stream()
             .anyMatch(type -> EntityKind.of(type) == EntityKind.NEUTRAL);
@@ -259,12 +255,10 @@ public final class KillAura extends Module implements Targeting {
         }
     }
 
-    // Hits before the attack cooldown ends deal reduced damage.
     private boolean charged() {
         return ignoreCooldown.isOn() || AttackTimer.charged();
     }
 
-    // Every reason the aura sits this tick out.
     private boolean holdingFire() {
         if (pauseOnUse.isOn() && mc.player.isUsingItem() || pauseOnMine.isOn() && BlockMiner.handMines()) {
             return true;
@@ -286,10 +280,9 @@ public final class KillAura extends Module implements Targeting {
             return true;
         }
         // Crystals hurt far more than a sword.
-        return Modules.feedersPauseCombat() || (pauseOnCrystals.isOn() && Modules.crystalsActing());
+        return Feeding.pausingCombat() || (pauseOnCrystals.isOn() && Modules.crystalsActing());
     }
 
-    // Hits everything in reach on one swing then sets the next wait.
     private void strike() {
         Entity primary = targets.getFirst();
         if (rotate.is(Rotate.CAMERA) && !crosshairOn(primary)) {
@@ -315,7 +308,6 @@ public final class KillAura extends Module implements Targeting {
         RotationManager.turnCamera(aimPoint(target), rotateSpeed.getFloat());
     }
 
-    // True once the real crosshair rests on the target's box within reach.
     private boolean crosshairOn(Entity target) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 look = mc.player.getViewVector(1f);
@@ -323,11 +315,9 @@ public final class KillAura extends Module implements Targeting {
         return target.getBoundingBox().clip(eye, end).isPresent();
     }
 
-    // Takes up the best weapon for the target. A hit never goes out in the tick of a swap. A
-    // plain server only counts the damage of the weapon swapped in after its next tick and Paper
-    // charges the hit by that weapon's speed at once. False whilst it waits or when a raised
-    // shield is left alone. A swap that cannot be made leaves the held item to hit with. A swing
-    // with nothing alive among its targets keeps it too since a crystal or a boat falls to any hit.
+    // A hit never goes out in the tick of a swap. A plain server only counts the damage of the
+    // weapon swapped in after its next tick and Paper charges the hit by that weapon's speed at
+    // once. False whilst it waits or when a raised shield is left alone.
     private boolean armWeapon(LivingEntity target) {
         if (target == null) {
             return true;
@@ -356,8 +346,6 @@ public final class KillAura extends Module implements Targeting {
         return !loan.select(best);
     }
 
-    // A borrowed weapon always goes home. The slot held before is taken up again unless the
-    // player has picked another since. An axe taken for a shield alone always goes back.
     private void putWeaponAway() {
         loan.release((weaponSwapBack.isOn() || !autoWeapon.isOn()) && loan.stillMine());
     }
@@ -379,13 +367,11 @@ public final class KillAura extends Module implements Targeting {
         return candidate(entity) && picked(entity);
     }
 
-    // Never yourself or the dead or a spectator or a friend or a mob on the ignore list.
     private boolean candidate(Entity entity) {
         return entity != mc.player && entity.isAlive() && !entity.isSpectator()
             && !EntityUtil.isFriend(entity) && !ignoredMobs.contains(entity.getType());
     }
 
-    // Whether the rows pick this entity out wherever it stands.
     private boolean picked(Entity entity) {
         return (extraMobs.contains(entity.getType()) || kindWanted(entity)) && filter.allows(entity);
     }
@@ -410,7 +396,6 @@ public final class KillAura extends Module implements Targeting {
         return distance <= (visible ? range.getValue() : wallsRange.getValue());
     }
 
-    // Whether the switches above pick out this kind of entity.
     private boolean kindWanted(Entity entity) {
         if (entity instanceof Player) {
             return players.isOn();
@@ -422,10 +407,8 @@ public final class KillAura extends Module implements Targeting {
             : passive.isOn() && allowedAge(mob, passiveAges.getValue());
     }
 
-    // Which of the two big switches a mob answers to. A species with a row of its own goes
-    // with the switch that row hangs under whatever the single mob is like. Every other mob
-    // goes by whether the game counts it a monster. An enderman is one and a wolf is not and
-    // the neutral rule then says when either is hit.
+    // A species with a row of its own goes with the switch that row hangs under. Every other mob
+    // goes by whether the game counts it a monster. An enderman is one and a wolf is not.
     private static boolean goesWithHostile(Mob mob) {
         return switch (EntitySpecies.of(mob)) {
             case SLIME, SHULKER, ZOMBIE_VILLAGER -> true;
@@ -434,7 +417,6 @@ public final class KillAura extends Module implements Targeting {
         };
     }
 
-    // The switches that pick out one family from the wider hostile or passive group.
     private boolean speciesAllowed(Mob mob) {
         return switch (EntitySpecies.of(mob)) {
             case WATER -> waterMobs.isOn();
@@ -481,7 +463,6 @@ public final class KillAura extends Module implements Targeting {
             return;
         }
         for (Entity target : targets) {
-            // A thing with no health gets the full green box.
             float share = target instanceof LivingEntity living ? EntityUtil.healthShare(living) : 1;
             AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
             Vec3 centre = box.getCenter();

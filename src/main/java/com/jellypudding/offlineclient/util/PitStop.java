@@ -15,12 +15,11 @@ import net.minecraft.world.level.block.Fallable;
 
 import java.util.function.Predicate;
 
-// The work a long flight on wings does standing between two legs. Rockets and an elytra and
-// bottles come out of the shulker boxes carried or the ender chest. AutoMend throws bottles at
-// the worn elytra and a fresher elytra goes on in place of one that stays worn.
+// Rockets and an elytra and bottles come out of the shulker boxes carried or the ender chest.
+// AutoMend throws bottles at the worn elytra and a fresher elytra goes on in place of one that
+// stays worn.
 public final class PitStop {
 
-    // What a stop is asked to look after.
     public record Needs(boolean mend, boolean restock, double line, int keepRockets) {
     }
 
@@ -31,29 +30,21 @@ public final class PitStop {
     // A mend that wins back no durability for this long is over. AutoMend throws a bottle every
     // few ticks and the orbs reach you within a second or two.
     private static final int MEND_STALL_TICKS = 10 * SharedConstants.TICKS_PER_SECOND;
-    // Bottles taken out of a container stop at a stack.
     private static final int BOTTLES = 64;
-    // The AutoMend rows a mend past Elytra line needs.
     private static final String MEND_ROWS = "Its Mode has to throw bottles and its Gear has to watch armour and its"
         + " Start below has to sit over Elytra line";
 
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
     private final RestockErrand restock = new RestockErrand(slots, "Autopilot", "the next flight");
-    // The hotbar slot a stack of bottles took and what it held.
     private final HotbarRoom room = new HotbarRoom();
     private Needs needs;
     private Step step = Step.DONE;
-    // True once the mend has begun and whilst AutoMend is on because the stop switched it on.
     private boolean mending;
     private boolean mendSwitchedOn;
-    // The least damage the elytra has shown whilst mending and the ticks since it last went down.
     private int leastDamage;
     private int stallTicks;
-    // Why the elytra is still worn once the stop is over as a sentence for chat. Null when it is
-    // fit to fly on.
     private String stillWorn;
 
-    // Forgets a container that would not open. Each flight starts afresh.
     public void reset() {
         restock.reset();
     }
@@ -114,7 +105,6 @@ public final class PitStop {
         return "your inventory and your containers hold no " + what;
     }
 
-    // Starts the work once you stand still.
     public void begin(Needs asked) {
         needs = asked;
         stillWorn = null;
@@ -126,7 +116,7 @@ public final class PitStop {
         }
     }
 
-    // One tick of the work. False once it is over. The hands wait whilst something else has them.
+    // False once the work is over.
     public boolean tick() {
         if (step == Step.DONE) {
             return false;
@@ -161,7 +151,6 @@ public final class PitStop {
         return stillWorn;
     }
 
-    // Lets go of whatever the stop holds. A container left down is named in chat.
     public void end() {
         restock.endErrand();
         slots.restoreIfMine();
@@ -170,7 +159,6 @@ public final class PitStop {
         step = Step.DONE;
     }
 
-    // AutoMend throws until the elytra is whole or stops winning back durability.
     private void mend() {
         AutoMend autoMend = Modules.get(AutoMend.class);
         ItemStack worn = MC.player.getItemBySlot(EquipmentSlot.CHEST);
@@ -221,7 +209,6 @@ public final class PitStop {
         mendSwitchedOn = false;
     }
 
-    // An elytra that is still worn gives way to the freshest one carried.
     private void change() {
         if (!wornBelow(needs.line())) {
             stillWorn = null;
@@ -236,8 +223,7 @@ public final class PitStop {
         }
     }
 
-    // AutoMend throws from the hotbar. A stack of bottles in the backpack comes up whenever the
-    // hotbar runs dry. A full hotbar lends a slot until the stop is over.
+    // AutoMend throws from the hotbar. A full hotbar lends a slot until the stop is over.
     private void bringBottlesToHand() {
         if (InventoryUtil.countWithOffhand(Items.EXPERIENCE_BOTTLE, InventoryUtil.HOTBAR_SIZE) > 0
             || !InventoryUtil.cursorFree()) {
@@ -249,8 +235,6 @@ public final class PitStop {
         }
     }
 
-    // What the errand takes out of a container. Rockets up to the count kept and a stack of
-    // bottles to mend with and an elytra fresher than the one worn.
     private boolean wanted(ItemStack stack) {
         return rocketsWanted(needs).test(stack) || bottlesWanted(needs).test(stack)
             || elytraWanted(needs).test(stack);
@@ -270,14 +254,11 @@ public final class PitStop {
             && lastsLonger(stack, MC.player.getItemBySlot(EquipmentSlot.CHEST));
     }
 
-    // True when a container the errand would set down holds a stack the test accepts.
     private boolean couldFetch(Needs asked, Predicate<ItemStack> wanted) {
         return asked.restock() && MC.player.getInventory().getFreeSlot() != -1
             && restock.couldRun(wanted, true, true);
     }
 
-    // True when AutoMend would mend the worn elytra past the line with the bottles carried or ones
-    // a restock fetches.
     private boolean couldMend(Needs asked) {
         AutoMend autoMend = Modules.get(AutoMend.class);
         if (!asked.mend() || autoMend == null || Modules.lockHolds(autoMend) || !mendable()
@@ -302,13 +283,10 @@ public final class PitStop {
         return worn.is(Items.ELYTRA) && ItemUtil.wornBelow(worn, line);
     }
 
-    // Every one of an item in the inventory and the offhand.
     private static int carried(Item item) {
         return InventoryUtil.countWithOffhand(item, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // The elytra carried that ElytraFly would put on in place of the worn one. Minus one when
-    // none lasts longer.
     private static int fresherCarried() {
         return ElytraFly.fresherElytra(MC.player.getItemBySlot(EquipmentSlot.CHEST));
     }

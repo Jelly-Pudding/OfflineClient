@@ -79,23 +79,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Marks the chunks around you that show a player built or lived there. Each clue was checked
-// against the structure templates and world generation of 26.3. Nothing the world makes by
-// itself marks a chunk with the settings as they start.
+// Each clue was checked against the structure templates and world generation of 26.3. Nothing the
+// world makes by itself marks a chunk with the settings as they start.
 public final class BaseFinder extends Module implements FindSource, ChunkPaint {
 
-    // What the glow lights up.
     private enum Glow { OFF, NEVER_NATURAL, PLACED }
 
-    // What one chunk holds of a kind of entity and where the first of them stood.
     private static final class ChunkTally {
 
         private final BlockPos pos;
-        // Words for the first such as cobblestone.
         private final String first;
         private int count;
         private int entities;
-        // The heights of the entities added up. A label floats over their middle.
         private double heights;
 
         private ChunkTally(Entity entity, String first) {
@@ -128,7 +123,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     // on the ground around them are judged as often.
     private static final int ENTITY_SCAN_TICKS = 10;
 
-    // The writing quoted from a sign stops after this many characters.
     private static final int SIGN_QUOTE = 40;
 
     private static final int GROWTH_COUNT = 3;
@@ -140,14 +134,12 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     // An item first seen this close came from your own digging or your own hand. A thrown stack
     // flies a few blocks in the half second between two looks.
     private static final double OWN_DROP_REACH = 10;
-    // Item ids judged yours or not. Enough for every item in reach many times over.
+    // Enough for every item in reach many times over.
     private static final int KEPT_DROPS = 4096;
 
-    // The crowd count floats this far over the middle of the mobs.
     private static final double LABEL_LIFT = 2;
     private static final float LABEL_SCALE = 1;
 
-    // Hues of the three colours.
     private static final float ORANGE = 30;
     private static final float SKY_BLUE = 195;
     private static final float GREEN = 120;
@@ -297,19 +289,17 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private final ChunkScanner<BlockClues.Hit> scanner = new ChunkScanner<BlockClues.Hit>().onResult(this::landed);
     private final ChunkScanner<BlockPos> glowScanner = new ChunkScanner<>(0);
     private final NearestCut<BlockPos> lit = new NearestCut<>(BlockPos::distToCenterSqr);
-    // The chunks judged in each world since this was switched on. A mark taken away stays away.
+    // Chunks judged in each world. A mark taken away stays away.
     private final Map<String, LongSet> judged = new HashMap<>();
     // Beds of a village colour waiting for every chunk a village could reach them from. Keyed by
     // the chunk of the bed.
     private final Map<Long, BlockClues.Hit> waitingBeds = new HashMap<>();
-    // Whether each item was yours when it was first seen. Item ids never repeat whilst a server
-    // runs and the verdicts outlast a toggle and a trip through a portal.
+    // Item ids never repeat whilst a server runs and the verdicts outlast a toggle and a trip
+    // through a portal.
     private final Map<Integer, Boolean> ownDrops = new BoundedMap<>(KEPT_DROPS);
     private final ServerWatch server = new ServerWatch();
     private final WorldWatch world = new WorldWatch();
-    // The crowd mobs in each chunk at the last look.
     private Map<Long, ChunkTally> crowded = Map.of();
-    // The settings the chunks in the scanner were read by.
     private BlockClues.Rules rules;
     private Glow glowMode;
     private int entityTicks;
@@ -334,7 +324,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
             "dripstone");
     }
 
-    // Every mob the game counts as a creature such as cows and sheep and horses.
     private static List<EntityType<?>> creatures() {
         List<EntityType<?>> types = new ArrayList<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
@@ -350,7 +339,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         return finds;
     }
 
-    // The map paints each chunk with a clue in the colour of where the clue came from.
     @Override
     public void paintChunks(Long2IntMap colours) {
         for (FindLog.Find find : finds.here()) {
@@ -428,8 +416,7 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         return on;
     }
 
-    // A chunk scan came back. What its signs say and the mob of a spawner and the village round a
-    // bed are read here on the game thread.
+    // Signs and spawners and villages are read here on the game thread.
     private void landed(ChunkPos chunk, List<BlockClues.Hit> hits) {
         if (hits.isEmpty() || judgedHere().contains(chunk.pack())) {
             return;
@@ -451,14 +438,12 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // Such as a lone zombie spawner.
     private String loneSpawner(BlockClues.Hit hit) {
         String mob = SpawnerMob.name(SpawnerMob.of(mc.level.getBlockEntity(hit.pos())));
         return mob.isEmpty() ? hit.what() : "a lone " + mob + " spawner";
     }
 
-    // Null for a bed of a village colour with a village around it. One whose surroundings have
-    // not all arrived waits and is judged again.
+    // A bed whose surroundings have not all arrived waits and is judged again.
     private String loneBed(BlockClues.Hit hit) {
         if (!StructureBeds.villageColour(mc.level.getBlockState(hit.pos()).getBlock())) {
             return hit.what();
@@ -470,7 +455,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         return Villages.around(hit.pos(), StructureBeds::villageBlock) ? null : hit.what();
     }
 
-    // A waiting bed leaves once its chunk is marked or gone or the bed is.
     private void judgeWaitingBeds() {
         waitingBeds.values().removeIf(hit -> {
             BlockPos pos = hit.pos();
@@ -503,7 +487,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         return "a sign reading " + TextCut.quote(String.join(" ", lines), SIGN_QUOTE);
     }
 
-    // Marks the chunk unless it was judged before. Only a new mark is told and rings.
     private void found(BaseClue clue, BlockPos pos, String what) {
         if (!judgedHere().add(ChunkPos.pack(pos)) || finds.at(pos) != null) {
             return;
@@ -551,7 +534,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // A stasis pearl find names whose pearl it is when anyone can tell.
     private static String described(EntityClues.Clue clue, Entity entity) {
         String owner = clue.clue() == BaseClue.PEARL && entity instanceof Projectile pearl
             ? EntityUtil.knownThrower(pearl) : null;
@@ -563,13 +545,11 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
             .add(entity, amount);
     }
 
-    // An item first seen close to you is yours for as long as it lies there.
     private boolean yours(ItemEntity item) {
         return ownDrops.computeIfAbsent(item.getId(), id -> item.distanceTo(mc.player) <= OWN_DROP_REACH);
     }
 
-    // A whole block such as cobblestone. String and seeds and redstone place blocks as well but
-    // come from mobs that die in caves.
+    // String and seeds and redstone place blocks as well but come from mobs that die in caves.
     private boolean minedBlock(ItemEntity item) {
         return ItemUtil.isFullBlock(item.getItem().getItem()) && item.getY() <= dropHeight.getValue();
     }
@@ -629,7 +609,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         return unmark(newest) ? "Unmarked " + newest.detail() : "Nothing to unmark";
     }
 
-    // Forgets a mark and keeps its chunk from being marked again. False when there was none.
     private boolean unmark(FindLog.Find find) {
         if (find == null) {
             return false;
@@ -674,7 +653,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         }
     }
 
-    // The count of a crowd is bright once it reaches the crowd size.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         if (!crowds.isOn() || !crowdCounts.isOn() || crowded.isEmpty() || !inGame() || !WorldToScreen.update()) {
@@ -693,7 +671,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         });
     }
 
-    // Marks by blocks and marks by entities and marks by hand each have a colour.
     private int colour(FindLog.Find find) {
         BaseClue clue = BaseClue.byNoun(find.kind());
         BaseClue.Source source = clue == null ? BaseClue.Source.BLOCKS : clue.source();

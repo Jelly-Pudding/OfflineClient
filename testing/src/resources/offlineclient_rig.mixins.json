@@ -6,6 +6,7 @@
   "mixins": [],
   "client": [
     "ChatUtilMixin",
+    "ClientPacketListenerMixin",
     "ClipboardManagerMixin",
     "GuiRenderStateMixin",
     "GuiTextRenderStateAccessor",

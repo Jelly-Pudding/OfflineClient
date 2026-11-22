@@ -12,11 +12,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
-// Shared by modules that use the item in hand on the mobs in reach. The nearest one that is
-// wanted gets a click each tick and is then left alone for as long as the subclass says.
 public abstract class EntityUseAura extends Module {
 
-    // A mob that turned the click down is tried again after this long.
     private static final int RETRY_TICKS = 20;
 
     protected final NumberSetting range = new NumberSetting("Range",
@@ -26,7 +23,6 @@ public abstract class EntityUseAura extends Module {
     protected final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards the mob on the server side.", true);
 
-    // Mobs clicked lately by entity id. One comes back once its wait is over.
     private final Cooldowns<Integer> clicked = new Cooldowns<>();
     private int count;
 
@@ -34,13 +30,10 @@ public abstract class EntityUseAura extends Module {
         super(name, description, Category.WORLD);
     }
 
-    // Whether the item in hand should be used on the entity.
     protected abstract boolean wanted(Entity entity, ItemStack held);
 
-    // Ticks before a mob that took the click gets another.
     protected abstract int restTicks(Entity entity);
 
-    // How many clicks were taken since the module went on.
     protected final int count() {
         return count;
     }

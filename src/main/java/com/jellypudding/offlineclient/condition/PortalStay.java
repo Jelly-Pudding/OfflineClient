@@ -6,8 +6,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 
-// Standing in a nether portal for a while such as one built across a highway as a trap. The
-// client is not told how long the server has counted and the ticks are counted here.
+// The client is not told how long the server has counted and the ticks are counted here.
 final class PortalStay extends Condition {
 
     private final NumberSetting stay;

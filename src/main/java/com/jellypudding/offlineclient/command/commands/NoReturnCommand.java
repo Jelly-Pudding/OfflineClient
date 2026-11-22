@@ -17,8 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// Closes and opens the areas NoReturn keeps you out of. The list numbers every area of this
-// server and remove takes one of those numbers.
 public final class NoReturnCommand extends Command {
 
     public NoReturnCommand() {

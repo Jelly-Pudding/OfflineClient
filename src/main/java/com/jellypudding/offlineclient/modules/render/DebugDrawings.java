@@ -35,10 +35,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-// Switches on the game's own debug drawings that need data from the built in server. The game
-// asks for that data only in its development builds and a server sends it to operators alone.
-// Nothing is asked of any other server. In single player the owner is an operator whilst cheats
-// are on.
+// The game asks for the data of its debug drawings only in its development builds and a server
+// sends it to operators alone. In single player the owner is an operator whilst cheats are on.
 public final class DebugDrawings extends Module {
 
     private enum Drawing {
@@ -92,7 +90,6 @@ public final class DebugDrawings extends Module {
     private final Map<Drawing, BoolSetting> switches = new EnumMap<>(Drawing.class);
     private final WorldWatch world = new WorldWatch();
     private int permissionCheckIn = CHECKED;
-    // The drawings the renderer was last told about.
     private Set<Drawing> shown = EnumSet.noneOf(Drawing.class);
 
     public DebugDrawings() {
@@ -140,7 +137,6 @@ public final class DebugDrawings extends Module {
         }
     }
 
-    // The drawings switched on. None outside single player.
     private Set<Drawing> picked() {
         Set<Drawing> picked = EnumSet.noneOf(Drawing.class);
         if (!mc.hasSingleplayerServer()) {
@@ -167,7 +163,6 @@ public final class DebugDrawings extends Module {
         }
     }
 
-    // The data the game asks the server for on top of its own.
     public Set<DebugSubscription<?>> subscriptions() {
         Set<DebugSubscription<?>> wanted = new HashSet<>();
         for (Drawing drawing : inUse()) {
@@ -176,7 +171,6 @@ public final class DebugDrawings extends Module {
         return wanted;
     }
 
-    // Fresh renderers for the picked drawings each time the game builds its list.
     public List<DebugRenderer.SimpleDebugRenderer> renderers() {
         List<DebugRenderer.SimpleDebugRenderer> renderers = new ArrayList<>();
         for (Drawing drawing : inUse()) {

@@ -19,10 +19,8 @@ public abstract class Setting<T> {
     protected final T defaultValue;
     private Supplier<Boolean> visibility = () -> true;
 
-    // The setting this one is a sub option of. Null for a top level row.
     private Setting<?> parent;
 
-    // A folded setting hides its sub options in the GUI behind a chevron.
     private boolean folded;
     private boolean foldedByDefault;
 
@@ -63,7 +61,6 @@ public abstract class Setting<T> {
         return description;
     }
 
-    // How the value reads in the interface and in chat.
     public String getValueString() {
         return String.valueOf(getValue());
     }
@@ -80,17 +77,15 @@ public abstract class Setting<T> {
         value = defaultValue;
     }
 
-    // True whilst the value is still the one it started with.
     public boolean isDefault() {
         return Objects.equals(value, defaultValue);
     }
 
-    // True whilst a value the player chose differs from the one it started with.
     public final boolean isChanged() {
         return !internal && !noDefault && !isDefault();
     }
 
-    // The starting value as the GUI and chat write it. Null where no short text says it.
+    // Null where no short text says the starting value.
     public String defaultText() {
         return null;
     }
@@ -109,7 +104,6 @@ public abstract class Setting<T> {
         return true;
     }
 
-    // Hides this setting in the GUI whilst the supplier returns false.
     @SuppressWarnings("unchecked")
     public <S extends Setting<T>> S visibleWhen(Supplier<Boolean> visibility) {
         this.visibility = visibility;
@@ -123,17 +117,14 @@ public abstract class Setting<T> {
         return visibleWhen(visibility);
     }
 
-    // A sub option shown whilst the box is ticked.
     public <S extends Setting<T>> S under(BoolSetting parent) {
         return under(parent, parent::isOn);
     }
 
-    // A sub option shown whilst the box is clear.
     public <S extends Setting<T>> S unless(BoolSetting parent) {
         return under(parent, () -> !parent.isOn());
     }
 
-    // A sub option shown whilst the parent holds one of the given values.
     @SafeVarargs
     public final <S extends Setting<T>, E extends Enum<E>> S under(EnumSetting<E> parent, E... values) {
         Set<E> allowed = new HashSet<>();
@@ -143,8 +134,7 @@ public abstract class Setting<T> {
         return under(parent, () -> allowed.contains(parent.getValue()));
     }
 
-    // Makes the rows of a group sub options shown whilst the parent holds the value. A row that
-    // is a sub option already stays under its own row.
+    // A row that is a sub option already stays under its own row.
     public static <E extends Enum<E>> void under(Setting<?>[] rows, EnumSetting<E> parent, E value) {
         for (Setting<?> row : rows) {
             if (row.parent == null) {
@@ -158,7 +148,6 @@ public abstract class Setting<T> {
         return !internal && visibility.get() && (parent == null || parent.isVisible());
     }
 
-    // Keeps the setting out of the GUI and the commands and the module search.
     @SuppressWarnings("unchecked")
     public <S extends Setting<T>> S internal() {
         internal = true;
@@ -169,7 +158,6 @@ public abstract class Setting<T> {
         return internal;
     }
 
-    // Marks a value the player made such as a marker corner. It has no default to go back to.
     @SuppressWarnings("unchecked")
     public <S extends Setting<T>> S noDefault() {
         noDefault = true;
@@ -189,7 +177,6 @@ public abstract class Setting<T> {
         return parent;
     }
 
-    // Starts with the sub options tucked away. Only worth it for a big group.
     @SuppressWarnings("unchecked")
     public <S extends Setting<T>> S startFolded() {
         folded = true;

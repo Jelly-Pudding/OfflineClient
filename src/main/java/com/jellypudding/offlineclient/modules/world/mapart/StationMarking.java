@@ -20,21 +20,17 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.List;
 import java.util.Set;
 
-// One marking of the blocks of a station. It marks them one right click at a time and reads each
-// chest of materials once its screen opens. A chest read still waited for goes with its marking.
+// Marks the blocks of a station one right click at a time and reads each chest of materials once
+// its screen opens.
 public final class StationMarking {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks a chest of materials clicked whilst marking gets to open.
     private static final int OPEN_TICKS = 40;
 
     private final Printer printer;
-    // The role the next right click marks.
     private Role next;
 
-    // A chest of materials clicked whilst marking and the menu live as it was clicked. It is read
-    // once its own screen opens.
     private BlockPos opening;
     private int openingMenu;
     private int openingTicks;
@@ -44,7 +40,6 @@ public final class StationMarking {
         this.next = next;
     }
 
-    // The first role still to be marked. The chests come last.
     public static Role nextRole(Station station) {
         for (Role role : List.of(Role.TABLE, Role.MAPS, Role.FINISHED, Role.DUMP)) {
             if (station.block(role) == null) {
@@ -72,15 +67,13 @@ public final class StationMarking {
         return next == Role.CHESTS && Printer.storage(state) && roleOf(pos, state) == null && !inPicture(pos, state);
     }
 
-    // The chest clicked is read once its screen is up.
     public void awaitChest(BlockPos pos) {
         opening = pos;
         openingMenu = MC.player.containerMenu.containerId;
         openingTicks = 0;
     }
 
-    // Marks the block for the role and moves on to the next role. A block it turned down leaves
-    // the role as it was. True once the marking is over.
+    // True once the marking is over.
     public boolean mark(BlockPos pos, BlockState state) {
         // The fix of mistakes would break whatever stands where the picture goes.
         if (inPicture(pos, state)) {
@@ -139,8 +132,6 @@ public final class StationMarking {
         return false;
     }
 
-    // True once the marking is over. It ends only with a chest of materials marked and no chest
-    // still to be read.
     private boolean finishMarking() {
         if (opening != null) {
             ChatUtil.error("Wait until the chest you clicked opens.");
@@ -158,7 +149,6 @@ public final class StationMarking {
         return true;
     }
 
-    // The role a block was marked for. Either half of a double chest counts. Null for none.
     private Role roleOf(BlockPos pos, BlockState state) {
         Station station = printer.station();
         BlockPos other = BlockUtil.otherChestHalf(pos, state);
@@ -171,13 +161,11 @@ public final class StationMarking {
         return station.chestAt(pos) != null || station.chestAt(other) != null ? Role.CHESTS : null;
     }
 
-    // Either half of a double chest counts.
     private boolean inPicture(BlockPos pos, BlockState state) {
         BlockPos other = BlockUtil.otherChestHalf(pos, state);
         return printer.footprint().isInside(pos) || other != null && printer.footprint().isInside(other);
     }
 
-    // Reads what a chest of materials clicked whilst marking holds once its screen is up.
     public void readOpenedChest() {
         if (opening == null) {
             return;

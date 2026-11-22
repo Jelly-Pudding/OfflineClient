@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
-// The draggable panel style of the ClickGUI. One panel per category with the
-// search bar floating over them and the tabs along the top.
 public final class ClickGuiScreen extends GuiScreenBase {
 
     private static final int SEARCH_WIDTH = 156;
@@ -38,12 +36,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final int SEARCH_WIDTH_MAX = 460;
 
     private static final int RESULTS_GAP = 6;
-    // Room between the tabs and whatever a tab opens.
     private static final int TAB_GAP = 4;
-    // How far the pointer travels before a press on the bar becomes a move.
     private static final int DRAG_SLACK = 3;
 
-    // Layout of the panels on a first run or after a reset.
     private static final int TILE_MARGIN = 10;
     private static final int TILE_GAP = 8;
     private static final int FOOTER_HEIGHT = 12;
@@ -58,14 +53,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     private static final String FAVOURITES = "Favourites";
 
-    // The panels on show. The last one is drawn on top.
+    // The last one is drawn on top.
     private final List<Panel> panels = new ArrayList<>();
-    // Every panel in the order they are tiled with the test for whether it is on show.
     private final Map<Panel, BooleanSupplier> allPanels = new LinkedHashMap<>();
     private final Map<Category, Panel> categoryPanels = new EnumMap<>(Category.class);
     private final Panel favourites;
     private int starred = -1;
-    // The count of changes to the hidden modules the category panels were last listed for.
     private int hiddenSeen;
     private final List<ModuleRow> searchRows = new ArrayList<>();
     private final ScrollBar resultsScroll = new ScrollBar();
@@ -82,15 +75,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
 
-    // The saved stacking order. Higher draws on top. Only used whilst the
-    // panels are built.
     private final Map<Panel, Integer> layers = new HashMap<>();
 
     private int searchWidth = SEARCH_WIDTH;
     private int searchX = -1;
     private int searchY = -1;
     private boolean searchPlaced;
-    // True whilst the search was touched more recently than any panel.
     private boolean searchFront = true;
     private final List<int[]> covered = new ArrayList<>();
     private boolean resizingLeft;
@@ -102,7 +92,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private int grabX;
     private int grabY;
 
-    // The scale and the view the layout was last worked out against.
     private float drawnAt;
     private int laidOutW;
     private int laidOutH;
@@ -130,7 +119,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         allPanels.put(favourites, () -> !favourites.getRows().isEmpty());
         syncPanels();
 
-        // The panel that was on top last time comes back on top.
         panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
         layers.clear();
 
@@ -144,7 +132,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         restoreSearch();
     }
 
-    // True when the bar was put somewhere by hand. A bar that was not goes back to the middle.
     private boolean restoreSearchBar(JsonObject gui) {
         if (gui.has(SEARCH_W)) {
             searchWidth = Math.clamp(gui.get(SEARCH_W).getAsInt(), SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
@@ -157,8 +144,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return gui.has(SEARCH_PLACED) && gui.get(SEARCH_PLACED).getAsBoolean();
     }
 
-    // Puts each panel on show or takes it off. A panel that comes back lands on top. True
-    // when one came or went.
     private boolean syncPanels() {
         if (starred != Favourites.version()) {
             starred = Favourites.version();
@@ -186,7 +171,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return changed;
     }
 
-    // True when the layout held the sizes of the boxes the tabs open.
     private boolean restoreTabState(JsonObject gui) {
         if (!gui.has(TAB_STATE) || !gui.get(TAB_STATE).isJsonObject()) {
             return false;
@@ -209,7 +193,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return true;
     }
 
-    // True when the layout held a place for the panel.
     private boolean restorePanelState(Panel panel) {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(panel.getTitle()) || !gui.get(panel.getTitle()).isJsonObject()) {
@@ -305,8 +288,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         layout();
     }
 
-    // Runs on every resize and on every change of scale. Panels the user has
-    // never moved are laid out again to fit the window. Anything they placed
+    // Panels the user has never moved are laid out again to fit the window. Anything they placed
     // themselves is only pulled back inside the edges.
     private void layout() {
         int wasW = laidOutW > 0 ? laidOutW : viewWidth();
@@ -382,7 +364,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // How many panels from this one onwards fit a single row.
     private static int rowCount(List<Panel> loose, int from, int usable) {
         int count = 0;
         int used = 0;
@@ -419,17 +400,14 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return searchY + SearchField.HEIGHT + RESULTS_GAP;
     }
 
-    // Everything the rows need. Taller than the view means the box scrolls.
     private int resultsContentHeight() {
         return ModuleRow.totalHeight(searchRows);
     }
 
-    // The screen below the box less a small margin.
     private int resultsRoom() {
         return Math.max(GuiTheme.ROW_HEIGHT + PADDING, viewHeight() - resultsTop() - 8);
     }
 
-    // The clipped strip the rows are drawn into.
     private int resultsViewHeight() {
         if (searchRows.isEmpty()) {
             return 0;
@@ -465,7 +443,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (outOfSight) {
             offset = top;
         } else if (target.getHeight() <= view) {
-            // Only the part that is cut off is scrolled into view.
             if (bottom > offset + view) {
                 offset = bottom - view;
             }
@@ -524,9 +501,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // The overlay is drawn under this screen. Anything the GUI lays over it gets a solid
-    // backing rather than two lots of writing in one place. Whilst the overlay steps aside
-    // only the game's own bars and the elements that stay are drawn.
+    // Anything the GUI lays over the overlay gets a solid backing rather than two lots of writing
+    // in one place.
     private void coverOverlay() {
         HudModule hud = Modules.active(HudModule.class);
         if (hud == null || OfflineClient.MC.player == null) {
@@ -545,8 +521,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // Backed where it laps over anything already drawn and then added to
-    // the pile itself.
     private void cover(GuiGraphicsExtractor context, int[] over) {
         RenderUtil.cover(context, over, covered, GuiTheme.bgSolid());
         covered.add(over);
@@ -586,7 +560,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // Either upright edge of the search bar or of the results box below it.
     private boolean overSearchEdge(double mx, double my, boolean left) {
         double edge = left ? searchX : searchX + searchWidth;
         if (Math.abs(mx - edge) > GuiTheme.GRAB) {
@@ -666,7 +639,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return views.get(openTab).mouseClicked(mx, my, button);
         }
 
-        // Whatever was touched last is in front and hears the click first.
         if (searchFront) {
             return clickSearch(mx, my, button) || clickPanels(mx, my, button);
         }
@@ -703,7 +675,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return false;
     }
 
-    // The panel drawn on top gets the click first and comes to the front.
     private boolean clickPanels(double mx, double my, int button) {
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
@@ -724,7 +695,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         OfflineClient.MC.gui.setScreen(new ClickGuiScreen());
     }
 
-    // Clicking the open tab goes back to the modules.
     private void chooseTab(TabStrip.Tab tab) {
         if (tab == TabStrip.Tab.HUD) {
             HudEditorScreen editor = HudEditorScreen.open();
@@ -787,7 +757,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return false;
     }
 
-    // A press on the empty part of the bar that pulls away carries the bar with it.
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         double mx = toView(event.x());
@@ -846,7 +815,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return openTab != null && views.get(openTab).isTyping();
     }
 
-    // Escape steps back to the modules before it closes the GUI.
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (openTab != null && views.get(openTab).keyPressed(event)) {

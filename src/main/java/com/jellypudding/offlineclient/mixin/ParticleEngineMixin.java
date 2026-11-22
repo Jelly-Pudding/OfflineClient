@@ -34,7 +34,6 @@ public class ParticleEngineMixin {
         }
     }
 
-    // Confetti repaints each totem particle the moment it is made.
     @Inject(method = "createParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)"
         + "Lnet/minecraft/client/particle/Particle;", at = @At("RETURN"))
     private void onParticleCreated(ParticleOptions options, double x, double y, double z,

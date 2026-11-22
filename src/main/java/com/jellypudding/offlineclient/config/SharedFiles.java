@@ -18,23 +18,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-// Files that two games on one computer may both write. One background thread does every
-// read and write of this game. A lock file stops two games writing at the same moment and
-// a stamp tells a game whether the other one wrote since it last looked.
+// One background thread does every read and write of this game. A lock file stops two games writing
+// at the same moment and a stamp tells a game whether the other one wrote since it last looked.
 public final class SharedFiles {
 
-    // When a file last changed and how long it was. Any write gives a new stamp.
     public record Stamp(FileTime modified, long size) {
     }
 
-    // Work on a file that may fail.
     @FunctionalInterface
     public interface FileWork<T> {
         T run() throws IOException;
     }
 
     private static final String LOCK_FILE = "sharing.lock";
-    // How long a closing game waits for its files.
     private static final long WAIT_SECONDS = 10;
 
     private static final ExecutorService THREAD = Executors.newSingleThreadExecutor(runnable -> {
@@ -49,8 +45,7 @@ public final class SharedFiles {
     private SharedFiles() {
     }
 
-    // Runs the work on the file thread and hands its answer to the game thread. A failure
-    // is logged and hands back null.
+    // A failure is logged and hands back null.
     public static <T> void submit(FileWork<T> work, Consumer<T> onGameThread) {
         THREAD.execute(() -> {
             T answer = null;
@@ -64,8 +59,7 @@ public final class SharedFiles {
         });
     }
 
-    // Runs the work on the file thread after everything already waiting there and blocks
-    // until it is done. For the moment the game closes. Null when it failed or took too long.
+    // For the moment the game closes. Null when it failed or took too long.
     public static <T> T await(FileWork<T> work) {
         try {
             return THREAD.submit(work::run).get(WAIT_SECONDS, TimeUnit.SECONDS);
@@ -77,7 +71,6 @@ public final class SharedFiles {
         return null;
     }
 
-    // Null for a file that is not there.
     public static Stamp stamp(Path file) throws IOException {
         try {
             BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
@@ -87,9 +80,8 @@ public final class SharedFiles {
         }
     }
 
-    // Runs the work whilst no other game on this computer can write a shared file. A reader
-    // needs no lock when every write swaps in a whole file. An append only file must cope with
-    // a torn last line.
+    // A reader needs no lock when every write swaps in a whole file. An append only file must cope
+    // with a torn last line.
     public static <T> T locked(FileWork<T> work) throws IOException {
         synchronized (TURN) {
             Path lock = DataFiles.path(LOCK_FILE);

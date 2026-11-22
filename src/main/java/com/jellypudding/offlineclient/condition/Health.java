@@ -6,8 +6,7 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Totems;
 
-// Low health and harm that is about to make it low. Enough totems in the bag can take the
-// place of the health.
+// Enough totems in the bag can take the place of the health.
 final class Health extends Condition {
 
     private final NumberSetting line;

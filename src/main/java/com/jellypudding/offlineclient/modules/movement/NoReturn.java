@@ -21,14 +21,12 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
-// Keeps you out of the areas you closed. Every block of an area you stand outside of turns
-// solid to you and your mount. An area you stand inside stays open until you leave it.
+// An area you stand inside stays open until you leave it.
 public final class NoReturn extends Module {
 
     // The server sends chunks one ring past your render distance.
     private static final int SENT_PAST_VIEW = 1;
 
-    // The edge is drawn from just below your feet to a little over your head.
     private static final double EDGE_BELOW = 1;
     private static final double EDGE_ABOVE = 3;
     private static final float EDGE_FILL = 0.3f;
@@ -41,7 +39,6 @@ public final class NoReturn extends Module {
     private final ColorSetting edgeColour = new ColorSetting("Edge colour",
         "Colour of the edge.", 0, false).under(showEdge);
 
-    // The areas of this dimension and those of them you stand outside of. Worked out each tick.
     private List<ClosedAreas.Area> here = List.of();
     private List<ClosedAreas.Area> walls = List.of();
 
@@ -57,7 +54,6 @@ public final class NoReturn extends Module {
         return count(here.size());
     }
 
-    // The radius an area closed by the command takes when none is typed.
     public int radius() {
         return radius.getInt();
     }
@@ -82,7 +78,7 @@ public final class NoReturn extends Module {
         walls = List.of();
     }
 
-    // True for a block in a closed area you stand outside of. Read for every block you could bump into.
+    // Read for every block you could bump into.
     public boolean closed(BlockPos pos) {
         int chunkX = SectionPos.blockToSectionCoord(pos.getX());
         int chunkZ = SectionPos.blockToSectionCoord(pos.getZ());
@@ -94,8 +90,7 @@ public final class NoReturn extends Module {
         return false;
     }
 
-    // How many chunks round its centre an area closes. Nought keeps every chunk the server
-    // would send you of the centre shut.
+    // Nought keeps every chunk the server would send you of the centre shut.
     public int reach(ClosedAreas.Area area) {
         return area.radius() > 0 ? area.radius() : Modules.renderDistance() + SENT_PAST_VIEW;
     }

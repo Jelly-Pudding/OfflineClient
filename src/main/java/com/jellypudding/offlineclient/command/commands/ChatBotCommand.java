@@ -11,8 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 
-// The bare name toggles the module like any other. This keeps the keys its model services ask
-// for. A key belongs to the host in the Model address and only ever goes to that host.
 public final class ChatBotCommand extends Command {
 
     private static final String KEY = "key";

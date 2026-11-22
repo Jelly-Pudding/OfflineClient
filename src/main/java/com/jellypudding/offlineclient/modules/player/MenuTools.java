@@ -55,7 +55,6 @@ public final class MenuTools extends Module {
         return isEnabled() && slotNumbers.isOn();
     }
 
-    // The server closes the menu and the screen stays open on your side.
     public void desync(AbstractContainerMenu menu) {
         ClientPacketListener connection = mc.getConnection();
         if (connection == null) {

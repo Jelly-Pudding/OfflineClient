@@ -32,7 +32,6 @@ public final class ScenariosSuite implements Suite {
     private static final int SETTLE_TICKS = 20;
 
     private static final String LEAVES = "oak_leaves[persistent=true]";
-    // How far the crosshair is asked to reach when the block aimed at is out of arm's reach.
     private static final double LONG_AIM = 32;
     private static final int TRIP_TICKS = 200;
     private static final double ON_TOP = 0.6;
@@ -58,7 +57,6 @@ public final class ScenariosSuite implements Suite {
     private static final int TILL_TICKS = 40;
     private static final int SOW_TICKS = 60;
     private static final int HAND_BACK_TICKS = 40;
-    // The soil AutoFarm may till in the tilling case lies this near the player.
     private static final int FIELD = 3;
     // Water this far east wets the east of the field and leaves the west dry.
     private static final int WATER_EAST = 5;
@@ -114,19 +112,7 @@ public final class ScenariosSuite implements Suite {
         world.fill(base, base.offset(0, 3, 0), "oak_log");
         world.teleport(home.getX() + 0.5, home.getY(), home.getZ() + 3.5, 180, 0);
         BlockPos top = base.offset(0, 5, 1);
-        rig.client().enable("ClickTp");
-        rig.controls().aimAt(Vec3.atCenterOf(top).add(0, 0, 0.5));
-        HitResult aimed = rig.ask(mc -> mc.player.pick(LONG_AIM, 1, false));
-        rig.expect(aimed instanceof BlockHitResult hit && hit.getBlockPos().equals(top)
-            && hit.getDirection() == Direction.SOUTH, "The crosshair is not on the south face of the top leaf");
-        rig.controls().click(USE);
-        rig.ticks(2);
-        rig.until("the trip to end", TRIP_TICKS, mc -> !Hop.travelling());
-        rig.ticks(SETTLE_TICKS);
-        Vec3 stands = rig.ask(mc -> mc.player.position());
-        rig.note("Clicked the south face of the top leaf at " + top.toShortString() + " and stands at "
-            + String.format(Locale.ROOT, "%.2f %.2f %.2f", stands.x, stands.y, stands.z));
-        Stage.expectAlive(rig);
+        Vec3 stands = clickSouthFace(rig, top, "the top leaf");
         rig.expect(stands.distanceTo(Vec3.atBottomCenterOf(top.above())) < ON_TOP,
             "The player does not stand on top of the block that was clicked");
     }
@@ -139,21 +125,29 @@ public final class ScenariosSuite implements Suite {
         world.gameMode(SURVIVAL);
         BlockPos low = home.offset(0, 0, -5);
         world.fill(low, low.above(), "stone");
+        Vec3 stands = clickSouthFace(rig, low, "the lower block");
+        rig.expect(stands.distanceTo(Vec3.atBottomCenterOf(low.south())) < ON_TOP,
+            "The player does not stand on the ground beside the face that was clicked");
+    }
+
+    // Uses the hand on the south face of a block with ClickTp on and hands back where the trip ended.
+    private static Vec3 clickSouthFace(Rig rig, BlockPos block, String called) {
         rig.client().enable("ClickTp");
-        rig.controls().aimAt(Vec3.atCenterOf(low).add(0, 0, 0.5));
+        rig.controls().aimAt(Vec3.atCenterOf(block).add(0, 0, 0.5));
+        HitResult aimed = rig.ask(mc -> mc.player.pick(LONG_AIM, 1, false));
+        rig.expect(aimed instanceof BlockHitResult hit && hit.getBlockPos().equals(block)
+            && hit.getDirection() == Direction.SOUTH, "The crosshair is not on the south face of " + called);
         rig.controls().click(USE);
         rig.ticks(2);
         rig.until("the trip to end", TRIP_TICKS, mc -> !Hop.travelling());
         rig.ticks(SETTLE_TICKS);
         Vec3 stands = rig.ask(mc -> mc.player.position());
-        rig.note("Clicked the south face of the lower block at " + low.toShortString() + " and stands at "
+        rig.note("Clicked the south face of " + called + " at " + block.toShortString() + " and stands at "
             + String.format(Locale.ROOT, "%.2f %.2f %.2f", stands.x, stands.y, stands.z));
         Stage.expectAlive(rig);
-        rig.expect(stands.distanceTo(Vec3.atBottomCenterOf(low.south())) < ON_TOP,
-            "The player does not stand on the ground beside the face that was clicked");
+        return stands;
     }
 
-    // The player is put high in the air with a sword in hand and a water bucket in another slot.
     private static void noFallPlace(Rig rig, boolean switchBack) {
         World world = rig.world();
         BlockPos home = home(rig);
@@ -183,7 +177,6 @@ public final class ScenariosSuite implements Suite {
             ? "The hotbar did not go back to the sword" : "The hotbar left the bucket with Switch back off");
     }
 
-    // The forward key is held for a second with Speed off and again with it on from the same spot.
     private static void speedByHand(Rig rig) {
         World world = rig.world();
         BlockPos home = home(rig);
@@ -283,7 +276,6 @@ public final class ScenariosSuite implements Suite {
         return mc.level.getBlockState(pos).is(block);
     }
 
-    // The blocks of one layer round the player's home as far as AutoFarm could reach.
     private static Iterable<BlockPos> field(BlockPos home, int layer) {
         return BlockPos.betweenClosed(home.offset(-FIELD, layer, -FIELD), home.offset(FIELD, layer, FIELD));
     }

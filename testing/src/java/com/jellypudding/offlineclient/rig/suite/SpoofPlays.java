@@ -35,7 +35,6 @@ final class SpoofPlays {
     private static final double NEAR = 0.5;
     private static final int OPEN_TICKS = 20;
     private static final int SHUT_TICKS = 5;
-    // What a server asks a game about itself as it joins.
     private static final List<String> SAME_FACTS = List.of("brand", "channels", "host", "locale");
     private static final int ANSWER_TICKS = 100;
     private static final int PACK_TICKS = 60;
@@ -110,9 +109,9 @@ final class SpoofPlays {
     // The game sends the lines back as it shuts. Nobody at that game has to do a thing.
     private static List<String> signLines(Rig rig, Duo duo, String player) {
         int mark = duo.server().logMark();
-        duo.server().console("probe sign " + player + " " + MOD_KEY + " " + GAME_KEY + " " + BIND + GAME_BIND);
+        duo.world().quietly("probe sign " + player + " " + MOD_KEY + " " + GAME_KEY + " " + BIND + GAME_BIND);
         rig.ticks(OPEN_TICKS);
-        duo.server().console("probe close " + player);
+        duo.world().quietly("probe close " + player);
         String lines = duo.server().heard("sign " + player, mark, ANSWER_TICKS);
         rig.expect(lines != null, "The server never got the sign back from " + player);
         return List.of(lines.split(LINE_SPLIT, -1));
@@ -133,9 +132,9 @@ final class SpoofPlays {
     // writes the name into the box and tells the server what the box holds.
     private static String anvilName(Rig rig, Duo duo, String player) {
         int mark = duo.server().logMark();
-        duo.server().console("probe anvil " + player + " " + MOD_KEY);
+        duo.world().quietly("probe anvil " + player + " " + MOD_KEY);
         String name = duo.server().heard("anvil " + player, mark, ANSWER_TICKS);
-        duo.server().console("probe close " + player);
+        duo.world().quietly("probe close " + player);
         rig.ticks(SHUT_TICKS);
         return name;
     }
@@ -204,7 +203,7 @@ final class SpoofPlays {
     private static List<String> packAnswers(Rig rig, Duo duo, PackTrap trap) {
         String player = rig.world().player();
         int mark = duo.server().logMark();
-        duo.server().console("probe pack " + player + " " + trap.url());
+        duo.world().quietly("probe pack " + player + " " + trap.url());
         rig.ticks(PACK_TICKS);
         return duo.server().allHeard("pack " + player, mark);
     }

@@ -50,7 +50,6 @@ public final class SetCommand extends Command {
     private static final String PREVIOUS = "prev";
     private static final String RAINBOW = "rainbow";
 
-    // The namespace a registry id may be typed without.
     private static final String VANILLA = Identifier.DEFAULT_NAMESPACE + Identifier.NAMESPACE_SEPARATOR;
 
     public SetCommand() {
@@ -75,7 +74,6 @@ public final class SetCommand extends Command {
 
         Setting<?> setting = module.getSetting(args[1]);
         if (setting == null) {
-            // The setting name may be left out when the module has only one of its own.
             Setting<?> only = module.onlySetting();
             if (args.length == 2 && only != null) {
                 apply(module, only, args[1]);
@@ -99,7 +97,6 @@ public final class SetCommand extends Command {
             editList(module, list, args);
             return;
         }
-        // Text settings and ranked lists and grids take the rest of the line. Everything else takes one word.
         apply(module, setting, words(args, 2));
     }
 
@@ -112,7 +109,6 @@ public final class SetCommand extends Command {
         ChatUtil.message("§3" + module.getName() + " settings");
         boolean changed = false;
         for (Setting<?> setting : settings) {
-            // An action has no value. What it does is the useful part.
             ChatUtil.message(setting instanceof ActionSetting
                 ? "§b" + setting.id() + " §8» §7" + setting.getDescription()
                 : "§b" + setting.id() + " §7= §f" + valueString(setting) + rangeHint(setting)
@@ -153,7 +149,6 @@ public final class SetCommand extends Command {
         }
     }
 
-    // What a list holds. A long one folds into a count that copies the names when clicked.
     private static <T> void showChosen(PickList<T> list) {
         List<String> names = list.chosen().stream().map(list::displayName).toList();
         if (names.isEmpty()) {
@@ -169,8 +164,6 @@ public final class SetCommand extends Command {
             Component.literal("§7It holds §f" + names.size() + " entries"), String.join("\n", names)));
     }
 
-    // A word adds or takes off every entry whose name or id holds it as the picker's add shown
-    // does. A word that is an entry's id names that entry alone. Each edit can be taken back.
     private static <T> void editList(Module module, PickList<T> list, String[] args) {
         String verb = args[2].toLowerCase(Locale.ROOT);
         String name = module.getName() + " " + list.getName();
@@ -206,7 +199,6 @@ public final class SetCommand extends Command {
             + (adding ? "§7 to §b" : "§7 off §b") + name + "§7.");
     }
 
-    // The entry on offer whose id is the word. Null when there is none.
     private static <T> T exact(PickList<T> list, String word) {
         for (T entry : list.options()) {
             String id = list.idOf(entry);
@@ -362,7 +354,6 @@ public final class SetCommand extends Command {
         return "";
     }
 
-    // A changed setting says what it started as where a few words can.
     private static String defaultHint(Setting<?> setting) {
         if (!setting.isChanged()) {
             return "";
@@ -394,7 +385,6 @@ public final class SetCommand extends Command {
             return CommandManager.filter(current, module.settingIds());
         }
         Setting<?> setting = module.getSetting(tokens[2]);
-        // A ranked list takes one word for each choice.
         if (setting instanceof RankSetting<?> r) {
             return CommandManager.filter(current, r.ids());
         }
@@ -413,7 +403,6 @@ public final class SetCommand extends Command {
         };
     }
 
-    // The edits first and then the ids an add could take or a remove could drop.
     private static <T> List<String> completeList(PickList<T> list, String[] tokens, int index, String current) {
         if (index == 3) {
             return CommandManager.filter(current, List.of(ADD, REMOVE, CLEAR));

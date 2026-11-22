@@ -24,8 +24,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
-// What BetterChat does to a message you send. Shortcuts and the reply shortcut and the case and
-// the prefix and suffix rows rewrite it on its way out and the coordinate guard holds one back.
+// What BetterChat does to a message you send.
 final class ChatRewrite {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -36,10 +35,8 @@ final class ChatRewrite {
     // A number of three digits or more then one of two or more read as coordinates.
     private static final Pattern COORDINATES = Pattern.compile("-?\\d{3,}[\\s,;/]+-?\\d{2,}");
 
-    // How many shortcuts can be set up one by one.
     private static final int SHORTCUTS = 32;
 
-    // The rows of one shortcut. The typed text folds what it becomes away.
     private static final class Shortcut {
 
         final TextSetting typed;
@@ -56,7 +53,6 @@ final class ChatRewrite {
                 .under(typed, () -> slot < count.getInt());
         }
 
-        // Null whilst the typed text is blank.
         Shortcuts.Pair pair() {
             return typed.isBlank() ? null : new Shortcuts.Pair(typed.getValue().trim(), sent.getValue());
         }
@@ -114,7 +110,6 @@ final class ChatRewrite {
 
     private final BooleanSupplier enabled;
     private String heldBack;
-    // Who whispered to you last on this server. Null until somebody has.
     private String lastWhisperer;
 
     ChatRewrite(BooleanSupplier enabled) {
@@ -124,12 +119,10 @@ final class ChatRewrite {
         }
     }
 
-    // BetterChat lists the guard among the rows of the chat box.
     BoolSetting guardRow() {
         return guardCoordinates;
     }
 
-    // Every row that changes what you send.
     Setting<?>[] rewriteRows() {
         List<Setting<?>> rows = new ArrayList<>();
         rows.add(shortcutCount);
@@ -142,8 +135,7 @@ final class ChatRewrite {
         return rows.toArray(Setting<?>[]::new);
     }
 
-    // The text to send in place of what was typed. A command comes back as a command. A sign
-    // the server kicks for never goes out and chat stays as short as the server takes it.
+    // A sign the server kicks for never goes out and chat stays as short as the server takes it.
     String rewrite(String message) {
         if (!enabled.getAsBoolean()) {
             return message;
@@ -162,8 +154,6 @@ final class ChatRewrite {
             "(%03d) ") + body + affix(suffix, suffixRandom, suffixText, suffixSmall, " (%03d)")));
     }
 
-    // Shortcuts are only swapped in a command when the player asked for that. A reply then
-    // becomes a whisper to whoever whispered last.
     private String rewriteCommand(String typed) {
         String command = shortcutCommands.isOn()
             ? Shortcuts.swapInCommand(typed, shortcutPairs(), ChatRewrite::isOnline) : typed;
@@ -173,8 +163,7 @@ final class ChatRewrite {
         return whisper.isEmpty() ? command : whisper;
     }
 
-    // The words typed after the reply command. Null for a line that is no reply or whilst the
-    // shortcut is off. A command that carries a password is never a reply whatever it starts with.
+    // A command that carries a password is never a reply whatever it starts with.
     private String replyWords(String command) {
         if (!replyShortcut.isOn() || replyCommand.isBlank() || Shortcuts.carriesPassword(command)) {
             return null;
@@ -276,7 +265,6 @@ final class ChatRewrite {
         ChatUtil.message("That looks like coordinates. Send it again if you mean it.");
     }
 
-    // Nothing held back or heard carries over to the next time BetterChat is on.
     void forget() {
         heldBack = null;
         lastWhisperer = null;

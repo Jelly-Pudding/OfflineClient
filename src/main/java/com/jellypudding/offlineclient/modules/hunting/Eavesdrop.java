@@ -57,10 +57,8 @@ import java.util.function.Predicate;
 // lines of events that keep coming from one place cross where that place is.
 public final class Eavesdrop extends Module implements FindSource, Leak.Source {
 
-    // The global events worth hearing with the level event id the server sends. A dragon
-    // only dies in the End and a survival portal only opens in the Overworld. A kind that
-    // repeats keeps coming from one place and its lines are crossed. A kept kind is a place
-    // worth going back to and goes in the finds.
+    // A dragon only dies in the End and a survival portal only opens in the Overworld. A kind that
+    // repeats keeps coming from one place and its lines are crossed. A kept kind goes in the finds.
     private enum Heard {
         WITHER(LevelEvent.SOUND_WITHER_BOSS_SPAWN, "Wither", "A wither was spawned", null, true, true),
         DRAGON(LevelEvent.SOUND_DRAGON_DEATH, "Dragon death", "The ender dragon died", Level.END, false, false),
@@ -95,7 +93,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
             return OTHER;
         }
 
-        // A plugin event is named by its id.
         private String label(int eventId) {
             return this == OTHER ? "Event " + eventId : label;
         }
@@ -105,19 +102,17 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         }
     }
 
-    // One event as it arrived. Home is the dimension its place lies in or null when it could
-    // be any. Here is the dimension you heard it in.
+    // Home is the dimension its place lies in or null when it could be any. Here is the dimension
+    // you heard it in.
     private record Event(Heard kind, int id, String home, String here, BlockPos pos, boolean paper, long now) {
     }
 
-    // One place events of one kind come from. An event of a kind that repeats joins the
-    // origin its line or block can point at. Every other event gets an origin of its own.
+    // An event of a kind that repeats joins the origin its line or block can point at. Every other
+    // event gets an origin of its own.
     private static final class Origin {
         private final Heard kind;
         private final int id;
-        // Where the place lies. Null when it could be in any dimension.
         private final String home;
-        // The dimension you first heard it in.
         private final String heardIn;
         private final BearingTrail trail = new BearingTrail(SPOT, false);
         // The true block once an event came from close by.
@@ -160,7 +155,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
             return place != null ? !place.missedBy(line, SPOT) : trail.isEmpty() || trail.fits(line, minSpread);
         }
 
-        // A true block fits when each line the origin holds could point at it.
         private boolean fits(BlockPos block, double minSpread) {
             double x = block.getX() + 0.5;
             double z = block.getZ() + 0.5;
@@ -177,7 +171,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
     // learnt once two such events that landed apart share the same number.
     private static final class RelayRing {
         private double ring = Double.NaN;
-        // The last event that could have come from the ring.
         private double candidate = Double.NaN;
         private Vec3 candidateAt = Vec3.ZERO;
 
@@ -237,7 +230,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
     // Nearer than this across the ground there is no telling which way it lies.
     private static final double LEVEL_MIN = 1;
 
-    // Where along a direction line its name sits.
     private static final double LABEL_ALONG = 32;
 
     private static final double LABEL_LIFT = 1.5;
@@ -279,7 +271,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
 
     // Oldest first.
     private final List<Origin> origins = new ArrayList<>();
-    // What the origins give away. Rebuilt every tick.
     private final List<Leak> leaks = new ArrayList<>();
     // Filled from the network thread and handled on the next tick.
     private final Queue<ClientboundLevelEventPacket> heard = new ConcurrentLinkedQueue<>();
@@ -412,8 +403,8 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         }
     }
 
-    // True for an event in a dimension you are not in that goes no further. Vanilla puts
-    // one on your own spot and only its news is left to tell.
+    // Vanilla puts an event of another dimension on your own spot and only its news is left to
+    // tell.
     private boolean heardElsewhere(Heard kind, int id, boolean paper, Vec3 point, String home, String here) {
         boolean away = home != null && !home.equals(here);
         if (paper) {
@@ -445,8 +436,8 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         return coordinate < 0 ? coordinate - 1 : coordinate;
     }
 
-    // An event that came from its own block. Paper cuts the block of a dying dragon towards
-    // nought and one cut to nought across the ground is only known to within a block.
+    // Paper cuts the block of a dying dragon towards nought and one cut to nought across the ground
+    // is only known to within a block.
     private void heardAt(Event event) {
         BlockPos pos = event.pos();
         boolean cut = event.paper() && event.kind() == Heard.DRAGON;
@@ -463,7 +454,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         heard(origin, event);
     }
 
-    // An event known only by the line from where the server saw you towards it.
     private void heardFar(Event event, Vec3 me, Vec3 point, double across, double slack) {
         String from = BlockUtil.text(BlockPos.containing(me));
         if (across < LEVEL_MIN) {
@@ -502,8 +492,8 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         log(origin, place, event.now());
     }
 
-    // The origin the event could have come from or a new one. A true block always joins the
-    // origin at its spot. A line only joins one whilst lines are crossed.
+    // A true block always joins the origin at its spot. A line only joins one whilst lines are
+    // crossed.
     private Origin originFor(Event event, boolean gather, Predicate<Origin> fits) {
         if (event.kind().repeats && gather) {
             for (Origin origin : origins) {
@@ -547,7 +537,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
             + " §7give or take §f" + Math.round(place.radius()) + " §7blocks" + height + dimensionWords(origin) + "§7.";
     }
 
-    // Names the dimension the place lies in when it is not yours or cannot be known.
     private String dimensionWords(Origin origin) {
         if (origin.home == null) {
             return ServerInfo.runsPaper() ? " §7in whichever dimension it came from" : "";
@@ -556,7 +545,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
             ? "" : " §7in the " + ServerInfo.dimensionName(origin.home);
     }
 
-    // A place worth going back to goes in the finds and follows the estimate as it sharpens.
     private void log(Origin origin, BearingFix place, long now) {
         if (!origin.kind.kept) {
             return;
@@ -567,7 +555,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
             detail, now);
     }
 
-    // A place worth going back to takes a waypoint that moves as the estimate sharpens.
     private void save(Origin origin, Leak leak, long now) {
         if (waypoints.isOn() && origin.kind.kept) {
             double radius = origin.place(minSpread()).radius();
@@ -580,7 +567,7 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         return origin.home != null ? origin.home : origin.heardIn;
     }
 
-    // The block standing for the place. An estimate without a known height takes yours.
+    // An estimate without a known height takes yours.
     private BlockPos spotOf(Origin origin, BearingFix place) {
         if (origin.exact != null) {
             return origin.exact;
@@ -589,7 +576,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         return BlockPos.containing(place.x(), y, place.z());
     }
 
-    // Null whilst the origin has no place.
     private Leak leakOf(Origin origin) {
         BearingFix place = origin.place(minSpread());
         if (place == null) {
@@ -604,8 +590,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         Notice.post(messages, this, Component.literal(text));
     }
 
-    // An origin is drawn in the dimension its place lies in. One that could lie in any is
-    // drawn in every one.
     private boolean drawnHere(Origin origin) {
         return origin.home == null || origin.home.equals(ServerInfo.dimension());
     }
@@ -667,8 +651,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         }
     }
 
-    // What an origin without a place still needs. One line needs a second from somewhere to
-    // the side and lines too close in angle need more spread.
     private String progress(Origin origin, Bearing newest, double least) {
         if (!origin.kind.repeats || !crossLines.isOn()) {
             return " " + newest.compass();

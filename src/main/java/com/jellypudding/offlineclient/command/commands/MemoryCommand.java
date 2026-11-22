@@ -34,7 +34,7 @@ public final class MemoryCommand extends Command {
         ChatUtil.row("Reserved", megabytes(runtime.totalMemory()));
     }
 
-    // Measured before and after. The game pauses for as long as Java takes.
+    // The game pauses for as long as Java takes.
     private static void free() {
         if (ManagementFactory.getRuntimeMXBean().getInputArguments().contains(REQUESTS_IGNORED)) {
             ChatUtil.error("Java was started with requests to free memory switched off.");

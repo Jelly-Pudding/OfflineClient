@@ -20,7 +20,6 @@ public final class HeldPacket<P extends Packet<?>> {
         return releasing;
     }
 
-    // Sends the held packet on. Nothing happens when none is held.
     public void release() {
         P out = packet;
         packet = null;
@@ -35,7 +34,6 @@ public final class HeldPacket<P extends Packet<?>> {
         }
     }
 
-    // Throws the held packet away. It never reaches the server.
     public void discard() {
         packet = null;
     }

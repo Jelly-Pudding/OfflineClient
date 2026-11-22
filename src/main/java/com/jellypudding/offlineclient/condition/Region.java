@@ -5,8 +5,7 @@ import com.jellypudding.offlineclient.setting.TextSetting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
-// Standing inside a box given by two of its corners. A corner names a block and both edges
-// count as inside.
+// A corner names a block and both edges count as inside.
 final class Region extends Condition {
 
     private static final int POINT = 3;
@@ -35,7 +34,6 @@ final class Region extends Condition {
             () -> writeHere(second, within)));
     }
 
-    // Null whilst either corner is not three numbers.
     private BoundingBox box() {
         double[] a = from.get();
         double[] b = to.get();

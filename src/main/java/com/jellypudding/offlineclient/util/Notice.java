@@ -33,9 +33,7 @@ public final class Notice {
     private final NumberSetting quiet;
     private String verb = "found";
 
-    // Kinds of find still inside their quiet time on the player's clock.
     private final Cooldowns<String> quieted = new Cooldowns<>();
-    // How many finds of each kind were held back since its last message.
     private final Map<String, Integer> heldBack = new HashMap<>();
     private final ServerWatch server = new ServerWatch();
 
@@ -60,7 +58,6 @@ public final class Notice {
         return new Setting<?>[] {where, coordinates, quiet};
     }
 
-    // The Messages row on its own for a module that words its own messages.
     public static EnumSetting<Where> row(String description, Where defaultWhere) {
         return new EnumSetting<>("Messages", description, defaultWhere)
             .describe(Where.OFF, "No messages.")
@@ -69,8 +66,7 @@ public final class Notice {
             .describe(Where.BOTH, "A chat line and a toast.");
     }
 
-    // Posts a module's own message where its row says. The words follow the module name in
-    // chat and make the body of a toast.
+    // The words follow the module name in chat and make the body of a toast.
     public static void post(EnumSetting<Where> where, Module owner, Component words) {
         if (show(where, owner, words)) {
             Modules.alert(Webhook.Alert.FIND, owner.getName() + " " + words.getString());
@@ -97,20 +93,20 @@ public final class Notice {
         return this;
     }
 
-    // Makes the rows a sub option of a switch. Nothing is announced whilst that switch is off.
+    // Nothing is announced whilst that switch is off.
     public Notice under(BoolSetting parent) {
         where.under(parent);
         return this;
     }
 
-    // Shows the rows only whilst the supplier answers true. Nothing is announced otherwise.
+    // Nothing is announced whilst the supplier answers false.
     public Notice visibleWhen(Supplier<Boolean> visibility) {
         where.visibleWhen(visibility);
         return this;
     }
 
-    // Tells the player about a find unless its kind is still quiet. The kind is a short
-    // name the module picks and the words read after the verb such as a zombie spawner.
+    // The kind is a short name the module picks and the words read after the verb such as a zombie
+    // spawner.
     public void tell(String kind, String what, BlockPos pos) {
         tell(kind, what, pos, ServerInfo.dimension());
     }
@@ -161,7 +157,6 @@ public final class Notice {
         return Math.round(distance) + " blocks " + Bearing.between(from, to).compass();
     }
 
-    // How far and which way the find lies. With coordinates on they follow.
     private void chat(String what, String away, BlockPos pos, String dimension, int more) {
         MutableComponent line = Component.literal(ChatUtil.from(owner, verb + " §f" + what + "§7 " + away));
         if (coordinates.isOn()) {

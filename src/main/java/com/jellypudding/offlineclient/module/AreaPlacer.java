@@ -21,12 +21,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 
-// Shared by modules that fill nearby positions from a chosen block list.
-// A subclass picks the positions and how each is clicked. The rest is one round a tick.
-// A subclass that first has to clear a block out of the way digs it through here as well.
 public abstract class AreaPlacer extends Module {
 
-    // Alpha the targets beyond this round are drawn at.
     private static final int QUEUED_ALPHA = 0x80;
 
     protected final NumberSetting range;
@@ -37,13 +33,12 @@ public abstract class AreaPlacer extends Module {
     protected final BoolSetting rotate;
     protected final BoolSetting render;
 
-    // Refilled by collect every tick. The first few are placed and all are drawn.
+    // Refilled every tick. The first few are placed and all are drawn.
     protected final List<BlockPos> targets = new ArrayList<>();
 
     private final SlotSwap slots = new SlotSwap();
     private final int color;
     private int timer;
-    // The block being dug out of the way. Null whilst none is.
     private BlockPos digging;
 
     protected AreaPlacer(String name, String description, String blocksDescription,
@@ -66,13 +61,11 @@ public abstract class AreaPlacer extends Module {
         render = new BoolSetting("Show targets", renderDescription, true);
     }
 
-    // Refills targets with the positions worth placing on.
     protected abstract void collect();
 
-    // Clicks one position. True once a placement has gone out.
+    // True once a placement has gone out.
     protected abstract boolean placeOn(BlockPos pos);
 
-    // True when the spot is in reach and either in plain sight or inside the walls range.
     protected boolean inReach(BlockPos pos) {
         if (!withinRange(pos, range.getValue())) {
             return false;
@@ -80,17 +73,14 @@ public abstract class AreaPlacer extends Module {
         return withinRange(pos, wallsRange.getValue()) || BlockUtil.canSee(pos);
     }
 
-    // Straight line distance from the eyes. A subclass may measure another way.
     protected boolean withinRange(BlockPos pos, double reach) {
         return BlockUtil.distanceTo(pos) <= reach;
     }
 
-    // Which blocks may be taken from the hotbar. A subclass may invert the list.
     protected boolean allowed(Block block) {
         return blocks.contains(block);
     }
 
-    // How many blocks go down this round. A subclass may cap it lower.
     protected int roundSize() {
         return perRound.getInt();
     }
@@ -114,9 +104,8 @@ public abstract class AreaPlacer extends Module {
         targets.clear();
     }
 
-    // Digs one block in reach that passes the test for as long as this is called every tick. The
-    // order says which goes first. Letting go of a block that stopped passing at once keeps it
-    // from passing for the block of another module.
+    // Letting go of a block that stopped passing at once keeps it from passing for the block of
+    // another module.
     protected final void dig(Predicate<BlockPos> wanted, Comparator<BlockPos> order) {
         if (Hands.taken()) {
             stopDigging();
@@ -140,7 +129,6 @@ public abstract class AreaPlacer extends Module {
         }
     }
 
-    // The block dig is working on. Null whilst it has none.
     protected final BlockPos digging() {
         return digging;
     }

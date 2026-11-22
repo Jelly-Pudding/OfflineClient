@@ -36,7 +36,6 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
-// Digs out a box marked with two corners. Blocks come out from the top down.
 public final class Excavator extends Module implements CornerPicker.Taker {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -205,7 +204,6 @@ public final class Excavator extends Module implements CornerPicker.Taker {
         }
     }
 
-    // Heads for the closest block left whilst none of them is in reach.
     private void walkOn() {
         PathFinder.Result result = finder.poll();
         if (result != null) {
@@ -230,8 +228,6 @@ public final class Excavator extends Module implements CornerPicker.Taker {
         walker.stop();
     }
 
-    // Sends the break packets for the blocks in reach a single tick breaks. True when
-    // any went out. Slower blocks fall through to the held click path.
     private boolean breakInstantly(List<BlockPos> inReach) {
         breaker.tick();
         // The tool has to be in hand before anything is judged a one hit block.
@@ -259,7 +255,6 @@ public final class Excavator extends Module implements CornerPicker.Taker {
         return breaker.canSendInstant(pos) && !Modules.toolRefuses(BlockUtil.state(pos), true);
     }
 
-    // The tool for the block about to be broken. Nothing to break gives the slot back.
     private void holdTool(BlockPos pos) {
         if (pos == null || !autoTool.isOn()) {
             slots.restoreIfMine();
@@ -268,9 +263,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
         ItemUtil.holdBestTool(BlockUtil.state(pos), slots);
     }
 
-    // Every block in reach in queue order or only the first. Blocks that are gone or are to be left
-    // standing drop out of the queue on the way past. AutoTool leaves standing a listed block it has
-    // no Silk Touch tool for.
+    // Blocks that are gone or are to be left standing drop out of the queue on the way past.
     private List<BlockPos> inReach(boolean every) {
         List<BlockPos> found = new ArrayList<>();
         Iterator<BlockPos> it = remaining.iterator();

@@ -15,9 +15,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.Set;
 import java.util.TreeSet;
 
-// Block states as build files keep them read into the states of this game. A file names the game
-// version that wrote it and the game's own data fixer brings each state up to date. A block that
-// has been renamed since still comes out as the block it is today.
+// A file names the game version that wrote it and the game's own data fixer brings each state up to
+// date.
 public final class SavedStates {
 
     // The game writes a state under these two keys. Before this data version it wrote the
@@ -36,8 +35,6 @@ public final class SavedStates {
         this.fileVersion = dataVersion > 0 ? dataVersion : CURRENT_VERSION;
     }
 
-    // A compound with a name and properties under either pair of keys. Null for a block this
-    // game does not have.
     public BlockState read(CompoundTag saved) {
         String name = saved.getString(ID_KEY).or(() -> saved.getString(NbtUtils.LEGACY_BLOCK_STATE_ID_TAG))
             .orElse("");
@@ -46,7 +43,6 @@ public final class SavedStates {
         return resolve(name, properties);
     }
 
-    // The text form such as oak_stairs[facing=east]. Null for a block this game does not have.
     public BlockState read(String text) {
         int open = text.indexOf('[');
         if (open == -1 || !text.endsWith("]")) {
@@ -62,13 +58,12 @@ public final class SavedStates {
         return resolve(text.substring(0, open), properties);
     }
 
-    // The names of the blocks this game does not have from A to Z.
     public Set<String> unknown() {
         return unknown;
     }
 
-    // The palette index a state read from a file gets. A block this game lacks and the structure
-    // void leave the cell alone. Every kind of air is the same wish for an empty cell.
+    // A block this game lacks and the structure void leave the cell alone. Every kind of air is the
+    // same wish for an empty cell.
     public static int kindIn(Blueprint.Builder builder, BlockState state) {
         if (state == null || state.is(Blocks.STRUCTURE_VOID)) {
             return Blueprint.NO_SAY;
@@ -90,7 +85,6 @@ public final class SavedStates {
         String id = state.getStringOr(ID_KEY, "");
         Identifier key = Identifier.tryParse(id);
         if (key == null || !BuiltInRegistries.BLOCK.containsKey(key)) {
-            // A state with no name at all is no kind of block to tell the player about.
             if (!id.isEmpty()) {
                 unknown.add(id);
             }

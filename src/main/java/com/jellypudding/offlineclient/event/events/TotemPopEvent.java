@@ -25,7 +25,6 @@ public final class TotemPopEvent extends UncancellableEvent {
         return count;
     }
 
-    // True when the player has died and the count starts again.
     public boolean isDeath() {
         return death;
     }

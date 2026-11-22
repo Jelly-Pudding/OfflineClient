@@ -42,9 +42,7 @@ public final class HeldShot {
 
     private final Packet<?> packet;
     private final Item item;
-    // Blocks a tick a bow or trident shot leaves at. Nothing for a throw.
     private final double speed;
-    // Throws of the same item made before the hop. They all go out together.
     private final List<Packet<?>> gathered = new ArrayList<>();
     private boolean fired;
 
@@ -54,7 +52,6 @@ public final class HeldShot {
         this.speed = speed;
     }
 
-    // Every item whose shot takes on the speed of the one who fires it.
     public static boolean boosts(Item item) {
         return item instanceof BowItem || item instanceof TridentItem || throwable(item);
     }
@@ -65,7 +62,6 @@ public final class HeldShot {
             || item instanceof WindChargeItem;
     }
 
-    // A pick of those items to act on.
     public static RegistryListSetting<Item> items(String description, List<Item> defaults) {
         return new RegistryListSetting<>("Items", description, BuiltInRegistries.ITEM, defaults)
             .only(HeldShot::boosts);
@@ -116,7 +112,6 @@ public final class HeldShot {
         return packet instanceof ServerboundUseItemPacket;
     }
 
-    // Takes another throw of the same item made before the shot goes. True when it was taken.
     public boolean gather(Packet<?> next) {
         if (fired || !(packet instanceof ServerboundUseItemPacket use)
             || !(next instanceof ServerboundUseItemPacket more) || more.hand() != use.hand()
@@ -136,19 +131,16 @@ public final class HeldShot {
         return Vec3.directionFromRotation(RotationManager.serverPitch(), RotationManager.serverYaw());
     }
 
-    // How fast and which way a bow or trident shot leaves before the hop adds its own.
     public Vec3 releaseVelocity() {
         return aim().scale(speed);
     }
 
-    // Lets the shot and every throw gathered with it go as they were.
     public void fire() {
         fired = true;
         send(packet);
         gathered.forEach(HeldShot::send);
     }
 
-    // Lets the shot go as it was when its trip ended before it could.
     public void finish() {
         if (!fired) {
             fire();
@@ -190,7 +182,6 @@ public final class HeldShot {
         private final ChatWarning warning;
         private HeldShot held;
 
-        // The warning says why a trip ended early.
         public Carrier(ChatWarning warning) {
             this.warning = warning;
         }

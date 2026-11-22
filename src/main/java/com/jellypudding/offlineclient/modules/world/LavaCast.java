@@ -43,9 +43,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Casts a cobblestone mountain from the top of a tower. Each layer pours lava into a
-// spout and scoops it back once it stops. Water poured on the plug then runs over the
-// flow and turns it to cobblestone. Lava never climbs and all of it stays below you.
+// Each layer pours lava into a spout and scoops it back once it stops. Water poured on the plug
+// then runs over the flow and turns it to cobblestone. Lava never climbs and all of it stays below
+// you.
 public final class LavaCast extends Module {
 
     public enum Spout { FRONT, AIMED }
@@ -67,18 +67,15 @@ public final class LavaCast extends Module {
         }
     }
 
-    // What the cast is doing for the flow time command. The layer time is minus one until
-    // its lava goes in. The estimate is minus one then too or for a flow too big to follow.
+    // The layer time is minus one until its lava goes in. The estimate is minus one then too or for
+    // a flow too big to follow.
     public record Progress(int layer, int layers, String doing, long layerSeconds, long flowEstimate) {
     }
 
-    // Server ticks the block updates may take to arrive on top of a flow step.
     private static final int SLACK = 20;
 
-    // Ticks a climb or a pour or a scoop may keep failing before the cast gives up.
     private static final int PATIENCE = 40;
 
-    // A flow joined to more blocks than this is not followed any further.
     private static final int MAX_CELLS = 8192;
 
     // Feet resting on the tower top can read a hair below it.
@@ -86,7 +83,6 @@ public final class LavaCast extends Module {
 
     private static final double MILLIS_PER_SECOND = 1000;
 
-    // A flow bigger than this costs too much to outline every frame.
     private static final int MAX_DRAWN_CELLS = 2048;
 
     private final EnumSetting<Spout> spoutMode = new EnumSetting<>("Spout",
@@ -132,10 +128,8 @@ public final class LavaCast extends Module {
     private final JoinedCells<BlockPos> joined = new JoinedCells<>(BlockPos::asLong);
     private final TickRate.Clock serverClock = new TickRate.Clock();
 
-    // Every block of the fluid seen joined to the spout since the stage began.
     private final Set<BlockPos> seen = new HashSet<>();
 
-    // The same blocks as a list for the outline. A new list each time the flow grows.
     private List<BlockPos> flowCells = List.of();
 
     // Set by the staircase just before it hands over. The way back down its steps.
@@ -180,7 +174,6 @@ public final class LavaCast extends Module {
         return layerStartedAt == 0 ? layer : layer + " " + secondsSince(layerStartedAt) + "s";
     }
 
-    // Null whilst no cast runs.
     public Progress progress() {
         if (stage == null) {
             return null;
@@ -251,7 +244,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // Where the spout sits from the tower top. Null when the aim is not on top of a block.
     private Vec3i spoutOffset(Direction facing) {
         if (fromStairs || spoutMode.is(Spout.FRONT)) {
             return facing.getUnitVec3i();
@@ -350,7 +342,6 @@ public final class LavaCast extends Module {
         return Math.round((System.currentTimeMillis() - startedAt) / MILLIS_PER_SECOND);
     }
 
-    // Puts a block under your feet when the cast starts in the air. It becomes the tower top.
     private void land() {
         if (mc.player.onGround() && onTower()) {
             pillarOn();
@@ -365,8 +356,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // Climbs the next block of the first pillar or starts pouring once it is done. The
-    // height limit cuts the pillar short.
     private void pillarOn() {
         int target = fromStairs ? 0 : height.getInt();
         if (pillarClimbed >= target || heightReached()) {
@@ -378,7 +367,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // Jumps and puts a block where your feet were. The block under you then becomes the tower top.
     private void climb() {
         BlockPos top = tower.above();
         if (BlockUtil.isSolid(top)) {
@@ -405,7 +393,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // Makes sure the spout has a floor and pours the lava in.
     private void pour() {
         BlockPos spout = spout();
         if (!BlockUtil.isReplaceable(spout) || (climb.isOn() && !BlockUtil.isReplaceable(spout.above()))) {
@@ -511,7 +498,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // Waits for the water left behind to run dry before the next layer.
     private void drain() {
         int before = seen.size();
         seen.removeIf(pos -> !mc.level.getFluidState(pos).getType().isSame(Fluids.WATER));
@@ -542,7 +528,6 @@ public final class LavaCast extends Module {
         }
     }
 
-    // True when no layer can follow this one.
     private boolean finalLayer() {
         return layersDone + 1 >= layers.getInt() || (climb.isOn() && (heightReached() || !roomToClimb()));
     }
@@ -551,7 +536,6 @@ public final class LavaCast extends Module {
         return stopHeight.isOn() && tower.getY() + 1 >= heightLimit.getInt();
     }
 
-    // Space for your head once you stand a block higher.
     private boolean roomToClimb() {
         return BlockUtil.isReplaceable(tower.above(2)) && BlockUtil.isReplaceable(tower.above(3));
     }
@@ -561,15 +545,13 @@ public final class LavaCast extends Module {
         setEnabled(false);
     }
 
-    // True once no new block has joined the fluid for one step of its flow and the slack.
-    // Lava steps every 30 ticks or 10 where it runs fast and water every 5. The quiet time
-    // counts server ticks and not client ones.
+    // Lava steps every 30 ticks or 10 where it runs fast and water every 5. The quiet time counts
+    // server ticks and not client ones.
     private boolean settled(Fluid fluid, BlockPos start) {
         quiet = grew(fluid, start) ? 0 : quiet + serverTicks;
         return quiet > fluid.getTickDelay(mc.level) + SLACK;
     }
 
-    // Walks every block of the fluid joined to the start. True when any is new.
     private boolean grew(Fluid fluid, BlockPos start) {
         if (!mc.level.getFluidState(start).getType().isSame(fluid)) {
             return false;

@@ -28,7 +28,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-// Guesses at the damage the player is about to take from what is already around them.
 public final class DamageUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -36,7 +35,6 @@ public final class DamageUtil {
     // A player this close could land a hit before the next tick.
     private static final double MELEE_RANGE = 5;
 
-    // How far a crystal or a bed or an anchor is looked for.
     public static final double BLAST_RANGE = 8;
 
     // Blocks a player can drop without being hurt.
@@ -49,7 +47,6 @@ public final class DamageUtil {
     private DamageUtil() {
     }
 
-    // Health and absorption left once the worst hit on its way lands.
     public static float healthAfterIncoming() {
         return healthAfterIncoming(BLAST_RANGE, true, true, true);
     }
@@ -75,7 +72,6 @@ public final class DamageUtil {
         return worst;
     }
 
-    // The worst crystal or bed or anchor in range.
     private static float blastThreat(double range) {
         float[] worst = {0};
         for (Entity entity : MC.level.entitiesForRendering()) {
@@ -88,7 +84,6 @@ public final class DamageUtil {
         return worst[0];
     }
 
-    // Damage a bed or an anchor standing here would deal. Zero when there is none.
     private static float chargeThreat(BlockPos pos) {
         if (!isCharge(BlockUtil.state(pos))) {
             return 0;
@@ -105,7 +100,6 @@ public final class DamageUtil {
         return state.getBlock() instanceof RespawnAnchorBlock && ExplosionUtil.anchorsExplodeHere();
     }
 
-    // The hardest hit any enemy in range could land with what they hold.
     private static float meleeThreat(double range) {
         float worst = 0;
         for (Entity entity : MC.level.entitiesForRendering()) {
@@ -117,13 +111,12 @@ public final class DamageUtil {
         return worst;
     }
 
-    // Damage one full strength hit with what the attacker holds would deal.
     public static float attackDamage(LivingEntity attacker, LivingEntity target) {
         return attackDamage(attacker, target, attacker.getWeaponItem());
     }
 
-    // The same hit with a weapon the attacker is not holding yet. The weapon's own bonus such
-    // as a mace's comes before a critical hit multiplies it and the enchantments after.
+    // The weapon's own bonus such as a mace's comes before a critical hit multiplies it and the
+    // enchantments after.
     public static float attackDamage(LivingEntity attacker, LivingEntity target, ItemStack weapon) {
         DamageSource source = attacker instanceof Player player
             ? MC.level.damageSources().playerAttack(player) : MC.level.damageSources().mobAttack(attacker);
@@ -136,8 +129,7 @@ public final class DamageUtil {
         return reduce(damage, target, source);
     }
 
-    // A full strength hit with the weapon before its enchantments and the target's armour. The
-    // client never learns anyone's attack damage and builds it from the attacker's base and the
+    // The client never learns anyone's attack damage and builds it from the attacker's base and the
     // weapon. Only your own effects ever reach the client.
     public static float hitDamage(LivingEntity attacker, ItemStack weapon) {
         double damage = attacker.getAttributeBaseValue(Attributes.ATTACK_DAMAGE)
@@ -147,13 +139,11 @@ public final class DamageUtil {
         return (float) Math.max(0, damage);
     }
 
-    // Nought when the effect is not on.
     private static int effectLevel(LivingEntity entity, Holder<MobEffect> effect) {
         MobEffectInstance instance = entity.getEffect(effect);
         return instance == null ? 0 : instance.getAmplifier() + 1;
     }
 
-    // The flat damage the weapon enchantments add against this target.
     private static float enchantBonus(ItemStack weapon, Entity target) {
         float bonus = 0;
         int sharpness = ItemUtil.enchantLevel(Enchantments.SHARPNESS, weapon);
@@ -192,9 +182,8 @@ public final class DamageUtil {
             ? Math.min(SAFE_FALL, living.getAttributeValue(Attributes.SAFE_FALL_DISTANCE)) : SAFE_FALL;
     }
 
-    // Damage the fall the entity is in would deal on landing. The drop still to come is
-    // measured down to the first block or water under them and that block charges it. Zero
-    // whilst NoFall is on.
+    // The drop still to come is measured down to the first block or water under them and that block
+    // charges it. Zero whilst NoFall is on.
     private static float fallDamage(LivingEntity entity) {
         if (entity == MC.player && Modules.enabled(NoFall.class)) {
             return 0;
@@ -252,7 +241,6 @@ public final class DamageUtil {
         return Math.max(damage, 0);
     }
 
-    // The protection points the worn armour offers against this kind of damage.
     private static int protectionAgainst(LivingEntity target, DamageSource source) {
         int points = 0;
         for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {

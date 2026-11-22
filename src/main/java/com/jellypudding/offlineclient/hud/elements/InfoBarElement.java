@@ -26,10 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// A line of readouts about where you are and how you move.
 public final class InfoBarElement extends HudElement {
 
-    // Stands in for the distance left whilst the editor is open and no goto walk is going.
     private static final double SAMPLE_GOTO = 120;
 
     private final BoolSetting coords = new BoolSetting("Info bar coordinates",
@@ -54,7 +52,6 @@ public final class InfoBarElement extends HudElement {
         "Writes the time on your computer.", false);
     private final BoolSetting hideInChat = new BoolSetting("Hide whilst typing",
         "Takes the bar away whilst the chat box is open.", true);
-    // The line is measured and drawn several times a frame.
     private final RowCache<String> parts = new RowCache<>(() -> build(false));
 
     public InfoBarElement() {
@@ -74,8 +71,6 @@ public final class InfoBarElement extends HudElement {
         return !parts().isEmpty();
     }
 
-    // The camera and the goto parts only show whilst they have something to say. In the editor
-    // they stand in for a bar that would otherwise be empty.
     private List<String> parts() {
         List<String> built = parts.get();
         return built.isEmpty() && editing() ? build(true) : built;
@@ -129,12 +124,10 @@ public final class InfoBarElement extends HudElement {
         return built;
     }
 
-    // A grey label and white figures after it.
     private static String figures(String label, String values) {
         return label + " §f" + values + "§7";
     }
 
-    // The compass point and which way it runs along its axis.
     private static String facing(Direction way) {
         CompassPoint point = CompassPoint.nearest(way.toYRot());
         return ChatUtil.capitalised(point.words()) + " " + point.axis();

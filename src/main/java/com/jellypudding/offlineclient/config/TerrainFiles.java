@@ -26,10 +26,8 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-// The saved map tiles of a server. Each dimension has a folder and each region of chunks a small
-// packed file in it. One more file holds the colour that stands for each chunk. A visit reads that
-// until a view needs the tiles of a region. A write lays this game's tiles over what the file holds
-// and two games on this computer keep what both of them saw. Only the file thread calls it.
+// Each dimension has a folder and each region of chunks a small packed file in it. One more file
+// holds the colour that stands for each chunk. Only the file thread calls it.
 public final class TerrainFiles {
 
     private static final String FOLDER = "maps";
@@ -39,8 +37,8 @@ public final class TerrainFiles {
     // and the chunk colours are gathered from the regions again.
     private static final int LAYOUT = 1;
 
-    // The colours the overview file holds and the regions it is behind on. Those are the region
-    // files it misses or that were written after it and the regions whose file is gone.
+    // Behind are the region files it misses or that were written after it and the regions whose
+    // file is gone.
     private record Overview(Long2ObjectMap<byte[]> colours, LongList behind) {
     }
 
@@ -51,8 +49,6 @@ public final class TerrainFiles {
         return DataFiles.path(FOLDER, DataFiles.keyName(server), DataFiles.safeName(dimension));
     }
 
-    // The colour of every chunk saved in the folder by region. Each region file the overview file
-    // is behind on is read for its colours and the overview file written again.
     public static Long2ObjectMap<byte[]> readOverviews(Path folder) throws IOException {
         if (!Files.isDirectory(folder)) {
             return new Long2ObjectOpenHashMap<>();
@@ -71,13 +67,11 @@ public final class TerrainFiles {
         });
     }
 
-    // The tiles of one region. Null for a file that is missing or cannot be read.
     public static byte[][] readRegion(Path folder, long region) {
         return read(regionFile(folder, region));
     }
 
-    // Lays the tiles over each saved region and writes it back with the colours of its chunks.
-    // Hands back every region as the write left its file. Only call it whilst the shared lock is held.
+    // Only call it whilst the shared lock is held.
     public static Long2ObjectMap<byte[][]> merge(Path folder, Long2ObjectMap<byte[][]> mine) throws IOException {
         // An overview file that cannot be read starts empty and the next visit catches up on the rest.
         Long2ObjectMap<byte[]> overviews = Objects.requireNonNullElseGet(readOverviewFile(folder),
@@ -110,7 +104,6 @@ public final class TerrainFiles {
         return folder.resolve("r." + ChunkPos.getX(region) + "." + ChunkPos.getZ(region) + ".map");
     }
 
-    // Reads the overview file and checks it against the region files of the folder.
     private static Overview overview(Path folder) throws IOException {
         // Taken before the colours are read. A write between the two only adds to what is behind.
         SharedFiles.Stamp written = SharedFiles.stamp(folder.resolve(OVERVIEW));
@@ -128,7 +121,6 @@ public final class TerrainFiles {
                 try {
                     region = ChunkPos.pack(Integer.parseInt(name.group(1)), Integer.parseInt(name.group(2)));
                 } catch (NumberFormatException e) {
-                    // A number too long for a region is no file of ours.
                     continue;
                 }
                 gone.remove(region);
@@ -143,8 +135,6 @@ public final class TerrainFiles {
         return new Overview(colours, behind);
     }
 
-    // Reads the colours of each region the overview is behind on from its file. A region whose
-    // file is gone or cannot be read leaves the overview. True when any colour changed.
     private static boolean catchUp(Path folder, Overview overview) {
         boolean changed = false;
         for (int i = 0; i < overview.behind().size(); i++) {
@@ -158,7 +148,6 @@ public final class TerrainFiles {
         return changed;
     }
 
-    // Null for a file that is missing or cannot be read.
     private static Long2ObjectMap<byte[]> readOverviewFile(Path folder) {
         Path file = folder.resolve(OVERVIEW);
         if (!Files.exists(file)) {
@@ -184,8 +173,6 @@ public final class TerrainFiles {
         }
     }
 
-    // The layout followed by how many regions there are and then each one after its place. False
-    // after logging why the file could not be written.
     private static boolean saveOverviews(Path folder, Long2ObjectMap<byte[]> overviews) {
         return DataFiles.writeSafely(folder.resolve(OVERVIEW), temp -> {
             try (DataOutputStream out = create(temp)) {
@@ -200,7 +187,6 @@ public final class TerrainFiles {
         });
     }
 
-    // Null for a file that is missing or cannot be read.
     private static byte[][] read(Path file) {
         if (!Files.exists(file)) {
             return null;
@@ -226,7 +212,6 @@ public final class TerrainFiles {
         }
     }
 
-    // The layout followed by how many tiles there are and then each one after its place.
     private static void write(Path file, byte[][] tiles) throws IOException {
         int count = 0;
         for (byte[] tile : tiles) {

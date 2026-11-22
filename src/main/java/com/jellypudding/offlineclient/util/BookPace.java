@@ -14,7 +14,6 @@ public final class BookPace {
 
     public static final BookPace INSTANCE = new BookPace();
 
-    // Paper's least gap between two edits.
     private static final int PAPER_TICKS = 20;
     // Server ticks of uneven length and a trip to the server that varies take up to this many more.
     private static final int SPARE_TICKS = 5;
@@ -25,8 +24,8 @@ public final class BookPace {
     private BookPace() {
     }
 
-    // True when the server takes another book edit now. A server that is not Paper takes one at any
-    // time. After a join the count waits until the server's rate is known.
+    // A server that is not Paper takes an edit at any time. After a join the count waits until the
+    // server's rate is known.
     public synchronized boolean ready() {
         return !ServerInfo.runsPaper() || TickRate.INSTANCE.measured() && sinceEdit >= PAPER_TICKS + SPARE_TICKS;
     }

@@ -11,21 +11,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-// Every saved profile. A click loads one and a name typed in the field saves the setup as one.
-// Part words typed after a name save or load only those parts.
 final class ProfilesTab implements TabView.Source {
 
-    // The detail of a profile that a server loads on joining.
     private static final String JOINS = "on join";
 
     private final Runnable beforeSave;
     private final Runnable afterLoad;
 
-    // What the field asked for when the rows were last read. A click loads those parts.
     private Asked asked = Asked.of("");
 
-    // The layout is written out before a profile is saved and the screen is built again after
-    // one is loaded.
     ProfilesTab(Runnable beforeSave, Runnable afterLoad) {
         this.beforeSave = beforeSave;
         this.afterLoad = afterLoad;
@@ -62,7 +56,6 @@ final class ProfilesTab implements TabView.Source {
         return "save this setup as";
     }
 
-    // Shown until the first profile is saved.
     @Override
     public List<TabView.Hint> hints(String query) {
         if (!query.isEmpty() || !OfflineClient.INSTANCE.getConfigManager().profiles().list().isEmpty()) {
@@ -102,8 +95,7 @@ final class ProfilesTab implements TabView.Source {
         }
     }
 
-    // What the profile field holds. A name and then perhaps the parts to save or load. Words
-    // after the name that are not all parts belong to the name itself.
+    // Words after the name that are not all parts belong to the name itself.
     private record Asked(String name, Set<ConfigManager.Part> parts) {
 
         private static Asked of(String text) {

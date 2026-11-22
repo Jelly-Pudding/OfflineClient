@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ChunkRebuild;
 
-// Recolours the world on your screen only. The mixins ask this what to paint.
+// The mixins ask this what to paint.
 public final class Ambience extends Module {
 
     private final BoolSetting endSky = new BoolSetting("End sky",

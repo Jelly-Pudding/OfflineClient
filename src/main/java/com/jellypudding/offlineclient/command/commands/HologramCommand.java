@@ -54,7 +54,6 @@ public final class HologramCommand extends Command {
     // Any spawn egg makes the entity its data names.
     private static final Item EGG = Items.PIG_SPAWN_EGG;
 
-    // Keys the game reads that it keeps private.
     private static final String LINE_WIDTH_KEY = "line_width";
     private static final String NAME_VISIBLE_KEY = "CustomNameVisible";
     private static final String INVISIBLE_KEY = "Invisible";
@@ -65,7 +64,6 @@ public final class HologramCommand extends Command {
 
     // The server answers a spawn within a round trip. This allows for a slow one.
     private static final int ANSWER_TICKS = 3 * SharedConstants.TICKS_PER_SECOND;
-    // How far past the clicked blocks a new entity still counts as the hologram.
     private static final double ANSWER_REACH = 1;
 
     public HologramCommand() {
@@ -136,7 +134,6 @@ public final class HologramCommand extends Command {
         }
     }
 
-    // Each name shows its text as it would look. Clicking a name types the command that places it.
     private static void list() {
         List<String> names = HologramPresets.get().names();
         if (names.isEmpty()) {
@@ -175,7 +172,6 @@ public final class HologramCommand extends Command {
         }
     }
 
-    // One text display holds every line and turns to face whoever looks at it.
     private static void placeDisplay(BlockHitResult aim, List<Component> lines) {
         if (OfflineClient.MC.level.getBlockEntity(aim.getBlockPos()) instanceof Spawner) {
             ChatUtil.error("A spawn egg would change that spawner. Look at another block.");
@@ -196,8 +192,8 @@ public final class HologramCommand extends Command {
         expect(EntityTypes.TEXT_DISPLAY, 1, new AABB(aim.getBlockPos()));
     }
 
-    // An invisible armour stand per line with its name showing. The top line comes first and each
-    // line takes the empty block above the one after it. Every one of those blocks must be in reach.
+    // Each line takes the empty block above the one after it and every one of those blocks must be
+    // in reach.
     private static void placeStands(BlockHitResult aim, List<Component> lines) {
         BlockPos bottom = spawnSpot(aim);
         int placed = 0;
@@ -248,7 +244,7 @@ public final class HologramCommand extends Command {
         return egg;
     }
 
-    // Holds the egg for one click. The click is made crouching or a block that opens would take it.
+    // The click is made crouching or a block that opens would take it.
     private static boolean use(ItemStack egg, BlockHitResult click) {
         InventoryUtil.Conjured held = InventoryUtil.conjure(egg);
         if (held == null) {
@@ -266,7 +262,6 @@ public final class HologramCommand extends Command {
         OfflineClient.INSTANCE.getEventBus().register(new Arrival(type, count, clicked.inflate(ANSWER_REACH)));
     }
 
-    // Counts the entities the server spawns where the eggs were used and says how the hologram went.
     // A plugin can still refuse a spawn egg and the click alone never shows that.
     private static final class Arrival {
 

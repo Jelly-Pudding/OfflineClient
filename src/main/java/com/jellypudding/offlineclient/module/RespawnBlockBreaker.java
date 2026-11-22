@@ -13,14 +13,12 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 
-// The shape shared by modules that break a respawn block placed beside the
-// player. A subclass says what counts as a threat and whether it can go off.
 public abstract class RespawnBlockBreaker extends Module {
 
     private static final int TARGET_COLOR = 0xFFFF4040;
 
-    // The breaker whose block the miner is on. Two blocks mined at once restart each other and
-    // the other breaker waits its turn whilst this is set.
+    // Two blocks mined at once restart each other and the other breaker waits its turn whilst this
+    // is set.
     private static RespawnBlockBreaker breaking;
 
     protected final NumberSetting range;
@@ -49,12 +47,10 @@ public abstract class RespawnBlockBreaker extends Module {
         addSettings(range, onlyDangerous, autoTool, rotate, render);
     }
 
-    // True when a blast here would reach the player. Distance only matters when asked.
     protected boolean dangerous(BlockPos pos) {
         return ExplosionUtil.respawnBlockThreat(pos, range.getValue(), onlyDangerous.isOn());
     }
 
-    // True when the block standing here would go off next to the player.
     protected abstract boolean isThreat(BlockPos pos);
 
     // False where the world turns the blast into an ordinary use.

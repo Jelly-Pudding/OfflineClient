@@ -70,7 +70,6 @@ final class Lifecycle {
     private static final int SETTLE_TICKS = 200;
     private static final float HURRY = 5;
 
-    // Something that happens to the player with the crowd on.
     private interface Event {
 
         void happen(Rig rig, Duo duo, Stage stage);

@@ -33,16 +33,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-// Fills the player records of PlayerLedger. The players the tab list shows are read every tick
-// and the players in view once a second. Pops and deaths in view go in as they happen. Players
-// in view that AntiBot takes for bots and the bodies FakePlayer puts down are left out.
 public final class Dossier extends Module {
 
-    // Players in view are looked over this often.
     private static final int LOOK_TICKS = 20;
     // Tab list entries that turn up this soon after you arrive were online already.
     private static final int SETTLE_TICKS = 40;
-    // Players online or in view are written this often whilst nothing else about them changes.
     private static final long HEARTBEAT_MS = TimeUnit.MINUTES.toMillis(5);
     private static final int ENCHANT_LETTERS = 4;
 
@@ -55,8 +50,7 @@ public final class Dossier extends Module {
     private final ActionSetting open = new ActionSetting("Open",
         "Opens the record of every player on this server.", DossierScreen::open);
 
-    // Who the tab list showed at the last read and who stood in view at the last look. Each
-    // has a spare that the next read fills.
+    // Each has a spare that the next read fills.
     private Set<UUID> online = new HashSet<>();
     private Set<UUID> onlineNext = new HashSet<>();
     private Set<UUID> inView = new HashSet<>();
@@ -121,8 +115,8 @@ public final class Dossier extends Module {
         }
     }
 
-    // A join or a leave is the difference between one read and the next. The ping and the
-    // moment they were last online change every tick and wait for some other change to be written.
+    // The ping and the moment they were last online change every tick and wait for some other
+    // change to be written.
     private void readTab(PlayerLedger ledger, long now, boolean settling) {
         onlineNext.clear();
         UUID self = mc.player.getUUID();
@@ -161,7 +155,6 @@ public final class Dossier extends Module {
         onlineNext = spare;
     }
 
-    // The name links to the record in chat.
     private void tellLastOnline(PlayerRecord record, long now) {
         if (!lastOnline.isOn() || record.lastOnline() == 0) {
             return;
@@ -172,8 +165,6 @@ public final class Dossier extends Module {
             .append("§7 was last seen online §f" + ChatUtil.ago(now - record.lastOnline()) + "§7."));
     }
 
-    // Where each player in view stands and what they wear and hold. One who walked out of view
-    // since the last look is written with the place they were last seen.
     private void look(PlayerLedger ledger, long now) {
         inViewNext.clear();
         String dimension = ServerInfo.dimension();
@@ -207,8 +198,6 @@ public final class Dossier extends Module {
         inViewNext = spare;
     }
 
-    // The tab list players were online up to this moment and the players in view were last seen
-    // where they stood. Their records are written as they are.
     private void lostSight(long now) {
         PlayerLedger ledger = PlayerLedger.INSTANCE;
         for (UUID id : online) {
@@ -244,13 +233,12 @@ public final class Dossier extends Module {
         PlayerLedger.INSTANCE.changed(record.id());
     }
 
-    // Null for a player who is not recorded.
     private PlayerRecord recordOf(Player player) {
         return inGame() && EntityUtil.isRealPlayer(player) ? PlayerLedger.INSTANCE.recordOf(player.getUUID(),
             player.getGameProfile().name(), System.currentTimeMillis()) : null;
     }
 
-    // Each gear slot as its item id and the enchantments on it. An empty slot gives an empty line.
+    // An empty slot gives an empty line.
     private static List<String> pieces(Player player) {
         List<String> pieces = new ArrayList<>(PlayerRecord.GEAR_SLOTS.size());
         for (EquipmentSlot slot : PlayerRecord.GEAR_SLOTS) {

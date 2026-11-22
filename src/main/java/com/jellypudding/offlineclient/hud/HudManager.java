@@ -13,14 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// Works out where each element sits and draws it. The editor screen asks for the
-// same layout. What you drag is exactly what you see whilst playing.
 public final class HudManager {
 
-    // Kept clear of the screen edge. Nothing touches the very border.
     private static final int MARGIN = 3;
 
-    // Kept between two pieces that are stood side by side. Their backgrounds never touch.
     static final int CLEARANCE = 2 * Backdrop.PAD;
 
     // An element whose anchor falls in the first third of the screen keeps its left
@@ -38,7 +34,6 @@ public final class HudManager {
         }
     }
 
-    // The share of the screen an element is stored at as a percentage each way.
     private record Share(double x, double y) {
 
         private static Share of(HudElement element) {
@@ -59,7 +54,6 @@ public final class HudManager {
         }
     }
 
-    // Files a piece straight after another. The list and the draw order keep a kind together.
     void addAfter(HudElement before, HudElement element) {
         elements.add(elements.indexOf(before) + 1, element);
         revision++;
@@ -70,7 +64,6 @@ public final class HudManager {
         revision++;
     }
 
-    // Goes up whenever a piece comes or goes.
     public int revision() {
         return revision;
     }
@@ -79,7 +72,6 @@ public final class HudManager {
         return Collections.unmodifiableList(elements);
     }
 
-    // Where each switched on element lands in the editor on a screen of the given size.
     public List<Placement> layout(Font font, int screenWidth, int screenHeight) {
         List<Placement> placed = new ArrayList<>();
         for (HudElement element : elements) {
@@ -90,9 +82,6 @@ public final class HudManager {
         return placed;
     }
 
-    // Everything on the screen and where it sits. Whilst the overlay is hidden only the elements
-    // that stay count. A part of the game's own HUD that is switched off sits at home at its own
-    // size whatever its element holds.
     public List<Placement> shown(Font font, int screenWidth, int screenHeight, boolean hidden) {
         List<Placement> placed = new ArrayList<>();
         for (HudElement element : elements) {
@@ -106,8 +95,6 @@ public final class HudManager {
         return placed;
     }
 
-    // Everything on the screen but the given pieces. A piece that is dragged lines up with these
-    // and one that is seated keeps clear of them.
     public List<Placement> others(Collection<HudElement> pieces, Font font, int screenWidth, int screenHeight,
                                   boolean hidden) {
         List<Placement> others = shown(font, screenWidth, screenHeight, hidden);
@@ -121,14 +108,10 @@ public final class HudManager {
         return (!hidden || element.staysWhenHidden()) && element.visible();
     }
 
-    // True for an element the HUD pass draws. In the editor every element that is switched on
-    // is on the screen too even if only as its name.
     static boolean onScreen(HudElement element, boolean hidden) {
         return HudElement.editing() && element.isActive() || drawn(element, hidden);
     }
 
-    // An element with a home sits there until it is moved. Everything else sits where
-    // its anchor says.
     public static Placement placement(HudElement element, Font font, int screenWidth, int screenHeight) {
         if (element.positionIsDefault()) {
             Placement home = homePlacement(element, font, screenWidth, screenHeight);
@@ -143,13 +126,10 @@ public final class HudManager {
             corner(element.yPercent(), element.placedHeight(), screenHeight, height, margin), width, height);
     }
 
-    // How near the screen edge an element may sit.
     public static int margin(HudElement element) {
         return element.touchesEdges() ? 0 : MARGIN;
     }
 
-    // Where an element sits at home at its present size. It grows away from the screen
-    // edge its home is nearest. Null for an element without a home.
     public static Placement homePlacement(HudElement element, Font font, int screenWidth, int screenHeight) {
         Box home = element.home(screenWidth, screenHeight);
         if (home == null) {
@@ -172,8 +152,8 @@ public final class HudManager {
         return (int) Math.max(1, Math.round(element.shownHeight(font) * element.scaleY()));
     }
 
-    // The top or left edge for an anchor given as a share of the screen. A pinned element reads
-    // its share on the screen it was placed on. Nought for placed means the screen it is on.
+    // A pinned element reads its share on the screen it was placed on. Nought for placed means the
+    // screen it is on.
     private static int corner(double percent, double placed, int room, int size, int margin) {
         double share = Math.clamp(percent / 100.0, 0, 1);
         double line = align(share);
@@ -183,7 +163,6 @@ public final class HudManager {
         return (int) Math.round(Math.clamp(edge, margin, Math.max(margin, room - size - margin)));
     }
 
-    // Nought pins the near edge and one the far edge and a half the middle.
     static double align(double share) {
         if (share < FIRST_THIRD - ON_THE_LINE) {
             return 0;
@@ -191,7 +170,6 @@ public final class HudManager {
         return share > LAST_THIRD + ON_THE_LINE ? 1 : 0.5;
     }
 
-    // The share of the screen an element pinned at this edge would be stored as.
     static double shareOf(int edge, int size, int room) {
         if (room <= 0) {
             return 0;
@@ -200,9 +178,8 @@ public final class HudManager {
         return Math.clamp((edge + align(middle) * size) / room, 0, 1);
     }
 
-    // Pins the element at a spot it was moved to. The spot is stored as a share of this screen.
-    // An element landing on its own home keeps the home itself and follows the game's layout on
-    // any screen.
+    // An element landing on its own home keeps the home itself and follows the game's layout on any
+    // screen.
     public static void pin(HudElement element, int left, int top, int width, int height, Font font,
                            int screenWidth, int screenHeight) {
         Placement home = homePlacement(element, font, screenWidth, screenHeight);
@@ -224,21 +201,20 @@ public final class HudManager {
         return edge >= room - size - margin ? room - size : edge;
     }
 
-    // Once a frame before the overlay is laid out. A piece the player just switched on where it
-    // started and would lie over another finds the nearest free place here.
+    // A piece the player just switched on where it started and would lie over another finds the
+    // nearest free place here.
     public void beginFrame(Font font, int screenWidth, int screenHeight, boolean hidden) {
         newcomers.seat(font, screenWidth, screenHeight, hidden);
     }
 
-    // Called when saved or default values were applied in bulk such as a load or a reset of
-    // everything. No switch among them was flipped by the player's own hand and every piece
+    // No switch among values applied in bulk was flipped by the player's own hand and every piece
     // stays where those values put it.
     public void takeAllAsTheyStand() {
         newcomers.takeAllAsTheyStand();
     }
 
-    // Called with the settings a reset or an undo changed. A piece whose switch is among them
-    // was not switched on by the player's own hand and stays where it is.
+    // A piece whose switch a reset or an undo changed was not switched on by the player's own hand
+    // and stays where it is.
     public void takeAsTheyStand(Collection<? extends Setting<?>> changed) {
         for (HudElement element : elements) {
             if (element.switchIsAmong(changed)) {
@@ -248,8 +224,7 @@ public final class HudManager {
     }
 
     // Pins each piece whose place was measured on a screen of another size where it sits on this
-    // one like a drag that moves it nowhere. A put back never changes the screen a piece is
-    // measured on then and one that is taken back lands the piece just where it sat.
+    // one like a drag that moves it nowhere.
     public void repin(Collection<HudElement> pieces, Font font, int screenWidth, int screenHeight) {
         for (HudElement piece : pieces) {
             if (!measuredOn(piece.placedWidth(), screenWidth) || !measuredOn(piece.placedHeight(), screenHeight)) {
@@ -259,13 +234,10 @@ public final class HudManager {
         }
     }
 
-    // Nought for placed is a share that follows whatever screen it is on.
     private static boolean measuredOn(double placed, int room) {
         return placed == 0 || placed == room;
     }
 
-    // Puts the pieces back where they started in the editor. One whose starting place is taken
-    // goes as near to it as it fits. Hands back the pieces that hold another place for it.
     public List<HudElement> putBackNear(List<HudElement> pieces, Font font, int screenWidth, int screenHeight) {
         Map<HudElement, Share> held = new HashMap<>();
         for (HudElement piece : pieces) {
@@ -276,17 +248,13 @@ public final class HudManager {
         return pieces.stream().filter(piece -> !Share.of(piece).equals(held.get(piece))).toList();
     }
 
-    // The overlay drawn along with the game's own HUD. Elements that sit on top of
-    // everything wait for renderOnTop. Whilst the overlay is hidden only the elements that
-    // stay are drawn. Whilst the rest waits for the debug text they are all that is drawn here
-    // as well and renderOverDebugText draws the rest.
+    // Whilst the overlay is hidden only the elements that stay are drawn. Elements that sit on top
+    // of everything wait for renderOnTop.
     public void render(GuiGraphicsExtractor context, Font font, boolean hidden, boolean restWaits) {
         beginFrame(font, context.guiWidth(), context.guiHeight(), hidden);
         drawEach(context, font, element -> drawn(element, hidden || restWaits));
     }
 
-    // Once the game has drawn the debug text of a frame whose render left the rest waiting. Those
-    // elements get a stratum of their own above everything already drawn.
     public void renderOverDebugText(GuiGraphicsExtractor context, Font font) {
         context.nextStratum();
         drawEach(context, font, element -> !element.staysWhenHidden() && element.visible());
@@ -300,8 +268,6 @@ public final class HudManager {
         }
     }
 
-    // Once the game has drawn the rest of the frame. These elements get a stratum of their
-    // own above everything already drawn.
     public void renderOnTop(GuiGraphicsExtractor context, Font font) {
         List<HudElement> onTop = elements.stream().filter(element -> element.drawsOnTop() && element.visible())
             .toList();
@@ -327,9 +293,8 @@ public final class HudManager {
         context.pose().popMatrix();
     }
 
-    // Draws a part of the game's own HUD. Switched off it goes where the game puts it. Switched
-    // on the game still lays it out at home and the pose carries it to where its element sits.
-    // A hidden part is skipped.
+    // Switched on the game still lays the part out at home and the pose carries it to where its
+    // element sits.
     public void drawGamePart(GamePart part, GuiGraphicsExtractor context, Font font, Runnable draw) {
         GamePartElement element = gameParts.get(part);
         if (element == null || !element.isActive()) {

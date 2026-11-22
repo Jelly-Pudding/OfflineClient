@@ -11,16 +11,14 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Lights the nether portal frames a build has standing. The game itself says whether a frame is
-// whole. A fire in the bottom of it then opens the portal whichever way the player faces.
+// The game itself says whether a frame is whole. A fire in the bottom of it then opens the portal
+// whichever way the player faces.
 public final class PortalLighter {
 
     private static final Minecraft MC = OfflineClient.MC;
 
     public enum Outcome {
-        // No whole frame of a build is in reach.
         NO_FRAME,
-        // A frame waits and nothing at hand starts a fire.
         NO_LIGHTER,
         LIT
     }
@@ -32,8 +30,6 @@ public final class PortalLighter {
         this.ignition = ignition;
     }
 
-    // Lights one whole frame of the sites within the range of the eyes. The slot the lighter was
-    // taken from is given back at once.
     public Outcome light(List<BuildSite> sites, BuildSite.Rules rules, double range, boolean rotate) {
         BlockPos inside = insideOfFrame(sites, rules, range);
         if (inside == null) {
@@ -47,8 +43,8 @@ public final class PortalLighter {
         return Outcome.LIT;
     }
 
-    // The empty cell on the floor of a whole frame. The floor is obsidian a build wanted and has
-    // standing. Null when there is none in reach or the dimension takes no portal.
+    // The floor is obsidian a build wanted and has standing. Null when there is none in reach or
+    // the dimension takes no portal.
     private static BlockPos insideOfFrame(List<BuildSite> sites, BuildSite.Rules rules, double range) {
         if (MC.level.dimension() != Level.OVERWORLD && MC.level.dimension() != Level.NETHER) {
             return null;

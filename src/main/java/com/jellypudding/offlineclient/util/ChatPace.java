@@ -68,7 +68,6 @@ public enum ChatPace {
 
     private static final double MILLIS_PER_TICK = SharedConstants.MILLIS_PER_TICK;
 
-    // The player is told about held lines this often at most.
     private static final long TELL_GAP_MS = 5000;
 
     private static long toldAt;
@@ -96,13 +95,11 @@ public enum ChatPace {
         return send(false, words, UnaryOperator.identity());
     }
 
-    // True when that many more chat lines and commands can go out now.
     public boolean fits(int chatLines, int commandLines) {
         return MIRROR.fits(this, chatLines, commandLines);
     }
 
-    // True when the lines can all go out now. A line for the client itself costs nothing and a
-    // blank one is never sent.
+    // A line for the client itself costs nothing and a blank one is never sent.
     public boolean affords(Collection<String> lines) {
         int[] counted = counted(lines);
         return fits(counted[0], counted[1]);
@@ -114,7 +111,6 @@ public enum ChatPace {
         return fits(new Counts(0), counted[0], counted[1], 0, 0);
     }
 
-    // Says once in a while that a line of the owner was held back.
     public static void tellHeld(String owner) {
         long now = Util.getMillis();
         if (now - toldAt >= TELL_GAP_MS) {
@@ -123,8 +119,7 @@ public enum ChatPace {
         }
     }
 
-    // True when the lines fit at this pace. The time is handed in and the round trip is given in
-    // ticks. Nothing in here reads a clock or the game.
+    // Nothing in here reads a clock or the game.
     boolean fits(Counts counts, int chatLines, int commandLines, long now, int tripTicks) {
         return switch (this) {
             case PLAYER -> true;
@@ -137,8 +132,7 @@ public enum ChatPace {
         };
     }
 
-    // The round trip in ticks for a ping in milliseconds. A server that gives no ping for the
-    // player is taken for the slowest. Only the burst a macro may send at once is lost.
+    // A server that gives no ping for the player is taken for the slowest.
     static int tripTicks(int pingMillis) {
         return pingMillis > 0 ? Math.round(pingMillis / (float) MILLIS_PER_TICK) : LONGEST_TRIP;
     }
@@ -163,7 +157,6 @@ public enum ChatPace {
         return true;
     }
 
-    // How many of the lines the server counts as chat and how many as commands.
     private static int[] counted(Collection<String> lines) {
         String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
         int[] counted = new int[2];
@@ -185,7 +178,6 @@ public enum ChatPace {
         private double chat;
         private double commands;
 
-        // The game time of the last time packet. Unknown after a join and a change of world.
         private long serverTime;
         private boolean timeKnown;
 

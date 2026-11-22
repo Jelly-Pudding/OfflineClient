@@ -15,8 +15,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-// Choices in the order the player prefers them. Each one can be switched off. The
-// ClickGUI draws every choice as a row to drag into place and click on or off.
+// Choices in the order the player prefers them. Each one can be switched off.
 public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetting.Entry<E>>> {
 
     public record Entry<E>(E choice, boolean on) {
@@ -26,12 +25,10 @@ public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetti
     private final Function<E, ItemStack> icon;
     private final Map<E, ItemStack> icons;
 
-    // Every constant of the enum in its declared order and switched on.
     public RankSetting(String name, String description, Class<E> type, Function<E, ItemStack> icon) {
         this(name, description, type, icon, choice -> true);
     }
 
-    // Every constant in its declared order. Only the ones the test picks start switched on.
     public RankSetting(String name, String description, Class<E> type, Function<E, ItemStack> icon,
                        Predicate<E> startsOn) {
         super(name, description, Arrays.stream(type.getEnumConstants())
@@ -76,7 +73,6 @@ public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetti
         return EnumSetting.label(get(index).choice());
     }
 
-    // What a command types for each choice.
     public List<String> ids() {
         return Arrays.stream(type.getEnumConstants())
             .map(choice -> choice.name().toLowerCase(Locale.ROOT)).toList();

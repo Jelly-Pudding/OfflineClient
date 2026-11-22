@@ -10,8 +10,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.ArrayList;
 import java.util.List;
 
-// A row of tabs across the top of the GUI. Each one can be switched off in
-// the ClickGUI settings and the whole row can be hidden.
 public final class TabStrip {
 
     public enum Tab {
@@ -62,13 +60,11 @@ public final class TabStrip {
 
     private final List<Slot> slots = new ArrayList<>();
 
-    // Where the content under the tabs may start.
     public static int bottom() {
         return TOP + HEIGHT + UNDERLINE;
     }
 
-    // Laid out every frame because a tab can be switched off at any time. A view too narrow for
-    // the whole row closes up the gaps beside the labels.
+    // Laid out every frame because a tab can be switched off at any time.
     private void layout(int screenWidth) {
         Font font = ClientFonts.gui();
         slots.clear();
@@ -95,7 +91,6 @@ public final class TabStrip {
         }
     }
 
-    // The rectangle the whole row covers.
     public int[] bounds(int screenWidth) {
         layout(screenWidth);
         if (slots.isEmpty()) {
@@ -148,7 +143,6 @@ public final class TabStrip {
         }
     }
 
-    // True when the click landed on a tab.
     public boolean mouseClicked(double mx, double my, int button, Action action) {
         if (!InputUtil.isLeft(button)) {
             return false;

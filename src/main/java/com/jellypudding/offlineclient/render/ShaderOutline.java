@@ -30,9 +30,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
-// The shader outline style of a module. Each frame the module hands in what it marks with a colour
-// each and the shader draws a line round their silhouettes with a soft glow past the line and
-// a see through fill inside. The box style of the module says whether lines or fill or both show.
+// Each frame the module hands in what it marks with a colour each and the shader draws a line round
+// their silhouettes with a soft glow past the line and a see through fill inside.
 public final class ShaderOutline {
 
     // The widest reach the shaders search. Matches MOST_REACH in shaders/include/outline.glsl.
@@ -66,7 +65,6 @@ public final class ShaderOutline {
     private final IntArrayList palette = new IntArrayList();
     private final Int2IntOpenHashMap idOfColor = new Int2IntOpenHashMap();
 
-    // Kept from frame to frame whilst the module draws the style.
     private MappableRingBuffer config;
     private StagedVertexBuffer boxVertices;
     private boolean holding;
@@ -76,7 +74,6 @@ public final class ShaderOutline {
         idOfColor.defaultReturnValue(-1);
     }
 
-    // The widths show under one choice of the module's look whilst the box style draws lines.
     public <E extends Enum<E>> ShaderOutline under(EnumSetting<E> parent, E value) {
         width.under(parent, () -> parent.is(value) && style.drawsLines());
         glow.under(parent, () -> parent.is(value) && style.drawsLines());
@@ -87,7 +84,6 @@ public final class ShaderOutline {
         return new Setting<?>[] {width, glow};
     }
 
-    // False once the shaders failed. The module then draws its boxes.
     public static boolean works() {
         return !broken;
     }
@@ -155,7 +151,6 @@ public final class ShaderOutline {
         }
     }
 
-    // Takes a share of the shared targets and makes the buffers of this module.
     private void hold() {
         if (holding) {
             return;
@@ -168,7 +163,6 @@ public final class ShaderOutline {
         boxVertices = new StagedVertexBuffer(() -> "OfflineClient silhouette boxes", RenderType.TRANSIENT_BUFFER_SIZE);
     }
 
-    // A target the size of the screen made or resized on demand.
     private static RenderTarget sized(RenderTarget target, String label, RenderTarget screen) {
         if (target == null) {
             return new TextureTarget(label, screen.width, screen.height, GpuFormat.RGBA8_UNORM, null);
@@ -200,8 +194,6 @@ public final class ShaderOutline {
         return id;
     }
 
-    // Finds the nearest silhouette along each row and then down each column and lays the line and
-    // the glow and the fill over the screen.
     private void outline(RenderTarget main) {
         GpuBuffer settings = config.currentBuffer();
         writeConfig(settings);

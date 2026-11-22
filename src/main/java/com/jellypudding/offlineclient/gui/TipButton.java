@@ -8,9 +8,8 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Supplier;
 
-// A vanilla button that says what a press would do. The words are asked for afresh on every frame
-// that shows them because what a press does can change whilst the screen is up. An empty answer
-// shows no tooltip.
+// The words are asked for afresh on every frame that shows them because what a press does can
+// change whilst the screen is up.
 public final class TipButton extends Button.Plain {
 
     private final Supplier<String> tip;

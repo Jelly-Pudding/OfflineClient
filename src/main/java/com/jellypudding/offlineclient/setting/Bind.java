@@ -29,7 +29,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         }
     }
 
-    // A key that goes with another one. Each knows the game's mask for it and its two keys.
     public enum Modifier {
         CTRL(InputConstants.MOD_CONTROL, InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL),
         ALT(InputConstants.MOD_ALT, InputConstants.KEY_LALT, InputConstants.KEY_RALT),
@@ -71,7 +70,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
 
     public static final Bind NONE = new Bind(InputConstants.Type.KEYBOARD, NO_KEY, 0);
 
-    // The order a list of binds reads in. Keys before buttons and a bare key before its combinations.
     public static final Comparator<Bind> ORDER = Comparator.<Bind, InputConstants.Type>comparing(Bind::device)
         .thenComparingInt(Bind::code).thenComparingInt(Bind::modifiers);
 
@@ -79,7 +77,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
     private static final int KEYPAD_DIVIDE = 84;
     private static final int KEYPAD_PERIOD = 99;
 
-    // The highest scancode a typed name is looked for under.
     private static final int LAST_KEY = InputConstants.KEY_RGUI;
 
     // Keys with a short name of their own. Printing and typing both read this table.
@@ -117,7 +114,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         .collect(Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
     private static final String BUTTON_PREFIX = "MOUSE";
 
-    // A key with no name anywhere prints as this followed by its code.
     private static final String RAW_PREFIX = "KEY";
 
     private static final String UNBOUND_NAME = "None";
@@ -134,13 +130,11 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return new Bind(InputConstants.Type.MOUSE, button, 0);
     }
 
-    // The key or button one of the game's own controls sits on.
     public static Bind of(InputConstants.Key key) {
         return new Bind(key.getType(), key.getValue(), 0);
     }
 
-    // What a key press asks for. A modifier key pressed on its own is the key and not also its
-    // own modifier.
+    // A modifier key pressed on its own is the key and not also its own modifier.
     public static Bind of(KeyEvent event) {
         return key(event.key()).with(modifiersOf(event) & ~ownModifier(event.key()));
     }
@@ -149,8 +143,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return mouse(button.button()).with(modifiersOf(button));
     }
 
-    // The button with whichever modifier keys are down at this moment. For a click that arrives
-    // as a bare button number.
     public static Bind ofClick(int button) {
         return mouse(button).with(heldModifiers());
     }
@@ -167,12 +159,10 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return device == InputConstants.Type.MOUSE;
     }
 
-    // True for the two buttons the game itself cannot be played without.
     public boolean isMainButton() {
         return isMouse() && (InputUtil.isLeft(code) || InputUtil.isRight(code));
     }
 
-    // True whilst the key or button and every modifier of the bind is really down.
     public boolean isHeld() {
         if (!isBound()) {
             return false;
@@ -181,18 +171,16 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return down && (heldModifiers() & modifiers) == modifiers;
     }
 
-    // True for the same key or button whatever the modifiers.
     public boolean sameInput(Bind other) {
         return device == other.device && code == other.code;
     }
 
-    // True when a press answers this bind. A bind with no modifiers answers under any of them
-    // and one with modifiers only under exactly its own.
+    // A bind with no modifiers answers under any of them and one with modifiers only under exactly
+    // its own.
     public boolean answers(Bind pressed) {
         return isBound() && sameInput(pressed) && (modifiers == 0 || modifiers == pressed.modifiers);
     }
 
-    // The game's own value for the key or button. Its controls are matched against it.
     public InputConstants.Key gameKey() {
         return device.getOrCreate(code);
     }
@@ -208,8 +196,7 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
             || code >= KEYPAD_DIVIDE && code <= KEYPAD_PERIOD && code != InputConstants.KEY_NUMPADENTER;
     }
 
-    // How the bind reads in the interface and in chat such as CTRL+G or MOUSE4. Typing the same
-    // text names the same bind.
+    // Typing the text this gives names the same bind.
     public String name() {
         if (!isBound()) {
             return UNBOUND_NAME;
@@ -223,8 +210,7 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return name.append(isMouse() ? buttonName(code) : keyName(code)).toString();
     }
 
-    // Turns typed text like "k" or "ctrl+f5" or "mouse4" or "none" into a bind. Null when the
-    // text names nothing.
+    // Null when the text names nothing.
     public static Bind parse(String text) {
         String typed = text.trim().toUpperCase(Locale.ROOT);
         if (typed.isEmpty()) {
@@ -249,7 +235,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return bare == null ? null : bare.with(modifiers);
     }
 
-    // What chat says about typed text that names no key.
     public static String unknown(String typed) {
         return "There is no key called " + typed + ". Try g or ctrl+g or f5 or mouse4 or mmb or none.";
     }
@@ -277,7 +262,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return key == NO_KEY ? null : key(key);
     }
 
-    // The scancode a name stands for. No key when it stands for none.
     private static int keyNamed(String name) {
         if (name.length() == 1) {
             char c = name.charAt(0);
@@ -320,7 +304,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return NO_KEY;
     }
 
-    // Minus one for text that is no whole number.
     private static int number(String digits) {
         try {
             return Integer.parseInt(digits);
@@ -368,7 +351,6 @@ public record Bind(InputConstants.Type device, int code, int modifiers) {
         return ownModifier(key) != 0;
     }
 
-    // The modifier keys that are down at this moment.
     private static int heldModifiers() {
         int held = 0;
         for (Modifier modifier : Modifier.values()) {

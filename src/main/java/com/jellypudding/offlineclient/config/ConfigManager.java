@@ -27,26 +27,21 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-// Writes everything the client remembers to offlineclient/config.json. What it holds is split
-// into parts and a named profile keeps any of them.
 public final class ConfigManager {
 
-    // A part of the setup that can be saved and brought back on its own. The settings of the
-    // HUD module are the layout of the overlay and count as a part of their own. Every key
-    // setting inside a module goes with the binds.
+    // The settings of the HUD module are the layout of the overlay and count as a part of their
+    // own. Every key setting inside a module goes with the binds.
     public enum Part {
         BINDS, ENABLED, SETTINGS, HUD, FRIENDS, MACROS, WAYPOINTS;
 
-        // What config.json holds. Macros and waypoints live in files of their own.
+        // Macros and waypoints live in files of their own.
         public static final Set<Part> OWN =
             Collections.unmodifiableSet(EnumSet.of(BINDS, ENABLED, SETTINGS, HUD, FRIENDS));
 
-        // What a player types and reads for the part.
         public String word() {
             return name().toLowerCase(Locale.ROOT);
         }
 
-        // Null for a word that names no part.
         public static Part named(String word) {
             for (Part part : values()) {
                 if (part.word().equalsIgnoreCase(word)) {
@@ -61,19 +56,16 @@ public final class ConfigManager {
     // across a save written below it.
     private static final int CONFIG_VERSION = 5;
 
-    // A change waits this long for others before the config is written. A scroll held on a
-    // setting then writes once when it stops.
+    // A scroll held on a setting then writes once when it stops.
     private static final long QUIET_MS = 2000;
-    // Changes that never pause are still written this often.
     private static final long LONGEST_WAIT_MS = 30_000;
 
-    // The names a save files things under that SaveConversion looks up too.
     static final String VERSION = "version";
     static final String MODULES = "modules";
     static final String SETTINGS = "settings";
     static final String ENABLED = "enabled";
 
-    // The modules starred in the GUI. They live in its layout and outlive a reset of it.
+    // They live in the layout of the GUI and outlive a reset of it.
     private static final String FAVOURITES = "favourites";
 
     private static final String PREFIX = "prefix";
@@ -91,7 +83,6 @@ public final class ConfigManager {
     private final Profiles profiles = new Profiles(this);
     private JsonObject guiState = new JsonObject();
     private final AtomicBoolean dirty = new AtomicBoolean();
-    // When the config was last marked and when the oldest change still waiting was marked.
     private volatile long changedAt;
     private volatile long waitingSince;
 
@@ -109,7 +100,7 @@ public final class ConfigManager {
         return profiles;
     }
 
-    // Marks the config for a write once the changes pause. Safe from any thread.
+    // Safe from any thread.
     public void saveSoon() {
         long now = System.currentTimeMillis();
         changedAt = now;
@@ -146,9 +137,7 @@ public final class ConfigManager {
         }
     }
 
-    // The saved values and then whatever a save written below this version holds differently.
-    // A save that was read across is written again at this version. A file that cannot be read
-    // is set aside first and nothing is saved over it whilst that fails.
+    // A file that cannot be read is set aside first and nothing is saved over it whilst that fails.
     public void load() {
         Optional<JsonObject> saved = read(file);
         if (saved.isEmpty() && Files.exists(file) && !DataFiles.setAside(file)) {
@@ -166,7 +155,6 @@ public final class ConfigManager {
         loaded = true;
     }
 
-    // What only config.json holds and no profile does.
     private void applyOwn(JsonObject root) {
         applyPart(root, GREETED, saved -> greeted = saved.getAsBoolean());
         applyPart(root, JOIN_PROFILES, profiles::joinsFromJson);
@@ -181,18 +169,17 @@ public final class ConfigManager {
         }
     }
 
-    // Which part the settings of a module belong to.
     private static Part settingsPart(Module module) {
         return module instanceof HudModule ? Part.HUD : Part.SETTINGS;
     }
 
-    // Which part one setting belongs to. A key goes with the binds whichever module holds it.
+    // A key goes with the binds whichever module holds it.
     private static Part partOf(Module module, Setting<?> setting) {
         return setting instanceof KeybindSetting ? Part.BINDS : settingsPart(module);
     }
 
-    // The parts as a save holds them. The prefix and the layout of the GUI go with the settings
-    // and the enemies go with the friends.
+    // The prefix and the layout of the GUI go with the settings and the enemies go with the
+    // friends.
     JsonObject buildRoot(Set<Part> parts) {
         JsonObject root = new JsonObject();
         root.addProperty(VERSION, CONFIG_VERSION);
@@ -255,8 +242,6 @@ public final class ConfigManager {
         return m;
     }
 
-    // What a saved root holds of the parts and nothing of any other part. It is cut the way
-    // buildRoot would have written those parts alone.
     JsonObject pick(JsonObject root, Set<Part> parts) {
         JsonObject picked = new JsonObject();
         copy(root, picked, VERSION);
@@ -326,7 +311,6 @@ public final class ConfigManager {
         }
     }
 
-    // Lays one saved root over another. The two hold different parts and share no value.
     static void merge(JsonObject onto, JsonObject over) {
         for (Map.Entry<String, JsonElement> entry : over.entrySet()) {
             JsonElement there = onto.get(entry.getKey());
@@ -338,7 +322,6 @@ public final class ConfigManager {
         }
     }
 
-    // Takes the parts from a save and leaves every other part of it unread.
     private void applyRoot(JsonObject root, Set<Part> parts) {
         if (parts.contains(Part.SETTINGS)) {
             applyPart(root, PREFIX,
@@ -367,7 +350,7 @@ public final class ConfigManager {
         }
     }
 
-    // One saved value that cannot be read loses only itself. A save without the key changes nothing.
+    // One saved value that cannot be read loses only itself.
     private static void applyPart(JsonObject root, String key, Consumer<JsonElement> apply) {
         JsonElement saved = root.get(key);
         if (saved == null) {
@@ -380,7 +363,6 @@ public final class ConfigManager {
         }
     }
 
-    // One bad entry only loses its own module.
     private static void applyModule(Module module, JsonElement saved, Set<Part> parts) {
         try {
             JsonObject m = saved.getAsJsonObject();
@@ -408,9 +390,8 @@ public final class ConfigManager {
         }
     }
 
-    // The parts back to how a fresh install has them without writing anything yet. The prefix
-    // and the layout of the GUI and the macros and waypoints stay. No reset made before can be
-    // taken back afterwards.
+    // The prefix and the layout of the GUI and the macros and waypoints stay. No reset made before
+    // can be taken back afterwards.
     private static void resetQuietly(Set<Part> parts) {
         Defaults.forget();
         ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
@@ -440,7 +421,6 @@ public final class ConfigManager {
         hudTakesAllAsTheyStand();
     }
 
-    // The friends and the enemies are one part and go together.
     private static void clearLists() {
         OfflineClient.INSTANCE.getFriendManager().clear();
         OfflineClient.INSTANCE.getFriendManager().clearEnemies();
@@ -456,7 +436,6 @@ public final class ConfigManager {
         saveNow();
     }
 
-    // True the first time this is asked after a fresh install.
     public boolean needsGreeting() {
         if (greeted) {
             return false;
@@ -482,10 +461,8 @@ public final class ConfigManager {
         resetModules();
     }
 
-    // Brings the parts back from a profile. Each part goes back to its defaults first. A setting
-    // the profile leaves out must not keep its value and a profile lists its own friends. A
-    // profile written below this version is read across like the config is. Profiles only hands
-    // such a profile over whole.
+    // Each part goes back to its defaults first. A setting the profile leaves out must not keep its
+    // value.
     void applyProfile(JsonObject root, Set<Part> parts) {
         resetQuietly(parts);
         SaveConversion.reshape(root);
@@ -503,8 +480,7 @@ public final class ConfigManager {
         return guiState;
     }
 
-    // The modules starred in a saved layout of the GUI. Anything in its list but a name is passed
-    // over. A throw here would crash the window style as it draws.
+    // A throw here would crash the window style as it draws.
     public static Set<String> readFavourites(JsonObject gui) {
         Set<String> names = new LinkedHashSet<>();
         if (gui.get(FAVOURITES) instanceof JsonArray list) {

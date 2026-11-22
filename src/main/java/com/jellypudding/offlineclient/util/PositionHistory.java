@@ -21,7 +21,6 @@ public final class PositionHistory {
     private int next;
     private int size;
 
-    // Once a tick with where you stand.
     public void record(Vec3 position) {
         Vec3 last = ticksAgo(0);
         if (last != null && last.distanceTo(position) > JUMP) {
@@ -67,7 +66,6 @@ public final class PositionHistory {
         return farthest;
     }
 
-    // True when you stood within reach of the spot at any point in the last few ticks.
     public boolean wasNear(Vec3 spot, double reach, int ticks) {
         for (int back = 0; back < Math.min(ticks, size); back++) {
             if (ticksAgo(back).distanceTo(spot) <= reach) {

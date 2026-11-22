@@ -46,19 +46,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Shapes you place yourself for building. Every one is saved with the module.
 public final class Marker extends Module {
 
     public enum Shape { CUBOID, SPHERE, RING, CYLINDER }
 
     private static final String USUAL_NAME = "Marker";
-    // A name heads every row of its marker and a description is a hover text. Both are cut to fit.
     private static final int LONGEST_NAME = 32;
     private static final int LONGEST_NOTE = 160;
     // With no draw range a ring is drawn this far out. The game cuts off anything further from the
     // camera even at the largest render distance and cloud range.
     private static final int IN_SIGHT = 2048;
-    // A ring is worked out again once you have moved this far.
     private static final int WINDOW_STEP = 16;
     private static final int TARGET_COLOR = 0xFF60D060;
 
@@ -91,7 +88,6 @@ public final class Marker extends Module {
 
     private final List<Entry> entries = new ArrayList<>();
     private final Builder builder = new Builder();
-    // The server Build was switched on for. Null whilst it is off.
     private String buildingOn;
 
     // One saved entry. The rows are rebuilt from it after the config has loaded.
@@ -139,7 +135,6 @@ public final class Marker extends Module {
         searchTags("build", "shape", "sphere", "cuboid", "ring", "circle", "cylinder");
     }
 
-    // The rows of every marker follow the list. One can be added at any time.
     @Override
     public List<Setting<?>> getSettings() {
         List<Setting<?>> all = new ArrayList<>(super.getSettings());
@@ -191,7 +186,6 @@ public final class Marker extends Module {
         }
     }
 
-    // The block you are looking at or the one you stand on.
     private void add() {
         BlockPos pos = mc.player.blockPosition();
         BlockHitResult hit = BlockUtil.aimedBlock();
@@ -252,11 +246,10 @@ public final class Marker extends Module {
         }
     }
 
-    // The part that places. It is a placer like Filler that takes its spots from the markers on
-    // show and is switched by the Build row. It is never listed as a module of its own.
+    // A placer like Filler that takes its spots from the markers on show. The Build row switches it
+    // and it is never listed as a module of its own.
     private final class Builder extends AreaPlacer {
 
-        // True once the player has been told the hotbar holds nothing to build with.
         private boolean toldEmpty;
 
         private Builder() {
@@ -298,7 +291,6 @@ public final class Marker extends Module {
             tellEmpty(!targets.isEmpty() && BlockUtil.findBlockSlot(this::allowed) == -1);
         }
 
-        // Said once each time the blocks run out with spots still waiting.
         private void tellEmpty(boolean empty) {
             if (empty && !toldEmpty) {
                 ChatUtil.error("Marker has none of its build blocks in the hotbar.");
@@ -312,10 +304,8 @@ public final class Marker extends Module {
         }
     }
 
-    // One marker and the rows that shape it.
     private static final class Entry {
 
-        // A typed spot with a row that moves it to where you stand and one that waits for a click.
         private final class Spot {
 
             private final TextSetting text;
@@ -346,7 +336,6 @@ public final class Marker extends Module {
                 return "Moved to " + BlockUtil.text(pos);
             }
 
-            // Null whilst the text is not three whole numbers.
             private BlockPos read() {
                 return BlockUtil.parse(text.getValue());
             }
@@ -358,7 +347,6 @@ public final class Marker extends Module {
             }
         }
 
-        // The numbers a ring was worked out from. Another ring is due once any of them moves.
         private record RingKey(long centre, int radius, long dy, int anchorX, int anchorZ, int reach) {
         }
 
@@ -379,7 +367,6 @@ public final class Marker extends Module {
         private final BoxStyle style;
         private final BoolSetting drop;
 
-        // The blocks of the ring at its lowest layer and what they were worked out from.
         private List<BlockPos> ring = List.of();
         private RingKey ringKey;
         private final JoinedCells<BlockPos> joined = new JoinedCells<>(BlockPos::asLong);
@@ -391,7 +378,6 @@ public final class Marker extends Module {
             boolean sphere = shape == Shape.SPHERE;
             note = new TextSetting(label + " description",
                 "A few words about this marker. They show when you point at its first row.", "");
-            // The first row of a marker tells what the marker is for once it has been given a description.
             active = new BoolSetting(label, "Draws this marker.", true) {
 
                 @Override
@@ -472,20 +458,17 @@ public final class Marker extends Module {
             layer.setValue((double) Math.clamp(layer.getInt() + (long) step, 0, 2 * radius.getInt()));
         }
 
-        // How far above or below the middle of the ball the drawn slice lies. A ring and a
-        // cylinder are the cut through the middle.
         private long sliceOffset() {
             int r = radius.getInt();
             return layer == null ? 0 : Math.min(layer.getInt(), 2 * r) - r;
         }
 
-        // How many blocks tall the shape stands on its lowest layer.
         private int layers() {
             return height == null ? 1 : height.getInt();
         }
 
-        // The test for a block of the marker as it is drawn. A cuboid is its outer faces. Null
-        // whilst the marker is off or belongs to another dimension or a spot cannot be read.
+        // A cuboid is its outer faces. Null whilst the marker is off or belongs to another
+        // dimension or a spot cannot be read.
         private Predicate<BlockPos> blocks(Dimension here) {
             BlockPos one = active.isOn() && world.getValue() == here ? first.read() : null;
             if (one == null) {
@@ -532,7 +515,6 @@ public final class Marker extends Module {
             style.draw(batch, AABB.encapsulatingFullBlocks(one, two), through);
         }
 
-        // Each block of the ring stands as tall as the shape. The blocks only ever touch sideways.
         private void drawRing(DrawBatch batch, boolean through, int range) {
             BlockPos centre = first.read();
             if (centre == null) {
@@ -552,9 +534,8 @@ public final class Marker extends Module {
             }
         }
 
-        // Only the stretch of the ring within reach of where you stand is worked out. A ring of
-        // any size then costs the same. It is worked out again once a number behind it changes
-        // or you have moved a good way.
+        // Only the stretch of the ring within reach of where you stand is worked out. A ring of any
+        // size then costs the same.
         private void rebuildRing(BlockPos centre, int reach) {
             BlockPos feet = mc.player.blockPosition();
             int anchorX = Math.floorDiv(feet.getX(), WINDOW_STEP) * WINDOW_STEP;
@@ -575,7 +556,7 @@ public final class Marker extends Module {
             ring = found;
         }
 
-        // How far a coordinate lies from the middle. A typed centre can be any number at all.
+        // A typed centre can be any number at all.
         private static int offset(long coordinate, int middle) {
             return Math.clamp(coordinate - middle, Integer.MIN_VALUE, Integer.MAX_VALUE);
         }

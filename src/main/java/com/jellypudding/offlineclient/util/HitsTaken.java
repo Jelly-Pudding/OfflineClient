@@ -15,7 +15,6 @@ public final class HitsTaken {
     private HitsTaken() {
     }
 
-    // How many hits there have been since the game started. It only ever goes up.
     public int count() {
         return count;
     }

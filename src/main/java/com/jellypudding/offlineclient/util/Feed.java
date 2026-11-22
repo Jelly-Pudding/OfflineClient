@@ -53,7 +53,6 @@ public final class Feed<T> {
             return !fresh().isEmpty();
         }
 
-        // Forgets what arrived whilst the reader was not looking.
         public void sync() {
             seen = feed.total;
         }

@@ -12,8 +12,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 
-// The map of everything you explored on the server you play on. Whilst this is on the land is
-// recorded as you go and the map key opens the map.
 public final class WorldMap extends Module {
 
     private final KeybindSetting mapKey = new KeybindSetting("Map key",

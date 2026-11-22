@@ -6,9 +6,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.Locale;
 
-// A piece of the game's own HUD. Left switched off the game draws it where it always does.
-// Switched on the game still draws it and this decides where and how big. Hide then takes it
-// off the screen.
+// Switched on the game still draws it and this decides where and how big.
 public final class GamePartElement extends HudElement {
 
     private final GamePart part;
@@ -26,7 +24,6 @@ public final class GamePartElement extends HudElement {
         return part;
     }
 
-    // Hide only acts on a part that is switched on and only shows then.
     public boolean hidden() {
         return isActive() && hide.isOn();
     }
@@ -35,8 +32,6 @@ public final class GamePartElement extends HudElement {
         hide.setValue(hidden);
     }
 
-    // A part the client places is on the screen unless Hide is on. One left to the game only
-    // counts when it is a part the game draws most of the time.
     @Override
     public boolean visible() {
         return isActive() ? !hide.isOn() : part.steady();
@@ -47,13 +42,11 @@ public final class GamePartElement extends HudElement {
         return part.home(screenWidth, screenHeight);
     }
 
-    // It may sit flush with the edge as it does at home.
     @Override
     public boolean touchesEdges() {
         return true;
     }
 
-    // The game draws its own bars whatever the rest of the overlay does.
     @Override
     public boolean staysWhenHidden() {
         return true;

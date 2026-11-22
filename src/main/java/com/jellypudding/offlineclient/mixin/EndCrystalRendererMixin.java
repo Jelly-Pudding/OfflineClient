@@ -17,7 +17,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// Chams resizes and recolours end crystals.
 @Mixin(EndCrystalRenderer.class)
 public abstract class EndCrystalRendererMixin {
 

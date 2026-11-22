@@ -34,13 +34,12 @@ public final class CaveTraces {
     public record Trace(Kind kind, BlockPos key, AABB box, int cells) {
     }
 
-    // What the scan looks for. Shares run from nought to one.
+    // Shares run from nought to one.
     public record Rules(boolean mined, int digSize, int clearRadius, boolean portals, int largestWidth,
                         int largestHeight, boolean cornersOptional, boolean closedEdges, double solidShare,
                         double openShare) {
     }
 
-    // One piece of connected plain air.
     private record Piece(LongList cells, boolean big) {
     }
 
@@ -57,7 +56,6 @@ public final class CaveTraces {
     private final Rules rules;
     private final LongSet ownDigs;
     private final int cap;
-    // The piece each plain air cell was flooded into.
     private final Long2IntMap pieceOf = new Long2IntOpenHashMap();
     private final List<Piece> pieces = new ArrayList<>();
 
@@ -90,8 +88,7 @@ public final class CaveTraces {
         out.addAll(find(world, rules, ownDigs, view.pos(), seeds));
     }
 
-    // The traces a chunk owns among the pieces of plain air that grow from the seeds. A seed is
-    // plain air beside cave air of the chunk.
+    // A seed is plain air beside cave air of the chunk.
     public static List<Trace> find(SeenBlocks world, Rules rules, LongSet ownDigs, ChunkPos chunk, LongSet seeds) {
         CaveTraces traces = new CaveTraces(world, rules, ownDigs);
         List<Trace> out = new ArrayList<>();
@@ -106,7 +103,6 @@ public final class CaveTraces {
         return out;
     }
 
-    // Judges one piece of plain air the scanned chunk owns.
     private void judge(int index, List<Trace> out) {
         Piece piece = pieces.get(index);
         for (long cell : piece.cells()) {
@@ -231,7 +227,6 @@ public final class CaveTraces {
         return true;
     }
 
-    // A small dig kept at its lowest cell.
     private static Trace dig(Piece piece) {
         long key = piece.cells().getLong(0);
         AABB box = new AABB(BlockPos.of(key));
@@ -264,7 +259,6 @@ public final class CaveTraces {
         return found;
     }
 
-    // The inside of the smallest frame less the blocks the solid share lets stand in it.
     private int leastPortalAir() {
         int inside = (FRAME_WIDTH - 2) * (FRAME_HEIGHT - 2);
         return (int) Math.ceil(inside * (1 - rules.solidShare()));
@@ -347,7 +341,6 @@ public final class CaveTraces {
             sums[i + 1][j + 1] = sums[i][j + 1] + sums[i + 1][j] - sums[i][j] + (counts ? 1 : 0);
         }
 
-        // Cells of a rectangle given by its lowest corner and its size in plane steps.
         private int count(int[][] sums, int i, int j, int w, int h) {
             return sums[i + w][j + h] - sums[i][j + h] - sums[i + w][j] + sums[i][j];
         }
@@ -409,8 +402,7 @@ public final class CaveTraces {
             return a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
         }
 
-        // A frame is kept at its lowest plain air cell. That cell stays plain air whilst the trace
-        // lasts. Null for a frame holding none.
+        // Null for a frame that holds no plain air.
         private BlockPos key(int[] match) {
             for (int row = match[1]; row < match[1] + match[3]; row++) {
                 for (int column = match[0]; column < match[0] + match[2]; column++) {

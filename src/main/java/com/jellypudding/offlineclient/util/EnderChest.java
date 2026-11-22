@@ -13,8 +13,8 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-// What your ender chest held the last time you had it open. The copy is taken again every
-// tick it stays open and is kept in a file for the server and the name you play under.
+// The copy is taken again every tick the chest stays open and is kept in a file for the server and
+// the name you play under.
 public final class EnderChest {
 
     public static final EnderChest INSTANCE = new EnderChest();

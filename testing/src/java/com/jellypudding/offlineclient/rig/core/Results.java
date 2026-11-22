@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.stream.Stream;
 
 // Writes each case to disk the moment it ends. A game that dies mid run leaves every finished
 // case behind and the name of the one it died in.
@@ -20,12 +21,20 @@ public final class Results {
 
     private final Path out;
 
+    // A run under a name used before would add its cases to the old ones.
     public Results(Path out) {
         this.out = out;
         try {
+            Files.deleteIfExists(out.resolve(FILE));
+            Files.deleteIfExists(out.resolve(RUNNING));
             Files.createDirectories(out.resolve(SHOTS));
+            try (Stream<Path> old = Files.list(out.resolve(SHOTS))) {
+                for (Path shot : old.filter(Files::isRegularFile).toList()) {
+                    Files.delete(shot);
+                }
+            }
         } catch (IOException e) {
-            throw new RigFailure("The result folder could not be made at " + out, e);
+            throw new RigFailure("The result folder could not be made ready at " + out, e);
         }
     }
 

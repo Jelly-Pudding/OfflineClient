@@ -3,9 +3,8 @@ package com.jellypudding.offlineclient.path;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
-// Where a search is trying to get to. The heuristic is measured in blocks and
-// must never read higher than the real walk or the search stops finding the
-// shortest way round.
+// The heuristic is measured in blocks and must never read higher than the real walk or the search
+// stops finding the shortest way round.
 public interface PathGoal {
 
     boolean reached(BlockPos pos);
@@ -13,10 +12,8 @@ public interface PathGoal {
     // The walk lifts the player up to stepUp blocks in one step without a jump.
     double heuristic(BlockPos pos, int stepUp);
 
-    // Blocks from a place to the goal in a straight line.
     double distance(Vec3 from);
 
-    // One exact block.
     record Spot(BlockPos target) implements PathGoal {
 
         public Spot {
@@ -39,7 +36,6 @@ public interface PathGoal {
         }
     }
 
-    // Anywhere within the radius of a block.
     record Around(BlockPos target, double radius) implements PathGoal {
 
         public Around {

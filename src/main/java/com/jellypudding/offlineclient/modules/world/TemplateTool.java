@@ -17,9 +17,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayList;
 import java.util.List;
 
-// Saves a build as a template for AutoBuild. Click two corners and then the block
-// the build should grow from. The facing at the last click becomes the front of
-// the template.
+// The facing at the last click becomes the front of the template.
 public final class TemplateTool extends Module implements CornerPicker.Taker {
 
     private static final String DEFAULT_NAME = "My build";

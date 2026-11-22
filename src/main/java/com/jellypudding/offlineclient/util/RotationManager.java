@@ -20,7 +20,6 @@ public final class RotationManager {
 
     public static final RotationManager INSTANCE = new RotationManager();
 
-    // The most degrees a managed rotation moves in one tick.
     public static final float STEP = 45f;
 
     public static final float BLOCK_TOLERANCE = 3f;
@@ -28,12 +27,10 @@ public final class RotationManager {
     // Entities move every tick and the angle the server holds is always stale.
     public static final float ENTITY_TOLERANCE = 25f;
 
-    // A step that reaches any angle in one tick.
     public static final float NO_STEP = 360f;
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // The winning request of the current tick. Null once it has been taken.
     private RotationPriority priority;
 
     private boolean holding;
@@ -72,7 +69,6 @@ public final class RotationManager {
     // the view once any module has turned the view back.
     private volatile boolean turnedByUse;
 
-    // The body the server angle was last seeded from.
     private final LifeWatch seeded = new LifeWatch();
 
     private RotationManager() {
@@ -90,8 +86,6 @@ public final class RotationManager {
         INSTANCE.take(yaw, pitch, priority, NO_STEP);
     }
 
-    // Asks for an angle at a chosen turn rate in degrees per tick. Used where a
-    // module exposes its own rotation speed.
     public static void request(float yaw, float pitch, RotationPriority priority, float step) {
         INSTANCE.take(yaw, pitch, priority, step);
     }
@@ -139,7 +133,6 @@ public final class RotationManager {
         return yawBetween(MC.player.getEyePosition(), point);
     }
 
-    // Looking straight at the feet. The steepest pitch the game allows either way.
     public static final float STRAIGHT_DOWN = 90f;
 
     public static float clampPitch(float pitch) {
@@ -177,7 +170,6 @@ public final class RotationManager {
         }
     }
 
-    // Turns the real view towards the point by at most the step on each axis.
     public static void turnCamera(Vec3 point, float step) {
         LocalPlayer player = MC.player;
         player.setYRot(Mth.approachDegrees(player.getYRot(), yawTo(point), step));

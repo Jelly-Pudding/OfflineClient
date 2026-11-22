@@ -19,7 +19,6 @@ import net.minecraft.world.phys.AABB;
 // A dropped anvil is a falling entity until it lands.
 public final class AntiAnvil extends Module {
 
-    // How far above the head an anvil is worth catching. Higher ones take a while yet.
     private static final int WATCH_HEIGHT = 12;
 
     // Two blocks over the feet is the first block clear of the player's own body.
@@ -83,7 +82,6 @@ public final class AntiAnvil extends Module {
         cover(target);
     }
 
-    // True whilst an anvil entity is falling through the column over the player.
     private boolean anvilOverhead() {
         AABB column = mc.player.getBoundingBox();
         column = new AABB(column.minX, column.maxY, column.minZ,
@@ -98,7 +96,6 @@ public final class AntiAnvil extends Module {
         return false;
     }
 
-    // True whilst an anvil block with nothing under it sits in the column within reach.
     private boolean anvilPlacedOverhead(BlockPos feet) {
         int top = FIRST_PLACED + (int) mc.player.blockInteractionRange();
         for (int i = FIRST_PLACED; i <= top; i++) {

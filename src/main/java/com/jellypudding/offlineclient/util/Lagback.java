@@ -40,7 +40,6 @@ public enum Lagback {
             seen = pulls();
         }
 
-        // Also sees the vehicle the player steers pulled back.
         public static Watcher withVehicles() {
             return new Watcher(true);
         }

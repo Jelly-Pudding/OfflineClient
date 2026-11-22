@@ -19,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// Applies the flags Chams and TrueSight and PopChams put on a render state.
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin {
 
@@ -68,7 +67,6 @@ public abstract class LivingEntityRendererMixin {
         return original;
     }
 
-    // Chams grows or shrinks players after vanilla has set their size.
     @Inject(
         method = "extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",
         at = @At("TAIL"))

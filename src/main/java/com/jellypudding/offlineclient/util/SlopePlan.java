@@ -16,7 +16,6 @@ public final class SlopePlan {
     private final List<Bend> bends = new ArrayList<>();
     private int floor;
 
-    // A run starts level at this floor with no bends.
     public void reset(int floor) {
         this.floor = floor;
         bends.clear();

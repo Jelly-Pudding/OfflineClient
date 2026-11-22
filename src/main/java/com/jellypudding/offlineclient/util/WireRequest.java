@@ -217,7 +217,6 @@ final class WireRequest extends HttpURLConnection {
         }
     }
 
-    // The path and query. An empty path asks for the root.
     private String target() throws MalformedURLException {
         String file = url.getFile();
         if (file.isEmpty() || file.charAt(0) == '?') {
@@ -576,7 +575,6 @@ final class WireRequest extends HttpURLConnection {
             }
         }
 
-        // A line of a chunked body without its ending.
         private static String line(InputStream in) throws IOException {
             ByteArrayOutputStream line = new ByteArrayOutputStream();
             for (int read = in.read(); read != '\n'; read = in.read()) {

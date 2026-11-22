@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// Your kills and deaths on this server.
 public final class KillStatsElement extends RowsElement {
 
     private final BoolSetting deaths = new BoolSetting("Show deaths",

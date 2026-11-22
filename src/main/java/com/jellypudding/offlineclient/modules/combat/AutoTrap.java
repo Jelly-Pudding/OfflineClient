@@ -67,7 +67,7 @@ public final class AutoTrap extends Module {
     private String targetName;
     private boolean placed;
 
-    // The spots the last tick found. The unobstructed test walks the entity list.
+    // The unobstructed test walks the entity list.
     private List<BlockPos> pending = List.of();
 
     public AutoTrap() {
@@ -121,7 +121,9 @@ public final class AutoTrap extends Module {
             }
             return;
         }
-        placed |= rounds.place(missing, blocks, SwingMode.BOTH) > 0;
+        if (!Hands.slotsTaken()) {
+            placed |= rounds.place(missing, blocks, SwingMode.BOTH) > 0;
+        }
     }
 
     // Furthest first. The near side is left open for as long as possible.

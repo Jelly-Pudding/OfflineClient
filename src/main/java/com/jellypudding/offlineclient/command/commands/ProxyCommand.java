@@ -32,8 +32,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-// The list of proxies and the login of the one picked. The test and the check work whether or
-// not Proxy is switched on.
+// The test and the check work whether or not Proxy is switched on.
 public final class ProxyCommand extends Command {
 
     private static final String ADD = "add";
@@ -49,9 +48,7 @@ public final class ProxyCommand extends Command {
     private static final List<String> WORDS = List.of(ADD, USE, REMOVE, LIST, CHECK, PRUNE, IMPORT, LOGIN, LOGOUT,
         TEST);
     private static final String SEPARATOR = " · ";
-    // How long the test waits for the proxy to reach the server.
     private static final int TEST_SECONDS = 10;
-    // Chat shows no more rows than this. The Proxies tab lists every one.
     private static final int MOST_LISTED = 20;
 
     private final ActionSetting prune = new ActionSetting("Remove dead proxies",
@@ -102,7 +99,6 @@ public final class ProxyCommand extends Command {
             + entry.kind() + "§7.");
     }
 
-    // Switching Proxy on says where joins go by itself.
     private void use(String[] args) {
         if (args.length != 2) {
             usage("proxy use <name>");
@@ -174,7 +170,6 @@ public final class ProxyCommand extends Command {
         ChatUtil.message("§7Checking §f" + Tally.counted(all.size(), "proxy") + "§7.");
     }
 
-    // The first time names what would go and the second within a few seconds removes them.
     private void prune(String[] args) {
         if (args.length != 1) {
             usage("proxy prune");
@@ -247,7 +242,6 @@ public final class ProxyCommand extends Command {
         }
     }
 
-    // With no server named it tries the one you are on or the last one you joined.
     private void test(String[] args) {
         if (args.length > 2) {
             usage("proxy test [server]");
@@ -272,9 +266,8 @@ public final class ProxyCommand extends Command {
         });
     }
 
-    // Opens a connection to the server through the proxy and closes it once the proxy has reached
-    // it. The game never speaks on it. Runs on its own thread as the lookup and the wait would
-    // stall the game.
+    // The game never speaks on the connection. Runs on its own thread as the lookup and the wait
+    // would stall the game.
     private static String reach(ProxyTunnel tunnel, String server) {
         Optional<ResolvedServerAddress> resolved =
             ServerNameResolver.DEFAULT.resolveAddress(ServerAddress.parseString(server));
@@ -307,7 +300,6 @@ public final class ProxyCommand extends Command {
         }
     }
 
-    // Null after telling the player there is no proxy by that name.
     private static ProxyStore.Entry saved(String name) {
         ProxyStore.Entry entry = ProxyStore.get().find(name);
         if (entry == null) {
@@ -316,7 +308,6 @@ public final class ProxyCommand extends Command {
         return entry;
     }
 
-    // Null after telling the player to pick one first.
     private static ProxyStore.Entry picked() {
         ProxyStore.Entry picked = ProxyStore.get().picked();
         if (picked == null) {

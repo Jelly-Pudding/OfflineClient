@@ -21,10 +21,9 @@ public final class PlacementWatch {
     // When each unanswered block went down. The network thread reads the keys.
     private final Map<Long, Long> waiting = new ConcurrentHashMap<>();
 
-    // Blocks the server has shown back as solid. Filled on the network thread.
+    // Filled on the network thread.
     private final Set<Long> confirmed = ConcurrentHashMap.newKeySet();
 
-    // Clicks spent on each block the server has not confirmed yet.
     private final Map<Long, Integer> attempts = new HashMap<>();
 
     // After the click that placed the block went out.
@@ -66,12 +65,10 @@ public final class PlacementWatch {
         return missing;
     }
 
-    // Blocks still waiting for the server.
     public int waiting() {
         return waiting.size();
     }
 
-    // Milliseconds the oldest unanswered block has waited. Zero whilst none waits.
     public long longestWait() {
         long now = System.currentTimeMillis();
         long longest = 0;
@@ -81,7 +78,6 @@ public final class PlacementWatch {
         return longest;
     }
 
-    // Clicks spent on a block the server has not confirmed yet.
     public int attempts(BlockPos pos) {
         return attempts.getOrDefault(pos.asLong(), 0);
     }

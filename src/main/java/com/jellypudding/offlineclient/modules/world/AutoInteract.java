@@ -13,8 +13,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// Right clicks the mobs you pick with whatever you hold. What that does is up to the item. A
-// bucket milks and a dye colours and a lead ties and a water bucket catches a fish.
 public final class AutoInteract extends EntityUseAura {
 
     // Long enough that a mob used once never comes round again whilst the module stays on.

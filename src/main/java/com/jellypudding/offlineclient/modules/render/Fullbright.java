@@ -46,9 +46,7 @@ public final class Fullbright extends Module {
         "How much of the gap is closed each tick.", 1, 0.1, 4, 0.1).min(0.05)
         .under(fade, () -> mode.is(Mode.GAMMA) && fade.isOn());
 
-    // Where the fade has reached. Jumps straight to the target whilst fade is off.
     private double shown = 1;
-    // The brightness you had before. It comes back once this is off.
     private double own = 1;
     private Mode running;
     // A dragged slider settles before every chunk is meshed again.
@@ -86,7 +84,6 @@ public final class Fullbright extends Module {
         running = null;
     }
 
-    // Undoes what one mode did. A mode swap whilst on leaves nothing behind.
     private void stop(Mode mode) {
         if (mode == null) {
             return;
@@ -122,7 +119,6 @@ public final class Fullbright extends Module {
         }
     }
 
-    // The gamma to show this tick. Fade walks it towards the target a step at a time.
     private double stepTowards(double target) {
         if (!fade.isOn()) {
             shown = target;
@@ -146,12 +142,10 @@ public final class Fullbright extends Module {
         return effect != null && effect.endsWithin(POTION_TICKS);
     }
 
-    // Every chunk is meshed again with the new light floor.
     private void relight() {
         ChunkRebuild.now();
     }
 
-    // The floor for one light layer or nought when the layer is left alone.
     public int lightFloor(LightLayer type) {
         if (!isEnabled() || running != Mode.LUMINANCE) {
             return 0;

@@ -44,8 +44,7 @@ public final class MobHomes {
     private MobHomes() {
     }
 
-    // True for a mob that turns up in some dimension but never in this one. A dimension the plain
-    // game does not have is never judged.
+    // A dimension the plain game does not have is never judged.
     public static boolean lost(EntityType<?> type, ResourceKey<Level> dimension) {
         Set<EntityType<?>> here = HOMES.get(dimension);
         return here != null && !here.contains(type)

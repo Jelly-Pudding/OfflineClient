@@ -34,19 +34,17 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// ChatComponentMixin asks this about every line that comes in and about the history size. What you
-// send and the chat it hides and the commands a click runs are parts of their own beside it.
+// ChatComponentMixin asks this about every line that comes in and about the history size.
 public final class BetterChat extends Module {
 
     private static final int VANILLA_HISTORY = 100;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter CLOCK_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    // How much wider the chat gets to fit a head on the left.
     private static final int HEAD_ROOM = 10;
     private static final int HEAD_SIZE = 8;
 
-    // Sender lookups remembered per message. Cleared once it outgrows any history.
+    // Cleared once it outgrows any history.
     private static final int HEAD_CACHE = 8192;
 
     // A run of blank lines is what a server sends to push chat off the screen.
@@ -99,7 +97,7 @@ public final class BetterChat extends Module {
     private final ChatFilter filter = new ChatFilter(this::isEnabled);
     private final ClickGuard clicks = new ClickGuard(this::isEnabled);
 
-    // The skin found for each message. A miss is remembered as well and never searched twice.
+    // A miss is remembered as well and never searched twice.
     private final Map<GuiMessage, Optional<PlayerSkin>> heads = new IdentityHashMap<>();
 
     // The chat line being drawn. Set by the line consumer just before the text goes out.
@@ -151,14 +149,12 @@ public final class BetterChat extends Module {
         return rewriter.rewrite(message);
     }
 
-    // The tag a player line goes up with. A signed line the game trusts has none and Mark
-    // reportable gives it one.
+    // A signed line the game trusts has no tag and Mark reportable gives it one.
     public GuiMessageTag tagFor(MessageSignature signature, GuiMessageTag tag) {
         return isEnabled() && markReportable.isOn() && signature != null && tag == null ? REPORTABLE : tag;
     }
 
-    // The shown part of the chat box in the command colour once the whole box starts with the
-    // command prefix. Null leaves it to the game.
+    // Null leaves it to the game.
     public FormattedCharSequence commandText(String typed, String shown) {
         if (!isEnabled() || !colourCommands.isOn()
             || !typed.startsWith(OfflineClient.INSTANCE.getCommandManager().getPrefix())) {
@@ -186,7 +182,6 @@ public final class BetterChat extends Module {
         return Component.empty().append(stamp).append(message);
     }
 
-    // Rebuilds the line with every run of blank lines cut down to one break.
     private static Component collapse(Component message) {
         MutableComponent rebuilt = Component.empty();
         message.visit((style, text) -> {
@@ -230,12 +225,10 @@ public final class BetterChat extends Module {
         return isEnabled() && playerHeads.isOn();
     }
 
-    // The chat background grows to fit a head beside a full width line.
     public int headRoom(int width) {
         return drawsHeads() ? width + HEAD_ROOM : width;
     }
 
-    // Only a line with a head beside it moves across. The rest stay flush with the edge.
     public int textStart(int x) {
         return drawing != null && headOf(drawing.parent()) != null ? x + HEAD_ROOM : x;
     }
@@ -277,7 +270,6 @@ public final class BetterChat extends Module {
         return heads.computeIfAbsent(message, m -> Optional.ofNullable(senderSkin(m))).orElse(null);
     }
 
-    // The face of the player who wrote the line. A line the server or the client wrote has none.
     private static PlayerSkin senderSkin(GuiMessage message) {
         if (mc.getConnection() == null) {
             return null;

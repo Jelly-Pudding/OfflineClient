@@ -18,16 +18,12 @@ import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.List;
 
-// Your bag drawn on the screen without opening it. Laid out like the inventory
-// screen with your armour above and the hotbar below.
 public final class InventoryElement extends HudElement {
 
     private static final int COLUMNS = 9;
     private static final int BAG_ROWS = 3;
     private static final int SLOT = 16;
-    // Extra room between the armour and the bag and between the bag and the hotbar.
     private static final int GROUP_GAP = 3;
-    // A faint cell under every slot. An empty bag still reads as a bag.
     private static final int CELL = 0x30000000;
     private static final int SELECTED = 0x70FFFFFF;
 
@@ -45,7 +41,6 @@ public final class InventoryElement extends HudElement {
     private record Cell(ItemStack stack, int x, int y, int color) {
     }
 
-    // What fills the bag rows and the colour of the cells under them.
     private record Bag(List<ItemStack> stacks, int color) {
     }
 
@@ -63,7 +58,6 @@ public final class InventoryElement extends HudElement {
         return armour.isOn() || offhand.isOn();
     }
 
-    // The armour sits at the left of the top row and the other hand at its right.
     private List<Cell> cells() {
         LocalPlayer player = OfflineClient.MC.player;
         List<Cell> cells = new ArrayList<>();
@@ -96,8 +90,6 @@ public final class InventoryElement extends HudElement {
         return cells;
     }
 
-    // Your own bag unless Show held container finds a container in your main hand or else your
-    // other hand. The cells under a container take a shulker box's dye.
     private Bag bag(LocalPlayer player, Inventory inventory) {
         if (container.isOn()) {
             for (ItemStack held : List.of(player.getMainHandItem(), player.getOffhandItem())) {
@@ -114,8 +106,6 @@ public final class InventoryElement extends HudElement {
         return new Bag(own, CELL);
     }
 
-    // The slots of a shulker box or of your ender chest once you have opened it in this world.
-    // Empty for anything else.
     private static List<ItemStack> contentsOf(ItemStack held) {
         if (ItemUtil.isShulkerBox(held.getItem()) && held.has(DataComponents.CONTAINER)) {
             return ContainerPreview.contentsOf(held);

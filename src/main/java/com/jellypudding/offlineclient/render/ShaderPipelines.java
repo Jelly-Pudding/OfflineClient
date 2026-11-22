@@ -20,7 +20,6 @@ import java.util.Set;
 // when first asked for and a shader that fails only turns off the look that needs it.
 public final class ShaderPipelines {
 
-    // The uniform names the outline shaders read.
     public static final String OUTLINE_CONFIG = "OutlineConfig";
     public static final String MASK_SAMPLER = "MaskSampler";
     public static final String ROWS_SAMPLER = "RowsSampler";
@@ -83,8 +82,7 @@ public final class ShaderPipelines {
     private ShaderPipelines() {
     }
 
-    // The compiled pipeline or null when its shaders cannot be made. The first ask compiles it and
-    // the game's log says what went wrong. Render thread only.
+    // Null when its shaders cannot be made. The first ask compiles it. Render thread only.
     public static CompiledRenderPipeline compiled(RenderPipeline pipeline) {
         if (FAILED.contains(pipeline)) {
             return null;
@@ -102,7 +100,6 @@ public final class ShaderPipelines {
         return compiled;
     }
 
-    // True when every one of the pipelines compiles.
     public static boolean ready(RenderPipeline... pipelines) {
         for (RenderPipeline pipeline : pipelines) {
             if (compiled(pipeline) == null) {

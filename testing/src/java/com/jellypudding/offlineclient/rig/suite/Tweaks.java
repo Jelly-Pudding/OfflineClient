@@ -20,15 +20,13 @@ final class Tweaks {
     private static final float FULL_TURN = 360;
     private static final String ADDED_WORDS = " rig";
 
-    // One value to give a setting. It says what did not take or null when the value took.
+    // Apply says what did not take or null when the value took.
     record Tweak(String label, Supplier<String> apply) {
     }
 
     private Tweaks() {
     }
 
-    // Every value worth trying. Only the switches and the choices when numbers and colours are
-    // to be left alone.
     static List<Tweak> of(Setting<?> setting, boolean numbersToo) {
         List<Tweak> tweaks = new ArrayList<>();
         switch (setting) {
@@ -46,8 +44,7 @@ final class Tweaks {
         return tweaks;
     }
 
-    // One change that leaves the setting at something other than its default. Null for a kind
-    // of setting this class leaves alone.
+    // Null for a kind of setting this class leaves alone.
     static Tweak change(Setting<?> setting) {
         return switch (setting) {
             case BoolSetting flag -> flip(flag);

@@ -33,7 +33,6 @@ public final class SeenEffects {
     private SeenEffects() {
     }
 
-    // Each effect once in the order the server lists them.
     public static List<Holder<MobEffect>> of(LivingEntity entity) {
         List<Holder<MobEffect>> seen = new ArrayList<>();
         if (entity == OfflineClient.MC.player) {
@@ -51,7 +50,6 @@ public final class SeenEffects {
         return seen;
     }
 
-    // Null for a swirl no effect gives off.
     private static Holder<MobEffect> effectOf(ParticleOptions swirl) {
         if (byColour == null) {
             index();

@@ -41,9 +41,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Builds a wither from four soul blocks in a T and three wither skeleton skulls on top.
-// The skulls go last and the wither spawns as the third one lands. The two spaces
-// beside the bottom block must be air or the pattern never matches.
+// The skulls go last and the wither spawns as the third one lands. The two spaces beside the bottom
+// block must be air or the pattern never matches.
 public final class AutoWither extends Module {
 
     public enum Trigger { ON_ENABLE, RIGHT_CLICK, REPEAT }
@@ -54,7 +53,6 @@ public final class AutoWither extends Module {
 
     public enum Arms { AUTO, ACROSS_VIEW, EAST_WEST, NORTH_SOUTH }
 
-    // The soul blocks make the T and the skulls sit on top. An item counts when it places the block.
     private enum Kind {
         SOUL_BLOCK("soul sand and soul soil"),
         SKULL("wither skeleton skulls");
@@ -84,8 +82,7 @@ public final class AutoWither extends Module {
     private record Part(BlockPos pos, Kind kind) {
     }
 
-    // The parts in build order and the two spaces beside the bottom block. The problem is
-    // null when the wither can go there and the reason it cannot otherwise.
+    // The problem is null when the wither can go there and the reason it cannot otherwise.
     private record Layout(List<Part> parts, List<BlockPos> sides, String problem) {
 
         boolean fits() {
@@ -96,23 +93,17 @@ public final class AutoWither extends Module {
     private static final int SOUL_BLOCKS = 4;
     private static final int SKULLS = 3;
 
-    // How far in front of your feet the bottom block goes.
     private static final int FRONT_DISTANCE = 2;
 
-    // Ticks a block may keep failing to go down before the build gives up.
     private static final int PATIENCE = 20;
 
-    // Times the parts the server turned down are put back before the build gives up.
     private static final int MAX_REBUILDS = 3;
 
-    // Ticks before the ground round you is searched again after no spot was found.
     private static final int SEARCH_TICKS = 20;
 
-    // Withers in a row a repeat may fail to build before it ends. A server that turns every
-    // block down would otherwise be asked again for ever.
+    // A server that turns every block down would otherwise be asked again for ever.
     private static final int FAILED_IN_A_ROW = 2;
 
-    // A wither not yet started is drawn at this share of the usual strength.
     private static final float GHOST_STRENGTH = 0.5f;
     private static final int BLOCKED_COLOR = 0xFFFF4040;
 
@@ -165,13 +156,10 @@ public final class AutoWither extends Module {
     private final WorldWatch world = new WorldWatch();
     private final ChatWarning noSpot = new ChatWarning();
 
-    // Soul blocks from the bottom up and then the skulls.
     private final List<Part> parts = new ArrayList<>();
 
-    // The two spaces beside the bottom block.
     private final List<BlockPos> corners = new ArrayList<>();
 
-    // Where the next wither would go whilst waiting for a right click.
     private Layout preview;
 
     private int next;
@@ -179,13 +167,10 @@ public final class AutoWither extends Module {
     private int failures;
     private int rebuilds;
 
-    // The player tick of the last click.
     private int lastClick;
 
-    // Ticks before the next wither of a repeat is started.
     private int pause;
 
-    // Withers of a repeat that failed one after the other.
     private int failedWithers;
 
     public AutoWither() {
@@ -201,7 +186,6 @@ public final class AutoWither extends Module {
         return false;
     }
 
-    // The blocks left whilst building and otherwise how many withers the inventory makes.
     @Override
     public String getSuffix() {
         if (!parts.isEmpty()) {
@@ -274,7 +258,6 @@ public final class AutoWither extends Module {
             timer--;
             return;
         }
-        // The build takes a hotbar slot and a turn and waits whilst something else has them.
         if (Hands.taken()) {
             return;
         }
@@ -337,11 +320,10 @@ public final class AutoWither extends Module {
         finish();
     }
 
-    // Every use press builds a wither in right click mode. A press mid build is swallowed
-    // too. It would place whatever the build left in hand.
+    // A press mid build is swallowed too. It would place whatever the build left in hand.
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (!inGame() || !trigger.is(Trigger.RIGHT_CLICK)) {
+        if (!inGame() || !trigger.is(Trigger.RIGHT_CLICK) || event.byModule()) {
             return;
         }
         // Without this delay vanilla clicks again in the same tick and on every tick the button is held.
@@ -378,7 +360,6 @@ public final class AutoWither extends Module {
         }
     }
 
-    // A skull is drawn at its own size and sits in the middle of its space.
     private static AABB box(Part part) {
         if (part.kind() == Kind.SKULL) {
             return Blocks.WITHER_SKELETON_SKULL.defaultBlockState()
@@ -387,8 +368,7 @@ public final class AutoWither extends Module {
         return DrawBatch.blockBox(part.pos());
     }
 
-    // Lays the next wither out and starts on it. Null once it is under way and the reason
-    // it cannot be built otherwise.
+    // Null once the wither is under way and the reason it cannot be built otherwise.
     private String start() {
         String unready = unready();
         if (unready != null) {
@@ -425,8 +405,6 @@ public final class AutoWither extends Module {
             ? layout : new Layout(layout.parts(), layout.sides(), unready);
     }
 
-    // Starts the next wither once the wait is over. The blocks running out ends the run. With
-    // nowhere to build the ground is searched again a little later.
     private void repeat() {
         if (pause > 0) {
             pause--;
@@ -446,7 +424,6 @@ public final class AutoWither extends Module {
         pause = SEARCH_TICKS;
     }
 
-    // Why no wither can be built anywhere right now. Null when one can.
     private String unready() {
         if (mc.level.getDifficulty() == Difficulty.PEACEFUL) {
             return "A wither never spawns on peaceful.";
@@ -463,7 +440,6 @@ public final class AutoWither extends Module {
         }
     }
 
-    // A repeat goes on to the next wither after one that failed. Two in a row end it.
     private void stop(String reason) {
         if (trigger.is(Trigger.ON_ENABLE) || trigger.is(Trigger.REPEAT) && ++failedWithers >= FAILED_IN_A_ROW) {
             disable(reason);
@@ -473,8 +449,7 @@ public final class AutoWither extends Module {
         finish();
     }
 
-    // A death or a new world ends the build. The borrowed stack goes home unless you are
-    // dying. Respawning hands out a fresh inventory.
+    // The borrowed stack goes home unless you are dying. Respawning hands out a fresh inventory.
     private void abandon() {
         loan.release();
         forget();
@@ -494,7 +469,6 @@ public final class AutoWither extends Module {
         return airPlace.isOn() ? BlockUtil.airSpot(BlockUtil.serverBlockReach()) : null;
     }
 
-    // The wither at the spot the settings choose. Null when there is no spot to build on.
     private Layout layout() {
         if (trigger.is(Trigger.REPEAT)) {
             return foundSpot();
@@ -503,8 +477,6 @@ public final class AutoWither extends Module {
         return stem == null ? null : layoutAt(stem);
     }
 
-    // One of the spots round you where a whole wither fits standing on solid ground. Null when
-    // there is none. The search runs nearest first.
     private Layout foundSpot() {
         List<Layout> found = new ArrayList<>();
         for (BlockPos stem : BlockUtil.positionsWithin(searchRange.getValue())) {
@@ -526,7 +498,6 @@ public final class AutoWither extends Module {
         };
     }
 
-    // The wither with its bottom block at the stem. The arms turn the first way that fits.
     private Layout layoutAt(BlockPos stem) {
         Direction facing = mc.player.getDirection();
         List<Direction> tries = switch (arms.getValue()) {
@@ -549,7 +520,6 @@ public final class AutoWither extends Module {
         return first;
     }
 
-    // Lays the T out with its arms along the given side.
     private Layout layout(BlockPos stem, Direction across) {
         BlockPos centre = stem.above();
         BlockPos left = centre.relative(across);
@@ -590,7 +560,6 @@ public final class AutoWither extends Module {
         return null;
     }
 
-    // Grass or a flower beside the bottom block breaks in one hit. True whilst one is cleared.
     private boolean clearCorner() {
         for (BlockPos side : corners) {
             if (BlockUtil.state(side).isAir()) {
@@ -615,7 +584,6 @@ public final class AutoWither extends Module {
         return part.kind().isBlock(BlockUtil.state(part.pos()));
     }
 
-    // The first part that does not stand. The size of the plan once every part does.
     private int firstMissing() {
         for (int i = 0; i < parts.size(); i++) {
             if (!built(parts.get(i))) {
@@ -625,7 +593,6 @@ public final class AutoWither extends Module {
         return parts.size();
     }
 
-    // A skull goes on the top of the soul block under it and stands upright.
     private boolean place(Part part) {
         int slot = InventoryUtil.findSlot(part.kind()::isItem, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1 || !loan.select(slot)) {
@@ -645,7 +612,6 @@ public final class AutoWither extends Module {
         return lastSkull.isOn() ? SKULLS : SKULLS - 1;
     }
 
-    // How many withers the inventory holds the parts for.
     private int withers() {
         return Math.min(Kind.SOUL_BLOCK.carried() / SOUL_BLOCKS, Kind.SKULL.carried() / skullsNeeded());
     }

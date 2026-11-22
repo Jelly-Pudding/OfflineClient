@@ -25,8 +25,6 @@ public final class BookLimits {
     private BookLimits() {
     }
 
-    // The pages cut to what one edit carries. Each page keeps at most 1024 characters and pages
-    // past the hundredth or past Paper's budget are left off the end.
     public static List<String> fit(List<String> pages, boolean paper) {
         List<String> cut = new ArrayList<>();
         for (String page : pages) {
@@ -38,17 +36,15 @@ public final class BookLimits {
         return List.copyOf(paper ? cut.subList(0, paperPrefix(cut)) : cut);
     }
 
-    // At most 1024 characters. A character made of two halves is never split.
+    // A character made of two halves is never split.
     public static String cutPage(String page) {
         return TextCut.cut(page, WritableBookContent.PAGE_EDIT_LENGTH);
     }
 
-    // True for a book Paper takes whole in one edit with the budget it ships with.
     public static boolean paperTakes(List<String> pages) {
         return paperPrefix(pages) == pages.size();
     }
 
-    // How many leading pages Paper takes in one edit with the budget it ships with.
     static int paperPrefix(List<String> pages) {
         long total = 0;
         long allowed = PAPER_PAGE_MAX;

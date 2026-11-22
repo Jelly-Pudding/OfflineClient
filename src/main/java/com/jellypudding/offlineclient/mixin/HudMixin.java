@@ -94,7 +94,6 @@ public class HudMixin {
         offlineclient$skip(ci, ClearView::blocksVignette);
     }
 
-    // The paint goes down before the item and sits under it.
     @Inject(method = "extractSlot(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IILnet/minecraft/client/DeltaTracker;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;I)V",
         at = @At("HEAD"))
     private void onExtractSlot(GuiGraphicsExtractor context, int x, int y, DeltaTracker tickCounter,
@@ -121,7 +120,6 @@ public class HudMixin {
         }
     }
 
-    // Each part of the game's own HUD is drawn where its HUD element sits.
     @WrapOperation(
         method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
         at = @At(value = "INVOKE",
@@ -224,7 +222,6 @@ public class HudMixin {
         }
     }
 
-    // One HUD element each. Every one is skipped at the head of its own extract call.
     @Inject(method = "extractSpyglassOverlay", at = @At("HEAD"), cancellable = true)
     private void onSpyglass(CallbackInfo ci) {
         offlineclient$skip(ci, ClearView::blocksSpyglass);

@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.probe;
 import com.destroystokyo.paper.event.player.PlayerClientOptionsChangeEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import io.papermc.paper.event.player.PlayerFailMoveEvent;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -60,8 +61,10 @@ public final class RigProbe extends JavaPlugin implements Listener {
     private static final int SIGN_AWAY = 2;
     // Ticks a game needs to see a block or a screen before the next thing about it is sent.
     private static final int CLIENT_TICKS = 5;
+    // The console is read after the worlds have ticked and tasks run before they tick. What a
+    // console line changed has gone out to the players by the second round of tasks after it.
+    private static final int SENT_TICKS = 2;
 
-    // What each player did since the last reset.
     private final Map<String, Map<String, Double>> tallies = new ConcurrentHashMap<>();
 
     @Override
@@ -87,6 +90,12 @@ public final class RigProbe extends JavaPlugin implements Listener {
                 Integer.parseInt(args[2]), Integer.parseInt(args[3])).getType().getKey());
             case "plugin" -> say("plugin " + word(args, 1) + " "
                 + Bukkit.getPluginManager().isPluginEnabled(word(args, 1)));
+            case "heard" -> Bukkit.getScheduler().runTaskLater(this, () -> mark(args[1], args[2]), SENT_TICKS);
+            case "food" -> {
+                Player hungry = Bukkit.getPlayerExact(args[1]);
+                hungry.setFoodLevel(Integer.parseInt(args[2]));
+                hungry.setSaturation(0);
+            }
             case "close" -> Bukkit.getPlayerExact(args[1]).closeInventory();
             case "unlist" -> Bukkit.getPlayerExact(args[1]).unlistPlayer(Bukkit.getPlayerExact(args[2]));
             case "list" -> Bukkit.getPlayerExact(args[1]).listPlayer(Bukkit.getPlayerExact(args[2]));
@@ -107,6 +116,15 @@ public final class RigProbe extends JavaPlugin implements Listener {
 
     private void say(String line) {
         getLogger().info(WORD + line);
+    }
+
+    // A cooldown of no length for a group no item has. The game of the rig sees the packet go by
+    // and knows it has taken everything sent before it.
+    private static void mark(String name, String group) {
+        Player player = Bukkit.getPlayerExact(name);
+        if (player != null) {
+            player.setCooldown(Key.key(group), 0);
+        }
     }
 
     // Stands a sign written in keys before the player and opens it for editing. The game sends
@@ -142,7 +160,6 @@ public final class RigProbe extends JavaPlugin implements Listener {
         return PlainTextComponentSerializer.plainText().serialize(text);
     }
 
-    // The player as the server holds it this tick.
     private static String facts(Player player) {
         if (player == null) {
             return "online=false";
@@ -203,7 +220,6 @@ public final class RigProbe extends JavaPlugin implements Listener {
         tallies.computeIfAbsent(player.getName(), name -> new ConcurrentHashMap<>()).merge(what, amount, Math::max);
     }
 
-    // Counts the ticks each player spends off the ground and how high they get.
     private void watchAir() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (!player.isOnGround()) {

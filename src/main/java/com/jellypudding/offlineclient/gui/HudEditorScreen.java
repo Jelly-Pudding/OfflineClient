@@ -31,22 +31,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-// Drag the overlay about and pull an edge or a corner to resize it. What you see
-// here is what you get whilst playing. The overlay keeps its true size and the
-// panel listing it follows the ClickGUI scale like every other panel. Only the pieces
-// and their frames are drawn over the overlay. The help sits at the foot of the panel.
+// The overlay keeps its true size and the panel listing it follows the ClickGUI scale like every
+// other panel.
 public final class HudEditorScreen extends Screen implements ClientScreen {
 
     // An element that draws nothing still needs something to grab.
     private static final int MIN_GRAB = 40;
 
     private static final int LABEL_GAP = 11;
-    // Between an element's name and its size.
     private static final int LABEL_SPACE = 4;
 
-    // The squares on the corners and edges of the element in hand.
     private static final int HANDLE = 5;
-    // How far either side of an edge still takes hold of it.
     private static final int EDGE_REACH = 2;
 
     private static final int TIP_WIDTH = 170;
@@ -54,16 +49,13 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
 
     private static final double SIZE_STEP = 0.05;
 
-    // How far an arrow key moves the pieces whilst Shift is held.
     private static final int LONG_NUDGE = 10;
 
-    // A pointer position no panel reaches.
     private static final int NOWHERE = -100_000;
 
-    // A dim wash to stop the world fighting the boxes.
     private static final int SHADE = 0x90000000;
 
-    // Which edges a drag moves. No edge at all moves the whole element.
+    // No edge at all moves the whole element.
     private enum Grip {
         MOVE(0, 0), LEFT(-1, 0), RIGHT(1, 0), TOP(0, -1), BOTTOM(0, 1),
         TOP_LEFT(-1, -1), TOP_RIGHT(1, -1), BOTTOM_LEFT(-1, 1), BOTTOM_RIGHT(1, 1);
@@ -102,12 +94,10 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
 
     // SDL has diagonal resize cursors the game never makes. Five and six are their numbers.
     private static final class Diagonals {
-        // From the top left corner to the bottom right one.
         static final CursorType FALLING = CursorType.createStandardCursor(5, "resize_nwse", CursorTypes.RESIZE_ALL);
         static final CursorType RISING = CursorType.createStandardCursor(6, "resize_nesw", CursorTypes.RESIZE_ALL);
     }
 
-    // The element under the pointer and the grip a press there would take.
     private record Target(Placement placement, Grip grip) {
     }
 
@@ -122,7 +112,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
 
     private String tooltip;
 
-    // The arrow keys move the piece under the pointer or else the one last taken hold of.
     private HudElement pointed;
     private HudElement lastHeld;
     // A run of arrow presses keeps to the piece it began with until the pointer moves or clicks
@@ -131,8 +120,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     private int lastMouseX;
     private int lastMouseY;
 
-    // What the pointer holds and how. Frozen when the press begins. Measuring against
-    // the live placement would feed each new size straight back into the next reading.
+    // Frozen when the press begins. Measuring against the live placement would feed each new size
+    // straight back into the next reading.
     private HudElement held;
     private Grip grip;
     private double pressX;
@@ -140,7 +129,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     private Placement start;
     private double startScaleX;
     private double startScaleY;
-    // Everything a move carries. A piece in the pick brings the whole pick.
     private List<Placement> carried = List.of();
 
     public HudEditorScreen(HudManager manager) {
@@ -169,8 +157,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         tooltip = text;
     }
 
-    // A piece the player added or took off from its row in the panel. Nothing here holds on to
-    // one that went and the foot says how to take it back.
     public void piecesChanged(String said, Defaults.Change change) {
         pick.keepOnly(manager.all());
         if (!manager.all().contains(lastHeld)) {
@@ -180,7 +166,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         foot.report(said, change);
     }
 
-    // Why a row in the panel could not do what it was asked.
     public void refuse(String why) {
         foot.refuse(why);
     }
@@ -204,7 +189,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return manager.layout(ClientFonts.hud(), width, height);
     }
 
-    // The pieces of the pick that are switched on.
     private List<Placement> picked(List<Placement> placed) {
         return placed.stream().filter(placement -> pick.has(placement.element())).toList();
     }
@@ -271,8 +255,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
     }
 
-    // The outline round an element sits where its background would. Never smaller than the
-    // name written above it. It stays on screen and every edge can be taken hold of.
     private Box frame(Placement placement) {
         Font font = ClientFonts.hud();
         int wide = Math.max(placement.width(), Math.max(MIN_GRAB, font.width(placement.element().getName())));
@@ -291,8 +273,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return overlay != null ? overlay : topmost(placed, mouseX, mouseY, true);
     }
 
-    // The last overlay piece under the pointer. With gamePart set it is the last of the game's
-    // own bars instead.
     private Target topmost(List<Placement> placed, double mouseX, double mouseY, boolean gamePart) {
         for (int i = placed.size() - 1; i >= 0; i--) {
             Placement placement = placed.get(i);
@@ -307,7 +287,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return null;
     }
 
-    // Which grip of the frame the pointer is on. Null when it is off the frame.
     private static Grip gripAt(Box frame, double mouseX, double mouseY) {
         int right = frame.left() + frame.width() - 1;
         int bottom = frame.top() + frame.height() - 1;
@@ -318,7 +297,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return Grip.of(side(mouseX, frame.left(), right), side(mouseY, frame.top(), bottom));
     }
 
-    // Minus one near the first edge and one near the last and nought between them.
     private static int side(double at, int first, int last) {
         if (Math.abs(at - first) <= EDGE_REACH) {
             return -1;
@@ -326,7 +304,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return Math.abs(at - last) <= EDGE_REACH ? 1 : 0;
     }
 
-    // A picked piece is tinted. An outline turns green for a moment when its piece is put back.
     private void renderFrame(GuiGraphicsExtractor context, Box frame, HudElement element, boolean over,
                              boolean chosen) {
         if (chosen) {
@@ -337,7 +314,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
             ColorUtil.lerp(usual, GuiTheme.GREEN, Defaults.freshness(element.getOptions())));
     }
 
-    // The name above the frame and its size beside it whilst it is under the pointer.
     private void renderLabel(GuiGraphicsExtractor context, Box frame, HudElement element, boolean over) {
         String name = element.getName();
         String size = over ? sizeText(element) : null;
@@ -352,7 +328,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
     }
 
-    // One figure whilst both ways match. The width and then the height once stretched.
     private static String sizeText(HudElement element) {
         long across = Math.round(element.scaleX() * 100);
         long down = Math.round(element.scaleY() * 100);
@@ -366,7 +341,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return above < 0 ? frame.top() + frame.height() + 2 : above;
     }
 
-    // A square on each corner and in the middle of each edge. The one in use is brighter.
     private static void renderHandles(GuiGraphicsExtractor context, Box frame, Grip active) {
         int right = frame.left() + frame.width() - 1;
         int bottom = frame.top() + frame.height() - 1;
@@ -382,9 +356,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
     }
 
-    // The panels and their tooltip draw at the ClickGUI scale. The overlay frames they
-    // cover are moved into the same scale first. Whilst a piece is held or a box drawn
-    // the panel sees no pointer and asks for no cursor of its own.
+    // Whilst a piece is held or a box drawn the panel sees no pointer and asks for no cursor of its
+    // own.
     private void renderPanels(GuiGraphicsExtractor context, int mouseX, int mouseY, List<int[]> frames,
                               boolean busy) {
         panelScale.refresh();
@@ -417,7 +390,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         context.pose().popMatrix();
     }
 
-    // The row under the pointer whilst the panel is open.
     private HudElement hoveredInList() {
         return panel.isCollapsed() ? null : panel.getHovered();
     }
@@ -446,7 +418,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
         Target target = targetAt(placements(), event.x(), event.y());
         if (target == null) {
-            // A click on empty space lets go of everything. A drag from there picks afresh.
             pick.clear();
             lastHeld = null;
             if (!InputUtil.isLeft(event.button())) {
@@ -477,11 +448,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
     }
 
-    // Each piece goes where it started or as near as it fits where that place is taken. What
-    // the foot says follows from where the pieces end up and not from where they were. One
-    // that sits at its start over another piece is moved clear like any other. The change is
-    // named after the pieces whose place it changed. A piece that is off its start afterwards
-    // found that place taken.
+    // Each piece goes where it started or as near as it fits where that place is taken. The change
+    // is named after the pieces whose place it changed.
     private void putBackPlaces(List<HudElement> pieces) {
         Font font = ClientFonts.hud();
         manager.repin(pieces, font, width, height);
@@ -528,7 +496,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         start = placement;
         startScaleX = held.scaleX();
         startScaleY = held.scaleY();
-        // Taking hold of a piece outside the pick lets the pick go.
         if (!pick.has(held)) {
             pick.clear();
         }
@@ -548,8 +515,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return nudge(event) || super.keyPressed(event);
     }
 
-    // An arrow key moves a piece one pixel and Shift makes it ten. A piece in the pick
-    // brings the whole pick and with no piece to hand the pick moves on its own.
     private boolean nudge(KeyEvent event) {
         int dx = event.isRight() ? 1 : event.isLeft() ? -1 : 0;
         int dy = event.isDown() ? 1 : event.isUp() ? -1 : 0;
@@ -636,9 +601,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return true;
     }
 
-    // Snaps to the screen and to the pieces left behind and to the bars the game still draws
-    // itself. A part of the game's own HUD moved alone also snaps back to its home. Shift moves
-    // freely.
+    // A part of the game's own HUD moved alone also snaps back to its home. Shift moves freely.
     private void move(MouseButtonEvent event) {
         int dx = (int) Math.round(event.x() - pressX);
         int dy = (int) Math.round(event.y() - pressY);
@@ -669,8 +632,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return true;
     }
 
-    // Moves the pieces together. They stop as one at the screen margin and keep their shape.
-    // Hands back the box round them where they came to rest.
+    // They stop as one at the screen margin and keep their shape.
     private Box slide(List<Placement> pieces, int dx, int dy) {
         int across = dx;
         int down = dy;
@@ -688,7 +650,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return new Box(group.left() + across, group.top() + down, group.width(), group.height());
     }
 
-    // The smallest box round every piece.
     private static Box around(List<Placement> pieces) {
         int left = Integer.MAX_VALUE;
         int top = Integer.MAX_VALUE;
@@ -703,8 +664,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return new Box(left, top, right - left, bottom - top);
     }
 
-    // An edge stretches one way and leaves the far edge where it was. A corner keeps
-    // the shape and grows away from the opposite corner. Shift turns off the steps.
+    // An edge leaves the far edge where it was. A corner keeps the shape and grows away from the
+    // opposite corner. Shift turns off the steps.
     private void resize(MouseButtonEvent event) {
         boolean free = minecraft.hasShiftDown();
         double across = (start.width() + grip.dx * (event.x() - pressX)) / start.width();
@@ -726,7 +687,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         pin(held, left, top, now.width(), now.height());
     }
 
-    // Five percent at a time unless shift is held.
     private static double step(double stretch, boolean free) {
         return free ? stretch : Math.round(stretch / SIZE_STEP) * SIZE_STEP;
     }

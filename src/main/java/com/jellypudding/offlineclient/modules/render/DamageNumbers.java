@@ -29,7 +29,6 @@ import java.util.Map;
 // sends health at most once a tick. Absorption counts as health.
 public final class DamageNumbers extends Module {
 
-    // A number rising from over the entity that lost the health.
     private static final class Pop {
 
         private final Vec3 at;
@@ -42,16 +41,13 @@ public final class DamageNumbers extends Module {
         }
     }
 
-    // A number rises this many blocks over its life.
     private static final double RISE = 1;
     private static final double OVER_HEAD = 0.3;
-    // Once its time is up a number fades out over this many ticks.
     private static final int FADE_TICKS = 8;
     // The health of a hit can come a tick or two after the hit itself.
     private static final int YOUR_HIT_TICKS = 3;
     // A smaller drop is rounding in the health the server sends.
     private static final float SMALLEST = 0.05f;
-    // Places a drop of health is written to.
     private static final int PLACES = 1;
 
     private final EntityFilter filter = EntityFilter.living("Shows hits on", "given numbers", true,
@@ -65,7 +61,7 @@ public final class DamageNumbers extends Module {
     private final BoolSetting yourHits = new BoolSetting("Your hits",
         "Says in chat how much health each of your hits took off.", false);
 
-    // Health by entity id as read last tick. An entity that left drops out on the next read.
+    // Health by entity id as read last tick.
     private Map<Integer, Float> health = new HashMap<>();
     private Map<Integer, Float> read = new HashMap<>();
     // The tick of your last hit on each entity whilst its health is awaited.

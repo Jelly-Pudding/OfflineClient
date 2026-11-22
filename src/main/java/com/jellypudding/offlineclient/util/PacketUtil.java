@@ -14,10 +14,9 @@ import net.minecraft.world.inventory.MenuType;
 
 public final class PacketUtil {
 
-    // The live connection. Set from the netty thread on every packet read.
+    // Set from the netty thread on every packet read.
     private static volatile Connection connection;
 
-    // The ground claim whilst it is being sent and the tick it last went out.
     private static Packet<?> claim;
     private static int claimTick = -1;
 
@@ -115,7 +114,6 @@ public final class PacketUtil {
         return new ServerboundMovePlayerPacket.StatusOnly(onGround, collision);
     }
 
-    // A packet that carried no position is upgraded to the form that does.
     public static ServerboundMovePlayerPacket withPosition(ServerboundMovePlayerPacket packet,
                                                            LocalPlayer player, double x, double y,
                                                            double z, boolean onGround) {
@@ -128,7 +126,6 @@ public final class PacketUtil {
         return new ServerboundMovePlayerPacket.Pos(x, y, z, onGround, collision);
     }
 
-    // A packet that carried no rotation is upgraded to the form that does.
     public static ServerboundMovePlayerPacket withRotation(ServerboundMovePlayerPacket packet,
                                                            LocalPlayer player, float yaw, float pitch) {
         boolean onGround = packet.isOnGround();

@@ -37,8 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Seals you inside a ball or a box of blocks. The walls go up nearest your body first and a
-// block with nothing to lean on goes straight into its empty space.
+// The walls go up nearest your body first and a block with nothing to lean on goes straight into
+// its empty space.
 public final class Cocoon extends Module {
 
     public enum Shape { BALL, BOX }
@@ -96,7 +96,6 @@ public final class Cocoon extends Module {
     private final WorldWatch world = new WorldWatch();
     private final ChatWarning warning = new ChatWarning();
 
-    // The spaces the last tick found. Drawn until the next one.
     private List<BlockPos> pending = List.of();
 
     private int timer;
@@ -174,17 +173,19 @@ public final class Cocoon extends Module {
             }
             return;
         }
+        // A crouch with nothing to build with would only hold the player down.
+        int slot = blockSlot();
+        if (slot == -1) {
+            standUp();
+            warning.say("No block in your hotbar can build the walls.");
+            return;
+        }
+        warning.clear();
         boolean crouchReady = crouchFor(open);
         if (timer > 0) {
             timer--;
             return;
         }
-        int slot = blockSlot();
-        if (slot == -1) {
-            warning.say("No block in your hotbar can build the walls.");
-            return;
-        }
-        warning.clear();
         placeRound(open, slot, crouchReady);
     }
 
@@ -216,12 +217,9 @@ public final class Cocoon extends Module {
         }
     }
 
-    // Holds a crouch whilst a space over your head needs one. True once the crouch has held
-    // long enough for the server to take it.
     private boolean crouchFor(List<BlockPos> open) {
         if (!crouch.isOn() || open.stream().noneMatch(this::needsCrouch)) {
-            sneak.letGo();
-            crouched = 0;
+            standUp();
             return false;
         }
         sneak.hold();
@@ -229,8 +227,11 @@ public final class Cocoon extends Module {
         return crouched > CROUCH_TICKS;
     }
 
-    // The spaces of the shape that still take a block. A space over your head that only your
-    // standing body fills counts whilst you may crouch for it.
+    private void standUp() {
+        sneak.letGo();
+        crouched = 0;
+    }
+
     private List<BlockPos> openCells() {
         List<BlockPos> open = new ArrayList<>();
         for (BlockPos cell : shapeCells(mc.player.blockPosition())) {
@@ -247,7 +248,6 @@ public final class Cocoon extends Module {
         return open;
     }
 
-    // True when the space cuts into your standing body and would miss it whilst you crouch.
     private boolean needsCrouch(BlockPos cell) {
         AABB space = new AABB(cell);
         Vec3 at = mc.player.position();
@@ -255,8 +255,6 @@ public final class Cocoon extends Module {
             && !mc.player.getDimensions(Pose.CROUCHING).makeBoundingBox(at).intersects(space);
     }
 
-    // Every space of the shape round the feet and head in order out from the body. The lower
-    // of two spaces the same distance out comes first.
     private List<BlockPos> shapeCells(BlockPos feet) {
         double radius = shape.is(Shape.BALL) ? ballRadius.getValue() : boxRadius.getInt();
         int span = (int) Math.ceil(radius);
@@ -287,8 +285,6 @@ public final class Cocoon extends Module {
         return positions;
     }
 
-    // How far a space lies from the body. A ball measures from the middle of the feet space or the
-    // head space and a box counts whole layers out.
     private double distanceOut(int dx, int dy, int dz) {
         if (shape.is(Shape.BALL)) {
             double flat = dx * dx + dz * dz;
@@ -298,7 +294,6 @@ public final class Cocoon extends Module {
         return Math.max(Math.max(Math.abs(dx), Math.abs(dz)), vertical);
     }
 
-    // A space with a side open to the outside of the shape.
     private static boolean onEdge(BlockPos offset, Map<BlockPos, Double> inside) {
         for (Direction side : Direction.values()) {
             if (!inside.containsKey(offset.relative(side))) {
@@ -316,7 +311,7 @@ public final class Cocoon extends Module {
         return BlockUtil.findStrongestBlockSlot(this::allowed);
     }
 
-    // A plain full block that stays where it is put. Sand and gravel would fall off a roof.
+    // Sand and gravel would fall off a roof.
     private boolean allowed(Block block) {
         return !never.contains(block) && !(block instanceof FallingBlock)
             && BlockUtil.isBuildingBlock(block, mc.player.blockPosition());

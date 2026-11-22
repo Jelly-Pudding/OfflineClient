@@ -32,8 +32,8 @@ public final class CrosshairClip extends ClipContext {
         return hitboxes == null ? shape : grown(shape, pos, getFrom(), hitboxes.aimGrowth(state));
     }
 
-    // The outline grown for a ray from the given start. A ray that starts inside the block space
-    // keeps the plain outline or a box round the eyes would catch every look.
+    // A ray that starts inside the block space keeps the plain outline or a box round the eyes
+    // would catch every look.
     public static VoxelShape grown(VoxelShape outline, BlockPos pos, Vec3 from, double share) {
         return share > 0 && !new AABB(pos).contains(from) ? grown(outline, share) : outline;
     }

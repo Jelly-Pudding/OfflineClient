@@ -70,7 +70,6 @@ final class Traces {
         return state;
     }
 
-    // Every difference as what it was and what it is.
     static List<String> changed(Map<String, String> before, Map<String, String> after) {
         List<String> changed = new ArrayList<>();
         Map<String, String> all = new TreeMap<>(before);

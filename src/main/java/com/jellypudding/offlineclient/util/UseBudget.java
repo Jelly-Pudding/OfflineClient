@@ -61,7 +61,7 @@ public final class UseBudget {
         }
     }
 
-    // How many more use packets the server takes right now. Servers without the limiter take any number.
+    // Servers without the limiter take any number.
     public static int remaining() {
         return limited() ? INSTANCE.left() : Integer.MAX_VALUE;
     }

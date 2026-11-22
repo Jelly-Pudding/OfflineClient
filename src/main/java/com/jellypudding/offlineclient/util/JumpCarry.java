@@ -20,7 +20,6 @@ public final class JumpCarry {
         return active;
     }
 
-    // Starts holding the speed. Nothing happens without a key to take the heading from.
     public void start(double speed) {
         if (!steer()) {
             return;
@@ -30,8 +29,6 @@ public final class JumpCarry {
         push();
     }
 
-    // Keeps the speed up for one more tick.
-    // Lets go on landing or anywhere that is not plain air.
     public void tick() {
         if (!active) {
             return;
@@ -50,7 +47,6 @@ public final class JumpCarry {
         hasHeading = false;
     }
 
-    // Takes the heading from the keys. False when there is none to take and none kept.
     private boolean steer() {
         Vec3 input = MovementUtil.inputDirection();
         if (input.lengthSqr() == 0) {

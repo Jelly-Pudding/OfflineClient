@@ -21,25 +21,20 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-// Lies down in a bed in reach once the night or a thunderstorm allows it. The server wakes
-// you at dawn and the module gets you up itself if it does not.
 public final class AutoSleep extends Module {
 
     // How far from the bottom middle of either half the server lets you stand.
     private static final double BED_REACH = 3;
     private static final double BED_HEIGHT = 2;
 
-    // Wide enough to take in every bed the server lets you reach.
     private static final double BED_SEARCH = 5;
 
     // The box around the head of the bed that must be free of monsters.
     private static final double MONSTER_WIDTH = 16;
     private static final double MONSTER_HEIGHT = 10;
 
-    // Ticks to wait for a bed that was clicked before another try.
     private static final int RETRY_TICKS = 100;
 
-    // Ticks after dawn the server gets to wake you before you get up yourself.
     private static final int WAKE_GRACE = 40;
 
     private final BoolSetting onlyStill = new BoolSetting("Only whilst still",
@@ -107,8 +102,7 @@ public final class AutoSleep extends Module {
         }
     }
 
-    // A free bed that the server would let you sleep in from where you stand. Straw beds are
-    // left alone. They fall apart once you get up.
+    // Straw beds are left alone. They fall apart once you get up.
     private boolean usable(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         if (!(state.getBlock() instanceof BedBlock) || state.getValue(AbstractBedBlock.OCCUPIED)) {

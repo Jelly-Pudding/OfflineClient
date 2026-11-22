@@ -23,18 +23,14 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.function.Predicate;
 
-// Tops up hotbar stacks by watching what each slot held last tick. A slot that runs out with
-// none of its item left in the inventory can be filled from a shulker box or the ender chest.
 public final class AutoReplenish extends Module {
 
     public enum Refills { EVERY_SLOT, HELD_SLOT, ONE_SLOT }
 
-    // A slot that ran out with none of its item left to fill it and what it held.
     private record Want(int index, ItemStack stack, boolean sameEnchants) {
     }
 
     private static final int OFFHAND_INDEX = 9;
-    // A box only goes down whilst you stand this still.
     private static final double STILL = 0.01;
 
     private final EnumSetting<Refills> refills = new EnumSetting<>("Refills",
@@ -85,10 +81,7 @@ public final class AutoReplenish extends Module {
     private final InventoryUtil.SlotSwap boxSlots = new InventoryUtil.SlotSwap();
     private final RestockErrand containers = new RestockErrand(boxSlots, "AutoReplenish", "you switch it on again");
     private Want want;
-    // True from the first container of an errand until nothing is left to search.
     private boolean errand;
-    // How many of the wanted item the inventory held as the errand began and the slots that held
-    // any of it one bit each.
     private int fitsBefore;
     private long slotsBefore;
     private int timer;
@@ -187,7 +180,6 @@ public final class AutoReplenish extends Module {
         }
     }
 
-    // The one slot the settings pin us to or minus one for the whole hotbar.
     private int trackedSlot() {
         return switch (refills.getValue()) {
             case EVERY_SLOT -> -1;
@@ -247,7 +239,6 @@ public final class AutoReplenish extends Module {
         return move(source, index);
     }
 
-    // A pinned slot takes the first listed item the rest of the inventory still holds.
     private boolean fillPinned(int index, ItemStack now, int wanted) {
         if (!now.isEmpty() && pinned.contains(now.getItem())
             && (now.getCount() > wanted || now.getCount() >= now.getMaxStackSize())) {
@@ -270,22 +261,18 @@ public final class AutoReplenish extends Module {
         return false;
     }
 
-    // A slot that ran out is filled from a container whilst a search may look for its item.
     private void noteWant(int index, ItemStack stack, boolean sameEnchants) {
         if ((searchShulkers.isOn() || searchEnderChest.isOn()) && want == null) {
             want = new Want(index, stack.copy(), sameEnchants);
         }
     }
 
-    // True for a stack that fills the slot the errand is for.
     private boolean fills(ItemStack stack) {
         return !stack.isEmpty() && stack.is(want.stack().getItem()) && !tooWorn(stack)
             && (!want.sameEnchants() || stack.getEnchantments().equals(want.stack().getEnchantments()));
     }
 
-    // Takes a stack for the slot that ran out out of a container once you stand still. One stack
-    // is enough and the container is mined back as soon as it is in. True whilst the errand holds
-    // the hotbar this tick.
+    // True whilst the errand holds the hotbar this tick.
     private boolean fetchWant() {
         if (!searchShulkers.isOn() && !searchEnderChest.isOn() || !stackAt(want.index()).isEmpty()) {
             want = null;
@@ -303,7 +290,6 @@ public final class AutoReplenish extends Module {
             || Hands.taken() || containers.busyElsewhere()) {
             return false;
         }
-        // One more stack is enough.
         int before = fitsCarried();
         Predicate<ItemStack> fetch = stack -> fills(stack) && fitsCarried() <= before;
         if (!containers.couldRun(fetch, searchShulkers.isOn(), searchEnderChest.isOn())) {
@@ -330,8 +316,7 @@ public final class AutoReplenish extends Module {
         return "AutoReplenish found no " + ChatUtil.words(want.stack().getItem()) + " in your " + where + ".";
     }
 
-    // The errand is over. A stack it brought goes into the slot that ran out from wherever it
-    // landed. One that merged into a stack you already had stays there.
+    // A stack that merged into one you already had stays there.
     private void finishErrand() {
         boxSlots.restoreIfMine();
         if (want != null && stackAt(want.index()).isEmpty()) {
@@ -346,8 +331,6 @@ public final class AutoReplenish extends Module {
         want = null;
     }
 
-    // A slot a refill may take from whose stack fills the slot that ran out. The hotbar counts
-    // only with Search hotbar on. Minus one when none does.
     private int refillSource() {
         int lowest = fromHotbar.isOn() ? 0 : InventoryUtil.MAIN_START;
         for (int i = lowest; i < InventoryUtil.WHOLE_INVENTORY; i++) {
@@ -358,8 +341,6 @@ public final class AutoReplenish extends Module {
         return -1;
     }
 
-    // A slot that holds a stack filling the slot that ran out and held none as the errand began.
-    // Minus one when none does.
     private int broughtSlot() {
         for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             if (i != ownIndex() && (slotsBefore & 1L << i) == 0 && fills(mc.player.getInventory().getItem(i))) {
@@ -369,7 +350,7 @@ public final class AutoReplenish extends Module {
         return -1;
     }
 
-    // The slots holding a stack that fills the slot that ran out one bit each.
+    // One bit for each slot.
     private long fittingSlots() {
         long slots = 0;
         for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
@@ -384,13 +365,10 @@ public final class AutoReplenish extends Module {
         return InventoryUtil.count(this::fills, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // The inventory index of the slot that ran out. The offhand has none.
     private int ownIndex() {
         return want.index() == OFFHAND_INDEX ? -1 : want.index();
     }
 
-    // A tool close to snapping trades places with the freshest spare of its kind. With no spare
-    // it goes into an empty slot before it breaks and the slot it held stays empty.
     private boolean swapWorn(int index, ItemStack now) {
         if (!tooWorn(now)) {
             return false;
@@ -412,8 +390,6 @@ public final class AutoReplenish extends Module {
         return false;
     }
 
-    // The spare with the most uses left that is not itself worn out. The same item wins over
-    // another of its kind. Minus one when there is none.
     private int freshestSpare(int index, ItemStack worn) {
         // The offhand is not part of the inventory index space.
         int own = index == OFFHAND_INDEX ? -1 : index;
@@ -437,19 +413,15 @@ public final class AutoReplenish extends Module {
         return best;
     }
 
-    // True when a fresher spare sits anywhere you carry it. Search hotbar only limits where a
-    // swap may take one from.
     private boolean carriesSpare(ItemStack worn) {
         return InventoryUtil.findSlot(stack -> spareFor(worn, stack), InventoryUtil.WHOLE_INVENTORY) != -1
             || spareFor(worn, mc.player.getOffhandItem());
     }
 
-    // A tool of the same kind that is not worn out itself.
     private boolean spareFor(ItemStack worn, ItemStack stack) {
         return GearKind.alike(worn, stack) && stack.isDamageableItem() && !tooWorn(stack);
     }
 
-    // The same item beats another of its kind and then more uses win.
     private static boolean beats(boolean same, int uses, boolean bestSame, int bestUses) {
         return same != bestSame ? same : uses > bestUses;
     }
@@ -470,7 +442,6 @@ public final class AutoReplenish extends Module {
             != InventoryUtil.Swap.REFUSED;
     }
 
-    // The network slot of a hotbar index or the offhand.
     private static int networkSlot(int index) {
         return index == OFFHAND_INDEX ? InventoryUtil.OFFHAND_SLOT : InventoryUtil.networkSlot(index);
     }

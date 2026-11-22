@@ -21,15 +21,13 @@ public final class AntiVoid extends Module {
 
     public enum Mode { CATCH, PLACE_BLOCK, FLIGHT }
 
-    // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
 
     // Server ticks between the dips that keep the flight kick away whilst caught. The server
     // kicks at eighty and may miss one dip.
     private static final int DIP_INTERVAL = 30;
 
-    // Ticks of placing in a row before the catch takes over. Open void has
-    // nothing to build against and every placement comes back as a ghost.
+    // Open void has nothing to build against and every placement comes back as a ghost.
     private static final int PLACE_LIMIT = 20;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -116,7 +114,6 @@ public final class AntiVoid extends Module {
         hold(motion);
     }
 
-    // Hangs in place. A jump lets go and the fall after it is caught again.
     private void hold(Vec3 motion) {
         if (mc.player.input.keyPresses.jump()) {
             mc.player.setDeltaMovement(motion.x, LivingEntity.BASE_JUMP_POWER, motion.z);
@@ -131,7 +128,6 @@ public final class AntiVoid extends Module {
         dip.tick(DIP_INTERVAL);
     }
 
-    // Flight stays on until the player is over ground again or this module goes off.
     private void startFlight() {
         Flight flight = Modules.get(Flight.class);
         if (flight == null || flight.isEnabled()) {

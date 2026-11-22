@@ -4,8 +4,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// Every kind of clue BaseFinder marks a chunk for. The noun names the finds and their waypoints
-// and keeps the quiet time of each kind apart. Where the clue came from picks its colour.
+// The noun names the finds and their waypoints and keeps the quiet time of each kind apart. Where
+// the clue came from picks its colour.
 public enum BaseClue {
 
     SIGN("sign", Source.BLOCKS),
@@ -53,7 +53,6 @@ public enum BaseClue {
         return source;
     }
 
-    // The clue a saved find was made for. Null for a noun no clue carries.
     public static BaseClue byNoun(String noun) {
         return BY_NOUN.get(noun);
     }

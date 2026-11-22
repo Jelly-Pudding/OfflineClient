@@ -26,8 +26,6 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
-// Puts something soft under a falling player just before the ground arrives and
-// takes the water or powder snow back once they have landed.
 public final class SoftLanding {
 
     public enum Kind {
@@ -50,9 +48,8 @@ public final class SoftLanding {
         }
     }
 
-    // A landing that fits the ground below. Lowest is the lowest the feet may be for it
-    // to still go down. Sneaking pours water past a block that would swallow it and stops
-    // a click from opening a chest or a door.
+    // Lowest is the lowest the feet may be for the landing to still go down. Sneaking pours water
+    // past a block that would swallow it and stops a click from opening a chest or a door.
     private record Plan(Kind kind, BlockPos ground, BlockPos spot, boolean sneak, double lowest) {
     }
 
@@ -67,25 +64,20 @@ public final class SoftLanding {
     // The top of a still water source as a share of its block.
     private static final double WATER_SURFACE = 8 / 9.0;
 
-    // A ray that stops within this of a water surface stopped on the water.
     private static final double SURFACE_SLACK = 1.0E-3;
 
-    // Ticks a landing waits to be collected before it is left where it is.
     private static final int GIVE_UP = 60;
 
     // Water poured into a block only shows once the server's update arrives.
     private static final int ECHO = 20;
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
-    // Whether the slot held before comes back once the landing item is done with.
     private boolean switchBack = true;
 
-    // What went down and where. Null once it is collected or given up on.
     private Kind placed;
     private BlockPos placedAt;
     private int placedTick;
 
-    // The kind waiting to be collected. Null whilst nothing is.
     public Kind pending() {
         return placed;
     }
@@ -98,8 +90,6 @@ public final class SoftLanding {
         switchBack = on;
     }
 
-    // The landing item goes home. The slot held before only comes back when that is wanted and
-    // the player is still on the slot the landing picked.
     private void handBack() {
         loan.giveBack(switchBack && loan.stillMine());
     }
@@ -133,8 +123,6 @@ public final class SoftLanding {
         }
     }
 
-    // One tick with no fall to break. The water or snow goes back into a bucket once
-    // the player stands on the ground or in the water.
     public void settle(boolean collect) {
         if (placed == null) {
             handBack();
@@ -156,8 +144,8 @@ public final class SoftLanding {
         }
     }
 
-    // The first landing in the player's order that is carried and fits here. Out of reach
-    // any landing with a window to go down in will do because the brake gets the feet there.
+    // Out of reach any landing with a window to go down in will do because the brake gets the feet
+    // there.
     private static Plan plan(List<Kind> ranked, BlockHitResult ground, double feet, double highest) {
         boolean inReach = feet <= highest;
         for (Kind kind : ranked) {
@@ -312,7 +300,7 @@ public final class SoftLanding {
         handBack();
     }
 
-    // The first surface straight below the eyes. Water counts as one.
+    // Water counts as a surface.
     private static BlockHitResult groundBelow(double range) {
         Vec3 eye = MC.player.getEyePosition();
         BlockHitResult hit = MC.level.clip(new ClipContext(eye, eye.subtract(0, range, 0),
@@ -320,9 +308,7 @@ public final class SoftLanding {
         return hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }
 
-    // True when the fall already ends in water or a web or a berry bush or on a block that
-    // charges no fall such as slime or powder snow. Webs and berry bushes hold you and the
-    // server forgets the fall.
+    // Webs and berry bushes hold you and the server forgets the fall.
     private static boolean alreadySoft(BlockHitResult ground) {
         BlockPos pos = ground.getBlockPos();
         FluidState fluid = MC.level.getFluidState(pos);

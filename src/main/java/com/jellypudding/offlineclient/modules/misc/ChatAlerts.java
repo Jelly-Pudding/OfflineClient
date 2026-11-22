@@ -18,7 +18,6 @@ import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.sounds.SoundEvents;
 
-// Only lines other players write set it off. Your own lines and server notices never do.
 // A plugin writes a whisper as server text that may name nobody the tab list knows.
 public final class ChatAlerts extends Module {
 
@@ -93,7 +92,6 @@ public final class ChatAlerts extends Module {
         }
     }
 
-    // A whisper no writer could be read from is shown whole.
     private static String wholeText(Packet<?> packet) {
         return switch (packet) {
             case ClientboundSystemChatPacket system -> ChatSender.plain(system.content());

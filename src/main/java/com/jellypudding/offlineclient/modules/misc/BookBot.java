@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.util.BookPace;
 import com.jellypudding.offlineclient.util.BookText;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.FormatCodes;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Recipes;
@@ -39,8 +40,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
-// Fills book and quill after book and quill with text.
-// Random text makes heavy books and a file writes whatever you like.
 public final class BookBot extends Module {
 
     public enum Mode { RANDOM, FILE }
@@ -58,7 +57,6 @@ public final class BookBot extends Module {
     // A book holds no more characters than this. The rest of a longer file is never read.
     private static final int MOST_READ = WritableBookContent.MAX_PAGES * WritableBookContent.PAGE_EDIT_LENGTH;
 
-    // Ticks the server is given to write a book or fill the crafting grid.
     private static final int SERVER_WAIT = 40;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -102,15 +100,11 @@ public final class BookBot extends Module {
     private final Random random = new Random();
     private int timer;
     private int written;
-    // The inventory slot of the book last sent until the server writes it. Minus one whilst none.
     private int awaiting = -1;
     private int awaitTicks;
-    // True from a recipe request until its result shows in the grid.
     private boolean crafting;
     private int craftTicks;
-    // True once chat has said that pages were left off a book.
     private boolean toldLeftOff;
-    // True once chat has said that Paper held a book back.
     private boolean toldPace;
 
     public BookBot() {
@@ -142,7 +136,7 @@ public final class BookBot extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.gui.screen() != null) {
+        if (mc.gui.screen() != null || Hands.slotsTaken()) {
             return;
         }
         if (awaiting != -1) {
@@ -178,7 +172,7 @@ public final class BookBot extends Module {
         send(text);
     }
 
-    // True whilst Paper would still kick for another book edit. Chat tells the player once each run.
+    // True whilst Paper would still kick for another book edit.
     private boolean waitsForPaper() {
         if (BookPace.INSTANCE.ready()) {
             return false;
@@ -190,9 +184,8 @@ public final class BookBot extends Module {
         return true;
     }
 
-    // The server writes a book a moment after the packet. Once it shows written it can be thrown.
-    // A book still blank after the wait was refused and is written again. Anything else moved
-    // into the slot meanwhile stays.
+    // The server writes a book a moment after the packet. A book still blank after the wait was
+    // refused and is written again.
     private void settle() {
         ItemStack book = mc.player.getInventory().getItem(awaiting);
         if (!isBlankBook(book)) {
@@ -205,8 +198,6 @@ public final class BookBot extends Module {
         }
     }
 
-    // One step of crafting a book and quill in the inventory grid. A book is crafted first when
-    // it is the only thing missing. False when there is nothing to craft one from.
     private boolean craftQuill() {
         InventoryMenu menu = mc.player.inventoryMenu;
         if (!InventoryUtil.cursorFree()) {
@@ -241,8 +232,6 @@ public final class BookBot extends Module {
         return true;
     }
 
-    // A book and quill when the inventory holds what it takes. Otherwise a book when that book is
-    // all a book and quill still lacks. Null when neither can be crafted.
     private static Recipes.Craft nextCraft(InventoryMenu menu) {
         Map<Item, List<Recipes.Craft>> known = Recipes.known(item -> item == Items.WRITABLE_BOOK
             || item == Items.BOOK);
@@ -323,7 +312,6 @@ public final class BookBot extends Module {
         return text.toString();
     }
 
-    // Null when the file cannot be read. A message says why.
     private List<String> fromFile() {
         String name = file.getValue().strip();
         if (name.isEmpty()) {

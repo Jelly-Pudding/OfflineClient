@@ -14,23 +14,20 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// An ordered list of registry entries such as blocks or items. Ids are
-// stored in the config and a resolved set is rebuilt on change.
+// Ids are stored in the config and a resolved set is rebuilt on change.
 public final class RegistryListSetting<T> extends Setting<Set<Identifier>> implements PickList<T> {
 
-    // A family of entries the picker adds or drops in one press. The noun finishes the
-    // sentence Every such and such.
+    // The noun finishes the sentence Every such and such.
     public record Group<T>(String label, String noun, List<T> members) {
     }
 
     private final Registry<T> registry;
 
-    // Resolved entries. Read from other threads and replaced whole.
+    // Read from other threads and replaced whole.
     private volatile Set<T> resolved = Set.of();
 
     private Runnable onChange;
 
-    // Which entries the picker offers. Every one unless narrowed.
     private Predicate<T> offered = entry -> true;
 
     public RegistryListSetting(String name, String description, Registry<T> registry,
@@ -52,7 +49,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         return Collections.unmodifiableSet(ids);
     }
 
-    // Narrows the picker to the entries that pass such as only the signs among the items.
     public RegistryListSetting<T> only(Predicate<T> offered) {
         this.offered = offered;
         return this;
@@ -63,7 +59,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         return RegistryEntries.offered(registry, offered);
     }
 
-    // The families the offer splits into. Empty for a registry that has none.
     public List<Group<T>> groups() {
         return RegistryEntries.groups(registry, options());
     }
@@ -142,7 +137,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         }
     }
 
-    // One rebuild for the lot like addAll.
     @Override
     public void removeAll(Collection<? extends T> entries) {
         boolean removed = false;
@@ -166,7 +160,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         return RegistryEntries.displayName(registry, entry);
     }
 
-    // Empty when the entry has no item form.
     @Override
     public ItemStack icon(T entry) {
         return RegistryEntries.icon(entry);

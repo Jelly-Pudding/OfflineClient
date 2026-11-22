@@ -26,8 +26,6 @@ public final class ProxyCheck {
 
     public enum State { CHECKING, ANSWERED, DEAD }
 
-    // What the newest check found for one proxy. The time is how long the proxy took to take the
-    // connection and the reason says why a dead one failed.
     public record Result(State state, long millis, String why) {
     }
 
@@ -52,7 +50,6 @@ public final class ProxyCheck {
     private static final int TRY_MS = (int) TimeUnit.SECONDS.toMillis(TRY_SECONDS);
     private static final long RETRY_MS = TimeUnit.SECONDS.toMillis(2);
     private static final int MOST_AT_ONCE = 16;
-    // Where a proxy the check left out and a dead one go in the order. Every time comes first.
     private static final long LEFT_OUT_RANK = Long.MAX_VALUE - 1;
     private static final long DEAD_RANK = Long.MAX_VALUE;
 
@@ -61,8 +58,7 @@ public final class ProxyCheck {
     private ProxyCheck() {
     }
 
-    // Checks every proxy given. The reply runs on the game thread once the last one is done unless
-    // a newer check took over. Nothing runs for an empty list.
+    // The reply runs on the game thread once the last proxy is done unless a newer check took over.
     public static void start(List<ProxyStore.Entry> entries, Runnable done) {
         Run run = new Run(entries.size());
         entries.forEach(entry -> run.results.put(entry, CHECKING));
@@ -90,13 +86,11 @@ public final class ProxyCheck {
         return run != null && run.left.get() > 0;
     }
 
-    // How far the running check has come such as checked 12 of 40 proxies.
     public static String progress() {
         Run run = current;
         return run == null ? "" : "checked " + (run.total - run.left.get()) + " of " + Tally.counted(run.total, "proxy");
     }
 
-    // Null for a proxy the newest check left out.
     public static Result result(ProxyStore.Entry entry) {
         Run run = current;
         return run == null ? null : run.results.get(entry);
@@ -107,7 +101,6 @@ public final class ProxyCheck {
         return result != null && result.state() == State.DEAD;
     }
 
-    // A few words for a list row such as 84 ms or dead. Null for a proxy the newest check left out.
     public static String detail(ProxyStore.Entry entry) {
         Result result = result(entry);
         if (result == null) {
@@ -120,7 +113,6 @@ public final class ProxyCheck {
         };
     }
 
-    // What the newest check found as a sentence. Empty for a proxy it left out.
     public static String sentence(ProxyStore.Entry entry) {
         Result result = result(entry);
         if (result == null) {
@@ -133,7 +125,6 @@ public final class ProxyCheck {
         };
     }
 
-    // What the newest check found such as 31 of 40 proxies took a connection.
     public static String summary() {
         Run run = current;
         if (run == null) {
@@ -160,7 +151,6 @@ public final class ProxyCheck {
             + best + " ms";
     }
 
-    // Forgets every saved proxy the newest check found dead and says how many went.
     public static String prune() {
         String refused = pruneRefusal();
         if (refused != null) {
@@ -171,8 +161,8 @@ public final class ProxyCheck {
         return removed == 0 ? "No saved proxy was found dead" : "Removed " + Tally.counted(removed, "dead proxy");
     }
 
-    // Why a prune removes nothing. Null when it may go ahead. Whilst not one proxy took a
-    // connection the fault is more likely your own connection than every proxy.
+    // Whilst not one proxy took a connection the fault is more likely your own connection than
+    // every proxy.
     public static String pruneRefusal() {
         Run run = current;
         if (run == null) {
@@ -188,8 +178,7 @@ public final class ProxyCheck {
         return dead ? "Removed nothing. Not one proxy took a connection and your own connection may be down" : null;
     }
 
-    // The proxies quickest first once a check is over. Those it left out follow and the dead come
-    // last. Whilst a check runs the order stays as it is and no row moves under the pointer.
+    // Whilst a check runs the order stays as it is and no row moves under the pointer.
     public static List<ProxyStore.Entry> ranked(List<ProxyStore.Entry> entries) {
         Run run = current;
         if (run == null || run.left.get() > 0) {
@@ -200,7 +189,6 @@ public final class ProxyCheck {
         return ranked;
     }
 
-    // An answered proxy goes by its time. The sort keeps the saved order among equals.
     private static long rank(Result result) {
         if (result == null) {
             return LEFT_OUT_RANK;
@@ -208,7 +196,6 @@ public final class ProxyCheck {
         return result.state() == State.ANSWERED ? result.millis() : DEAD_RANK;
     }
 
-    // The proxies among these the newest check found dead.
     public static List<ProxyStore.Entry> dead(List<ProxyStore.Entry> among) {
         List<ProxyStore.Entry> dead = new ArrayList<>();
         for (ProxyStore.Entry entry : among) {
@@ -250,8 +237,8 @@ public final class ProxyCheck {
         return new Result(State.DEAD, 0, why);
     }
 
-    // How long the proxy took to take a connection. Finding its address is not counted. The
-    // connection goes straight out the way a join reaches the proxy.
+    // Finding the address is not counted. The connection goes straight out the way a join reaches
+    // the proxy.
     private static long connect(ProxyStore.Entry entry) throws IOException {
         InetAddress address = InetAddress.getByName(entry.host());
         try (Socket socket = new Socket(java.net.Proxy.NO_PROXY)) {

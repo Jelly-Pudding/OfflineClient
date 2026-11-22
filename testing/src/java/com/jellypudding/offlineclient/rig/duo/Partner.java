@@ -77,7 +77,6 @@ public final class Partner {
         return running;
     }
 
-    // Ends the second game at the end of a run.
     public static void end() {
         if (running != null) {
             running.stop();
@@ -178,7 +177,6 @@ public final class Partner {
         return await();
     }
 
-    // What the second player sees of somebody this tick.
     public Map<String, String> see(String who) {
         return pairs(ask("see", who));
     }

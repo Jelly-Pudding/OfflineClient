@@ -89,7 +89,6 @@ public final class FallCommand extends Command {
             ChatUtil.error("No fall can hurt you.");
             return;
         }
-        // The most whole damage a fall within the longest trip deals.
         double most = Math.floor((Hop.MAX_TRIP - safe) * scale - MIDDLE);
         if (health / perPoint > most) {
             ChatUtil.error("That needs a fall of more than " + Hop.MAX_TRIP + " blocks.");
@@ -124,7 +123,6 @@ public final class FallCommand extends Command {
             + EntityUtil.hearts(dealt) + "§7."));
     }
 
-    // Why the server would charge a different fall or none. Null when nothing stands in the way.
     private static String problem(LocalPlayer player) {
         if (player.isPassenger()) {
             return "Get off what you are riding first.";
@@ -147,21 +145,18 @@ public final class FallCommand extends Command {
         return null;
     }
 
-    // The block the server hands a landing to. The server looks for it a fifth of a block
-    // under the feet.
+    // The server looks for the landing block a fifth of a block under the feet.
     @SuppressWarnings("deprecation")
     private static BlockState landing(LocalPlayer player) {
         return player.level().getBlockState(player.getOnPosLegacy());
     }
 
-    // The drop that deals exactly that whole damage. The server floors the fall past the safe
-    // distance times the scale.
+    // The server floors the fall past the safe distance times the scale.
     static double heightFor(int damage, double safe, double scale) {
         return safe + (damage + MIDDLE) / scale;
     }
 
-    // The least whole damage that takes at least that much health once protection has had its
-    // share. The protection only scales a hit and the guess from one point lands within a step.
+    // The protection only scales a hit and the guess from one point lands within a step.
     private static int damageFor(LocalPlayer player, DamageSource fall, float health, float perPoint, int most) {
         int damage = Math.clamp((long) Math.ceil(health / perPoint), 1, most);
         while (damage > 1 && DamageUtil.reduce(damage - 1, player, fall) >= health) {

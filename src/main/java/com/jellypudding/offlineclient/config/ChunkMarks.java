@@ -31,16 +31,13 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// A letter for every chunk a module judged. Each server and dimension keeps its own. The
-// first letter a chunk gets stays. With saving on each new mark goes on the end of a text
-// file for its dimension. With loading on that file comes back on the next visit and what
-// another game on this computer adds to it turns up within seconds. Modules call it on the
-// game thread and the files are read and written on the shared file thread.
+// The first letter a chunk gets stays. What another game on this computer adds to the file turns up
+// within seconds. Modules call it on the game thread and the files are read and written on the
+// shared file thread.
 public final class ChunkMarks {
 
-    // What a look at a file found. A whole reading holds every mark in the file because it was
-    // read for the first time or was written anew since. Otherwise it holds the lines another
-    // game added past the end this game had reached. The name is null for a file with none.
+    // A whole reading holds every mark in the file. Otherwise it holds the lines another game added
+    // past the end this game had reached.
     record Reading(String name, long end, Long2ByteOpenHashMap marks, boolean whole) {
     }
 
@@ -48,16 +45,11 @@ public final class ChunkMarks {
     private static final String TEXT = ".txt";
     // The first line of a file holds a name that changes whenever the file is written anew.
     private static final String HEADER = "# chunk marks ";
-    // The header name is short. This much of the file always holds it.
     private static final int HEADER_BYTES = 64;
-    // A mark per line as x and z and a letter.
     private static final Pattern MARK = Pattern.compile("(-?\\d+) (-?\\d+) (\\p{Lower})");
-    // Marks are lower case letters and the counts are kept by letter.
     private static final int LETTERS = 128;
 
-    // New marks wait this long for others before they are written.
     private static final long WRITE_GAP_MS = 3000;
-    // How often the file of the dimension you are in is checked for what another game added.
     private static final long POLL_MS = 5000;
     // A file this many lines longer than the chunks it holds is written again without repeats.
     private static final int SPARE_LINES = 20_000;
@@ -68,14 +60,12 @@ public final class ChunkMarks {
         Runtime.getRuntime().addShutdownHook(new Thread(ChunkMarks::saveAllOnExit, "OfflineClient chunk marks save"));
     }
 
-    // The marks of one dimension and how far this game has come with its file.
     private static final class Marks {
         private Long2ByteOpenHashMap byChunk = new Long2ByteOpenHashMap();
         private final int[] counts = new int[LETTERS];
         // Every mark this game made here in order. The first ones up to written are in the file.
         private LongArrayList made = new LongArrayList();
         private int written;
-        // The name in the first line of the file and how far into it this game has read.
         private String name;
         private long end;
         private boolean loaded;
@@ -110,9 +100,7 @@ public final class ChunkMarks {
         "Shows the chunks saved on earlier visits and the ones another game on this computer saves "
             + "whilst you play.", true);
 
-    // The marks of the server you play on by dimension.
     private final Map<String, Marks> dimensions = new HashMap<>();
-    // The server the marks belong to. Null before the first world.
     private String server;
     // Moves on with every new server. An answer that comes back for an older one is dropped.
     private int generation;
@@ -120,7 +108,6 @@ public final class ChunkMarks {
     private boolean loading;
     private int revision;
 
-    // Loading only reads files whilst the module is on.
     public ChunkMarks(Module owner) {
         this.owner = owner;
         ALL.add(this);
@@ -131,19 +118,16 @@ public final class ChunkMarks {
         return new Setting<?>[] {save, load};
     }
 
-    // Goes up whenever the marks change. A module rebuilds what it draws only when this moves.
     public int revision() {
         return revision;
     }
 
-    // The letter of a chunk in the dimension you are in. Nought when it has none.
     public byte get(long chunk) {
         Marks marks = current(false);
         return marks == null ? 0 : marks.byChunk.get(chunk);
     }
 
-    // Gives a chunk in the dimension you are in its letter. False when it already had one.
-    // That one stays.
+    // False when it already had one. That one stays.
     public boolean mark(long chunk, byte letter) {
         Marks marks = current(true);
         if (marks == null || !marks.putIfAbsent(chunk, letter)) {
@@ -154,20 +138,17 @@ public final class ChunkMarks {
         return true;
     }
 
-    // The marks of the dimension you are in as a view for drawing.
     public Long2ByteMap here() {
         Marks marks = current(false);
         return marks == null ? Long2ByteMaps.EMPTY_MAP : Long2ByteMaps.unmodifiable(marks.byChunk);
     }
 
-    // How many chunks of the dimension you are in carry the letter.
     public int count(byte letter) {
         Marks marks = current(false);
         return marks == null ? 0 : marks.counts[letter];
     }
 
-    // Forgets the marks of the dimension you are in and empties its file. Other games that
-    // load the file forget them too. Hands back how many there were.
+    // Other games that load the file forget them too.
     public int clearDimension() {
         Marks marks = current(true);
         if (marks == null) {
@@ -188,15 +169,12 @@ public final class ChunkMarks {
         return count;
     }
 
-    // Writes what waits and forgets the marks of every dimension. Loading brings the saved
-    // ones back.
     public void forget() {
         flushAll(true);
         dimensions.clear();
         revision++;
     }
 
-    // The marks of the dimension you are in. Null outside a world.
     private Marks current(boolean create) {
         String dimension = ServerInfo.dimension();
         if (dimension.isEmpty()) {
@@ -210,8 +188,6 @@ public final class ChunkMarks {
         return DataFiles.path(FOLDER, DataFiles.keyName(server), DataFiles.safeName(dimension) + TEXT);
     }
 
-    // The marks follow the server you play on. A new one writes what the last was waiting
-    // for and starts again from its own files.
     private void follow() {
         if (OfflineClient.MC.level == null) {
             return;
@@ -257,8 +233,6 @@ public final class ChunkMarks {
         }
     }
 
-    // A switch flipped whilst you play acts at once. Saving writes every mark made whilst it
-    // was off. Loading reads the files again or drops every mark that came from them.
     private void syncSwitches() {
         saving = save.isOn();
         if (load.isOn() == loading) {
@@ -288,9 +262,8 @@ public final class ChunkMarks {
         marks.epoch++;
     }
 
-    // Writes what waits in every dimension without the usual pause. Leaving a server or
-    // forgetting the marks writes even what a write under way may already hold because the
-    // marks are dropped after.
+    // Leaving a server writes even what a write under way may already hold because the marks are
+    // dropped after.
     private void flushAll(boolean leaving) {
         if (!saving || server == null) {
             return;
@@ -358,8 +331,7 @@ public final class ChunkMarks {
         });
     }
 
-    // Takes in what the file held. A whole reading replaces what came from the file before
-    // and the first mark a chunk ever got wins. Lines another game added only fill gaps.
+    // The first mark a chunk ever got wins. Lines another game added only fill gaps.
     private void took(Marks marks, Reading reading) {
         marks.name = reading.name();
         marks.end = reading.end();
@@ -375,8 +347,7 @@ public final class ChunkMarks {
         }
     }
 
-    // The file becomes the marks. This game keeps what it has not written yet unless the file
-    // already has that chunk. A written mark the file lost was cleared by another game.
+    // A written mark the file lost was cleared by another game.
     private static void takeWhole(Marks marks, Long2ByteOpenHashMap file) {
         LongArrayList kept = new LongArrayList();
         for (int i = 0; i < marks.written; i++) {
@@ -397,7 +368,6 @@ public final class ChunkMarks {
         marks.replace(file);
     }
 
-    // The lines of the marks made from one point to another.
     private static String lines(Marks marks, int from, int upTo) {
         StringBuilder text = new StringBuilder();
         for (int i = from; i < upTo; i++) {
@@ -416,15 +386,12 @@ public final class ChunkMarks {
         return text.toString();
     }
 
-    // One mark as x and z and its letter.
     private static void line(StringBuilder text, long chunk, byte letter) {
         text.append(ChunkPos.getX(chunk)).append(' ').append(ChunkPos.getZ(chunk)).append(' ').append((char) letter)
             .append('\n');
     }
 
-    // Every mark in the file up to its last whole line. A file that is not there reads empty.
-    // Compacting first writes a file again that holds far more lines than chunks. Only
-    // compact whilst the shared lock is held.
+    // Only compact whilst the shared lock is held.
     private static Reading wholeFile(Path file, boolean compact) throws IOException {
         if (!Files.exists(file)) {
             return new Reading(null, 0, new Long2ByteOpenHashMap(), true);
@@ -439,8 +406,6 @@ public final class ChunkMarks {
         return new Reading(nameIn(text), end, marks, true);
     }
 
-    // What another game added past the end this game reached. The whole file again when it
-    // was written anew since or is gone.
     private static Reading readAfter(Path file, String name, long end) throws IOException {
         if (!Files.exists(file)) {
             return new Reading(null, 0, new Long2ByteOpenHashMap(), true);
@@ -462,9 +427,7 @@ public final class ChunkMarks {
         }
     }
 
-    // Puts the lines at the end of the file and starts it with a name when it is new. A game
-    // that follows the file first reads what another game added. Only call it whilst the
-    // shared lock is held.
+    // Only call it whilst the shared lock is held.
     private static Reading append(Path file, String lines, String name, long end, boolean follows)
         throws IOException {
         Reading before = follows ? readAfter(file, name, end) : null;
@@ -479,12 +442,11 @@ public final class ChunkMarks {
         if (!before.whole()) {
             return new Reading(before.name(), size, before.marks(), false);
         }
-        // The file is new or was written anew and these lines belong to it now as well.
         parse(lines, lines.length(), before.marks());
         return new Reading(fresh == null ? before.name() : fresh, size, before.marks(), true);
     }
 
-    // Writes the file anew under a new name. Only call it whilst the shared lock is held.
+    // Only call it whilst the shared lock is held.
     private static Reading rewrite(Path file, Long2ByteOpenHashMap marks) throws IOException {
         String fresh = newName();
         String text = HEADER + fresh + '\n' + lines(marks);
@@ -494,13 +456,11 @@ public final class ChunkMarks {
         return new Reading(fresh, text.length(), marks, true);
     }
 
-    // Empties a file under a new name. Only call it whilst the shared lock is held.
+    // Only call it whilst the shared lock is held.
     private static Reading emptied(Path file) throws IOException {
         return Files.exists(file) ? rewrite(file, new Long2ByteOpenHashMap()) : null;
     }
 
-    // Reads the whole lines before the given point into the marks. A chunk already there
-    // keeps its letter. Hands back how many lines held a mark.
     private static int parse(String text, int upTo, Long2ByteOpenHashMap into) {
         Matcher line = MARK.matcher(text);
         int count = 0;
@@ -525,7 +485,6 @@ public final class ChunkMarks {
         return count;
     }
 
-    // The name on the first line or null when the text does not start with one.
     private static String nameIn(String text) {
         if (!text.startsWith(HEADER)) {
             return null;
@@ -548,7 +507,6 @@ public final class ChunkMarks {
         return new String(buffer.array(), 0, buffer.position(), StandardCharsets.US_ASCII);
     }
 
-    // Writes what every store still holds unwritten as the game closes.
     private static void saveAllOnExit() {
         for (ChunkMarks store : ALL) {
             if (!store.saving || store.server == null) {

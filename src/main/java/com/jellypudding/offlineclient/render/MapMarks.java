@@ -33,36 +33,26 @@ import org.joml.Matrix3x2f;
 import java.util.ArrayList;
 import java.util.List;
 
-// What a map draws over the land. The entities Radar picks and your waypoints and the hunting finds
-// and you yourself. The minimap and the map of everything you explored share it and a map you
-// carry takes the arrow for you.
+// The minimap and the map of everything you explored share these marks.
 public final class MapMarks {
 
-    // A waypoint or a find with the colour it is drawn in and what it is called.
     public record Mark(double x, double z, int colour, String label, boolean waypoint) {
     }
 
     private static final int OUTLINE = 0xC0000000;
     private static final int SELF = 0xFFFFFFFF;
     private static final int NORTH = 0xFFE05050;
-    // Half the side of the square a waypoint and a find and an entity are drawn as.
     private static final int WAYPOINT_SIZE = 2;
     private static final int FIND_SIZE = 1;
     private static final int PLAYER_SIZE = 2;
     private static final int ENTITY_SIZE = 1;
-    // How far inside the edge a waypoint off the map sits and how far the middle of the letter
-    // for north does.
     private static final int EDGE_INSET = 4;
     private static final int NORTH_INSET = 6;
-    // Between a mark and its name and between a dot and the name over it.
     private static final int NAME_GAP = 2;
-    // The arrow for you in pixels from your spot. Its tip and its back corners and the notch
-    // between them.
     private static final double ARROW_TIP = 4.5;
     private static final double ARROW_BACK = 3.5;
     private static final double ARROW_SIDE = 3.5;
     private static final double ARROW_NOTCH = 1.5;
-    // The dark arrow under it is this much bigger.
     private static final double OUTLINE_GROWTH = 1.4;
     // Finds take a colour from the name of the module that made them.
     private static final float FIND_SATURATION = 0.55f;
@@ -72,7 +62,6 @@ public final class MapMarks {
     private MapMarks() {
     }
 
-    // Your waypoints in the dimension you are in and the finds of every hunting module here.
     public static List<Mark> gather() {
         List<Mark> marks = new ArrayList<>();
         Waypoints waypoints = Modules.get(Waypoints.class);
@@ -93,8 +82,7 @@ public final class MapMarks {
         return marks;
     }
 
-    // The colour each hunting module that is on gave the chunks of the dimension you are in. A
-    // module that marks whole chunks but paints none itself has its finds painted in its colour.
+    // A module that marks whole chunks but paints none itself has its finds painted in its colour.
     public static Long2IntOpenHashMap chunkColours() {
         Long2IntOpenHashMap colours = new Long2IntOpenHashMap();
         ModuleManager manager = OfflineClient.INSTANCE.getModuleManager();
@@ -118,7 +106,6 @@ public final class MapMarks {
         return ColorUtil.hsv(Math.floorMod(log.name().hashCode(), FULL_TURN), FIND_SATURATION, 1f);
     }
 
-    // A dot for each entity Radar picks with the name of each player over theirs.
     public static void entities(GuiGraphicsExtractor context, Font font, MapView view, boolean shadow) {
         Radar radar = Modules.get(Radar.class);
         ClientLevel level = OfflineClient.MC.level;
@@ -142,7 +129,6 @@ public final class MapMarks {
         }
     }
 
-    // A square dot with a name over it kept inside the map wherever it fits. A null name writes none.
     private static void dot(GuiGraphicsExtractor context, Font font, MapView view, int x, int y, int half,
                             int colour, String name, boolean shadow) {
         context.fill(x - half, y - half, x + half + 1, y + half + 1, colour);
@@ -157,9 +143,8 @@ public final class MapMarks {
         context.text(font, name, left, Math.max(view.top() + 1, y - font.lineHeight - NAME_GAP), colour, shadow);
     }
 
-    // Each mark as a small square. A waypoint off the map sits on the edge the way it lies whilst
-    // edges is on. A find off the map is left out. Names go beside waypoints whilst names is on
-    // and over every square.
+    // A waypoint off the map sits on the edge the way it lies whilst edges is on. A find off the
+    // map is left out.
     public static void marks(GuiGraphicsExtractor context, Font font, MapView view, List<Mark> marks, boolean edges,
                              boolean names, boolean shadow) {
         Shapes squares = Shapes.within(context, view);
@@ -193,7 +178,6 @@ public final class MapMarks {
         labels.forEach(Runnable::run);
     }
 
-    // The mark drawn nearest a screen spot within the reach. Null when none is.
     public static Mark nearest(MapView view, List<Mark> marks, double screenX, double screenY, double reach) {
         Mark best = null;
         double bestDistance = reach * reach;
@@ -209,13 +193,12 @@ public final class MapMarks {
         return best;
     }
 
-    // An arrow on your spot pointing the way you face. Yaw nought looks south. Its corners keep
-    // their fractions of a pixel and the arrow glides and turns without a jump.
+    // Yaw nought looks south. The corners keep their fractions of a pixel and the arrow glides and
+    // turns without a jump.
     public static void self(GuiGraphicsExtractor context, MapView view, double x, double z, float yaw) {
         self(context, view, x, z, yaw, 1);
     }
 
-    // The same arrow drawn this many times its usual size.
     public static void self(GuiGraphicsExtractor context, MapView view, double x, double z, float yaw,
                             double size) {
         Shapes arrows = Shapes.within(context, view);
@@ -232,7 +215,6 @@ public final class MapMarks {
         arrows.draw(context);
     }
 
-    // Two triangles meeting at the tip with a notch cut between the back corners.
     private static void arrow(Shapes shapes, double x, double y, double pointX, double pointY, double size,
                               int colour) {
         double sideX = -pointY;
@@ -248,7 +230,6 @@ public final class MapMarks {
         shapes.triangle(tipX, tipY, notchX, notchY, backX - sideX * wing, backY - sideY * wing, colour);
     }
 
-    // The letter for north on the edge of the map the way north lies.
     public static void north(GuiGraphicsExtractor context, Font font, MapView view, boolean shadow) {
         double x = view.middleX() + view.turnedX(0, -view.height());
         double y = view.middleY() + view.turnedY(0, -view.height());
@@ -265,7 +246,6 @@ public final class MapMarks {
     // which a corner of the game's own filled rectangles cannot.
     private static final class Shapes implements GuiElementRenderState {
 
-        // Every shape has four corners with an x and a y each.
         private static final int CORNERS = 4;
         private static final int PARTS = CORNERS * 2;
 
@@ -279,7 +259,7 @@ public final class MapMarks {
             this.area = area;
         }
 
-        // The view on the screen the way a scissor round it would clip. Null when none of it shows.
+        // Null when none of the view shows.
         private static Shapes within(GuiGraphicsExtractor context, MapView view) {
             ScreenRectangle screen = new ScreenRectangle(0, 0, context.guiWidth(), context.guiHeight());
             ScreenRectangle area = new ScreenRectangle(view.left(), view.top(), view.width(), view.height())

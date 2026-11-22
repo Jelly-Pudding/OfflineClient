@@ -33,16 +33,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-// Takes the six pictures of a panorama where you stand with the game's own panorama shot and
-// saves them as a resource pack that puts them behind the title screen. Every run makes a pack
-// of its own and a folder that is there already is never touched.
 public final class PanoramaCommand extends Command {
 
     private static final ExecutorService WORKER = Background.worker("OfflineClient panorama");
 
     private static final int FACES = 6;
     private static final String FACE = "panorama_%d.png";
-    // Where the title screen reads its panorama from inside a pack.
     private static final String BACKGROUND = "assets/minecraft/textures/gui/title/background";
     // The game writes each face into a folder of this name inside the one it is handed.
     private static final String SHOTS = "screenshots";
@@ -55,7 +51,6 @@ public final class PanoramaCommand extends Command {
     // The game saves the faces on its file thread after the frame. They are waited for this long.
     private static final long WAIT_MILLIS = TimeUnit.SECONDS.toMillis(30);
     private static final long POLL_MILLIS = 100;
-    // Every picture file the game writes ends with this chunk.
     private static final byte[] PNG_END = {0, 0, 0, 0, 'I', 'E', 'N', 'D', (byte) 0xAE, 0x42, 0x60, (byte) 0x82};
 
     private static volatile boolean busy;
@@ -103,8 +98,7 @@ public final class PanoramaCommand extends Command {
         mc.schedule(() -> take(staging, shots, pack, spot));
     }
 
-    // The module that moves or turns or narrows the view. Null whilst the view is your own.
-    // The six faces would show the wrong way or fail to meet.
+    // A module that moves or turns or narrows the view would leave the six faces askew.
     private static String viewChanger() {
         if (AwayView.active() instanceof Module away) {
             return away.getName();
@@ -117,7 +111,6 @@ public final class PanoramaCommand extends Command {
         return zoom == null ? null : zoom.getName();
     }
 
-    // The first free name such as Panorama 2. Null once there are too many.
     private static Path freshPack(Path folder) {
         for (int number = 1; number <= MOST_PACKS; number++) {
             String name = number == 1 ? PACK : PACK + " " + number;
@@ -143,7 +136,6 @@ public final class PanoramaCommand extends Command {
         }
     }
 
-    // Whatever stops the shot before the worker has it lets the next command run.
     private static void take(Path staging, Path shots, Path pack, String spot) {
         boolean handedOver = false;
         try {
@@ -155,7 +147,6 @@ public final class PanoramaCommand extends Command {
         }
     }
 
-    // True once the worker has the faces to wait for.
     private static boolean shoot(Path staging, Path shots, Path pack, String spot) {
         Minecraft mc = OfflineClient.MC;
         if (mc.player == null || mc.level == null) {
@@ -192,7 +183,6 @@ public final class PanoramaCommand extends Command {
         return true;
     }
 
-    // Waits for the game to finish writing the faces and moves them into the new pack.
     private static void build(Path shots, Path pack, String description) throws IOException {
         long giveUp = System.currentTimeMillis() + WAIT_MILLIS;
         for (int face = 0; face < FACES; face++) {
@@ -241,7 +231,7 @@ public final class PanoramaCommand extends Command {
         }
     }
 
-    // True once the whole picture is on disk. The game writes the end chunk last.
+    // The game writes the end chunk last.
     private static boolean written(Path file) throws IOException {
         if (!Files.exists(file) || Files.size(file) < PNG_END.length) {
             return false;
@@ -254,7 +244,6 @@ public final class PanoramaCommand extends Command {
         return Arrays.equals(tail, PNG_END);
     }
 
-    // The front face made small is the picture the pack list shows.
     private static void writeIcon(Path front, Path icon) throws IOException {
         try (InputStream in = Files.newInputStream(front); NativeImage face = NativeImage.read(in);
              NativeImage small = new NativeImage(ICON_SIZE, ICON_SIZE, false)) {

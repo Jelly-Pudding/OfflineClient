@@ -53,9 +53,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-// Rerolls a fresh librarian's book trade by breaking and replacing its
-// lectern until it offers a book from the wanted list. Hire gives a jobless
-// villager a lectern first.
 public final class AutoLibrarian extends Module {
 
     private static final int VILLAGER_COLOR = 0xFF30E030;
@@ -64,16 +61,13 @@ public final class AutoLibrarian extends Module {
 
     private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN, WAIT_FOR_JOB }
 
-    // A lectern for a hire goes down this many blocks round the villager at most.
     private static final int HIRE_REACH = 2;
-    // A villager that takes no job in this many ticks is passed over.
     private static final int HIRE_TICKS = 600;
     // A reroll can take an hour and the alarm has to reach a player who stepped away.
     private static final int FOUND_RINGS = 3;
 
     public enum Update { OFF, REMOVE, PRICE }
 
-    // One entry of the wanted list along with the text it was written as.
     private record Wish(String token, Holder<Enchantment> enchantment, int level, int price) {
     }
 
@@ -112,7 +106,6 @@ public final class AutoLibrarian extends Module {
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
     private int cooldown;
-    // True from choosing a jobless villager until it takes the lectern or is passed over.
     private boolean hiring;
     private int waited;
 
@@ -165,7 +158,9 @@ public final class AutoLibrarian extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (Hands.tied()) {
+        // The search uses no hand and answers at once.
+        boolean searching = stage == Stage.FIND_VILLAGER || stage == Stage.FIND_LECTERN;
+        if (Hands.tied() || !searching && Hands.slotsTaken()) {
             return;
         }
         if (cooldown > 0) {
@@ -211,7 +206,6 @@ public final class AutoLibrarian extends Module {
         disable("No fresh librarian in reach." + whyNone());
     }
 
-    // The villagers in reach that cannot be trained and why.
     private String whyNone() {
         Tally near = new Tally();
         for (Entity entity : mc.level.entitiesForRendering()) {
@@ -222,7 +216,6 @@ public final class AutoLibrarian extends Module {
         return near.isEmpty() ? "" : " Near you are " + near.words() + ".";
     }
 
-    // A word for the villager that reads well with a count before it such as 2 nitwit villagers.
     private static String kindOf(Villager other) {
         Holder<VillagerProfession> job = other.getVillagerData().profession();
         if (job.is(VillagerProfession.LIBRARIAN)) {
@@ -237,15 +230,13 @@ public final class AutoLibrarian extends Module {
         return job.unwrapKey().map(key -> ChatUtil.words(key.identifier()) + " villager").orElse("villager");
     }
 
-    // A grown villager with no job that has not been tried yet. Nitwits never take one.
+    // Nitwits never take a job.
     private boolean hireable(Entity entity) {
         return entity instanceof Villager candidate && candidate.isAlive() && !candidate.isBaby()
             && !spent.contains(candidate.getId())
             && candidate.getVillagerData().profession().is(VillagerProfession.NONE);
     }
 
-    // A free block beside the villager on solid ground that you can reach and place against.
-    // The one nearest the villager wins.
     private BlockPos lecternSpot(Villager jobless) {
         BlockPos feet = jobless.blockPosition();
         BlockPos best = null;
@@ -266,7 +257,6 @@ public final class AutoLibrarian extends Module {
         return best;
     }
 
-    // The new librarian is trained like any other. One that takes no job is passed over.
     private void waitForJob() {
         if (!villager.isAlive()) {
             hiring = false;
@@ -373,7 +363,6 @@ public final class AutoLibrarian extends Module {
         stage = Stage.BREAK_LECTERN;
     }
 
-    // The wanted entry the offer satisfies or null when none does.
     private Wish wishFor(MerchantOffer offer) {
         int price = offer.getCostA().getCount();
         ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(offer.getResult());
@@ -388,8 +377,7 @@ public final class AutoLibrarian extends Module {
         return null;
     }
 
-    // The wanted list read against the enchantment registry of this world. The first number
-    // after a name is the level and a second one is the price.
+    // The first number after a name is the level and a second one is the price.
     private List<Wish> wishes() {
         List<Wish> result = new ArrayList<>();
         for (String token : wanted.getValue().toLowerCase(Locale.ROOT).split("\\s+")) {
@@ -424,14 +412,12 @@ public final class AutoLibrarian extends Module {
         }
     }
 
-    // The wanted enchantment at the level the book carries and what it costs.
     private static String deal(ItemStack book, Wish wish, int price) {
         int level = EnchantmentHelper.getEnchantmentsForCrafting(book).getLevel(wish.enchantment());
         return Enchantment.getFullname(wish.enchantment(), level).getString()
             + " for " + price + (price == 1 ? " emerald" : " emeralds");
     }
 
-    // Strikes the book off the list or asks the next villager for a better price.
     private void updateWanted(Wish wish, int price) {
         if (updateBooks.is(Update.OFF)) {
             return;

@@ -10,8 +10,8 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-// One value per server address kept in its own file under offlineclient. Values are saved
-// as json text because a tool that reads json numbers as doubles would round a long seed.
+// Values are saved as json text because a tool that reads json numbers as doubles would round a
+// long seed.
 public final class ServerStore<T> {
 
     private static ServerStore<String> logins;
@@ -31,7 +31,7 @@ public final class ServerStore<T> {
         load();
     }
 
-    // Login passwords. They stay out of config.json because players hand their configs to each other.
+    // They stay out of config.json because players hand their configs to each other.
     public static synchronized ServerStore<String> logins() {
         if (logins == null) {
             logins = new ServerStore<>("logins.json", Function.identity(), Function.identity());
@@ -39,8 +39,6 @@ public final class ServerStore<T> {
         return logins;
     }
 
-    // Proxy logins by the name of their proxy in the proxy list. They stay out of config.json for
-    // the same reason.
     public static synchronized ServerStore<ProxyTunnel.Login> proxyLogins() {
         if (proxyLogins == null) {
             proxyLogins = new ServerStore<>("proxies.json", ProxyTunnel.Login::parse, ProxyTunnel.Login::text);
@@ -48,8 +46,6 @@ public final class ServerStore<T> {
         return proxyLogins;
     }
 
-    // Keys for chat model services by the host of the service. They stay out of config.json
-    // for the same reason.
     public static synchronized ServerStore<String> modelKeys() {
         if (modelKeys == null) {
             modelKeys = new ServerStore<>("modelkeys.json", Function.identity(), Function.identity());
@@ -57,7 +53,6 @@ public final class ServerStore<T> {
         return modelKeys;
     }
 
-    // World seeds OreSight works out the ores from.
     public static synchronized ServerStore<Long> seeds() {
         if (seeds == null) {
             seeds = new ServerStore<>("seeds.json", Long::parseLong, String::valueOf);
@@ -65,7 +60,6 @@ public final class ServerStore<T> {
         return seeds;
     }
 
-    // Null when nothing is saved for that server.
     public T get(String server) {
         return values.get(server);
     }
@@ -83,18 +77,15 @@ public final class ServerStore<T> {
         return removed;
     }
 
-    // Changes the values of many servers with a single write.
     public void edit(Consumer<Map<String, T>> change) {
         change.accept(values);
         save();
     }
 
-    // Every server with a saved value from A to Z.
     public List<String> servers() {
         return List.copyOf(values.keySet());
     }
 
-    // A value that cannot be read loses only its own server.
     private void load() {
         DataFiles.readJson(file, root -> DataFiles.members(root, (server, value) -> parse.apply(value.getAsString()),
             "entries of " + file.getFileName())).ifPresent(values::putAll);

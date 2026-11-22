@@ -33,7 +33,6 @@ public final class StructureSearch {
     public record Find(Holder<Structure> structure, BlockPos spot, double distance, boolean certain) {
     }
 
-    // The structure a set starts in one chunk.
     private record Start(Holder<Structure> structure, boolean certain) {
     }
 

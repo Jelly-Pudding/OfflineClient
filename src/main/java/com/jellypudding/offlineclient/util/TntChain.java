@@ -33,14 +33,12 @@ import java.util.Set;
 // is lit and thrown and where it goes off cannot be judged.
 public final class TntChain {
 
-    // Where lit TNT goes off and the block it stood in.
     public record Blast(Vec3 at, BlockPos block) {
     }
 
     // Lit TNT goes off a sixteenth of the way up its body.
     private static final double BLAST_SHARE = 0.0625;
 
-    // How far the guess follows lit TNT down before it stops looking for ground.
     private static final int MAX_FALL = 32;
 
     // A blast hurts out to twice its power. The strongest ray of a blast dies out before that
@@ -62,16 +60,13 @@ public final class TntChain {
     private static final Minecraft MC = OfflineClient.MC;
 
     private final BlockPos centre;
-    // Every TNT block read.
     private final List<Blast> blasts = new ArrayList<>();
     private final Map<BlockPos, Integer> blockAt = new HashMap<>();
     private final Map<BlockPos, List<Integer>> cells = new HashMap<>();
-    // Where each unlit TNT minecart and TNT cube stands.
     private final List<Vec3> movers = new ArrayList<>();
     private int[] parent = new int[0];
     // Each group by the index that stands for it. Nearest to the middle of the reading first.
     private final Map<Integer, List<Blast>> groups = new HashMap<>();
-    // Groups that reach past what was read or reach a TNT minecart or TNT cube.
     private final Set<Integer> unjudged = new HashSet<>();
     // False when a chunk round the spot was missing or more TNT stood there than is kept.
     private boolean whole = true;
@@ -80,7 +75,7 @@ public final class TntChain {
         this.centre = centre.immutable();
     }
 
-    // Reads and groups the TNT round the spot. Game thread only.
+    // Game thread only.
     public static TntChain around(BlockPos centre) {
         TntChain chain = new TntChain(centre);
         chain.readBlocks();
@@ -93,9 +88,8 @@ public final class TntChain {
         return chain;
     }
 
-    // Every blast that may follow once TNT at the spot is lit. Its own and every group its blast
-    // reaches. Null when any of them comes near the edge of what was read or reaches a TNT minecart
-    // or TNT cube. Every block of one group hands back the same list.
+    // Null when a group comes near the edge of what was read or reaches a TNT minecart or TNT cube.
+    // Every block of one group hands back the same list.
     public List<Blast> blastsFrom(BlockPos spot) {
         if (!whole) {
             return null;
@@ -124,12 +118,11 @@ public final class TntChain {
         return all;
     }
 
-    // Where the lit TNT goes off.
     public static Vec3 blastPoint(PrimedTnt tnt) {
         return new Vec3(tnt.getX(), tnt.getY(BLAST_SHARE), tnt.getZ());
     }
 
-    // A grown cube holding TNT that nobody has lit yet. Babies never hold anything.
+    // Babies never hold anything.
     public static boolean unlitTntCube(SulfurCube cube) {
         return !cube.isBaby() && !cube.isPrimed() && holdsTnt(cube);
     }
@@ -138,7 +131,7 @@ public final class TntChain {
         return cube.getBodyArmorItem().is(ItemTags.SULFUR_CUBE_ARCHETYPE_EXPLOSIVE);
     }
 
-    // Where TNT lit at the block goes off. Lit TNT drops onto the first block with a top.
+    // Lit TNT drops onto the first block with a top.
     private static Vec3 blastPoint(BlockPos spot) {
         BlockPos cell = spot;
         for (int fallen = 0; fallen < MAX_FALL; fallen++) {
@@ -154,7 +147,6 @@ public final class TntChain {
         return Vec3.atBottomCenterOf(cell);
     }
 
-    // Two pieces of TNT share a group when either can set the other off.
     private void group() {
         parent = new int[blasts.size()];
         for (int i = 0; i < parent.length; i++) {
@@ -189,7 +181,6 @@ public final class TntChain {
         return index;
     }
 
-    // The TNT blocks whose middles the blast reaches.
     private List<Integer> reachedBy(Blast blast) {
         List<Integer> reached = new ArrayList<>();
         Vec3 at = blast.at();
@@ -205,8 +196,7 @@ public final class TntChain {
         return reached;
     }
 
-    // True when the blast reaches past what was read where TNT may stand unseen or reaches a TNT
-    // minecart or TNT cube. Any explosion that reaches one hurts it however well it is hidden.
+    // Any explosion that reaches a TNT minecart or TNT cube hurts it however well it is hidden.
     private boolean beyondJudging(Blast blast) {
         double room = RADIUS - REACH - 1;
         Vec3 at = blast.at();
@@ -270,7 +260,6 @@ public final class TntChain {
         return true;
     }
 
-    // Only the part of the section within the radius of the spot is read.
     private boolean readSection(LevelChunkSection section, int baseX, int baseY, int baseZ) {
         int lowX = Math.max(0, centre.getX() - RADIUS - baseX);
         int highX = Math.min(SectionPos.SECTION_MAX_INDEX, centre.getX() + RADIUS - baseX);
@@ -290,7 +279,6 @@ public final class TntChain {
         return true;
     }
 
-    // False once more TNT has been read than is kept.
     private boolean keep(BlockPos block) {
         if (blasts.size() >= MOST_BLOCKS) {
             return false;

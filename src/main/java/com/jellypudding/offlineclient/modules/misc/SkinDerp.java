@@ -15,8 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Sends the server skin layers and a main hand of its own whilst your options stay as they are.
-// The server shows everyone what it was sent. Switching off sends your options again.
+// The server shows everyone the layers it was sent whilst your options stay as they are.
 public final class SkinDerp extends Module {
 
     public enum Pattern { RANDOM, BLINK, PEEL, CHASE }
@@ -39,7 +38,6 @@ public final class SkinDerp extends Module {
     private final BoolSetting swapHands = new BoolSetting("Swap hands",
         "Swaps your main hand from side to side for everyone to see.", false);
 
-    // The layers last sent as one mask and the hand last sent.
     private int sent;
     private HumanoidArm hand;
     private int step;
@@ -92,7 +90,6 @@ public final class SkinDerp extends Module {
             own.particleStatus()));
     }
 
-    // Every layer the pattern changes. A kept layer always shows.
     private List<PlayerModelPart> moving() {
         List<PlayerModelPart> moving = new ArrayList<>(List.of(PlayerModelPart.values()));
         if (keepCape.isOn()) {
@@ -104,7 +101,6 @@ public final class SkinDerp extends Module {
         return moving;
     }
 
-    // The moving layers that show at this step as one mask.
     private int shown(List<PlayerModelPart> moving) {
         int count = moving.size();
         int all = mask(moving, 0, count);

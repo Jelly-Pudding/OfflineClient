@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.Modules;
 import java.util.List;
 import java.util.Locale;
 
-// The links BookReader posts run this. On its own it opens the books BookReader found.
 public final class BookCommand extends Command {
 
     private static final String READ = "read";

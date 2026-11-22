@@ -40,34 +40,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Crafts the chosen items over and over through the recipe book the way a shift click on a
-// recipe does. A recipe that takes its own result such as dyeing a shulker box goes in by hand
-// because the recipe book might pick a box that already has the colour. A map and an empty
-// map go in by hand as well and come out as the map and its copy. With Restock by itself the
-// module opens a crafting table of its own accord once a chosen item has run out.
+// Crafts through the recipe book the way a shift click on a recipe does. A recipe that takes its
+// own result such as dyeing a shulker box goes in by hand because the recipe book might pick a box
+// that already has the colour. A map and an empty map go in by hand as well and come out as the map
+// and its copy.
 public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 2;
 
-    // Ticks between two recipe book requests. Paper kicks a player who keeps sending them faster
-    // than one a tick. The gap leaves room for a server set stricter than that.
+    // Paper kicks a player who keeps sending recipe book requests faster than one a tick. The gap
+    // leaves room for a server set stricter than that.
     private static final int PLACE_GAP = 6;
 
-    // Ticks a table put down gets to show before the next try.
     private static final int TABLE_WAIT = 10;
 
-    // Ticks a clicked table gets to open. Nothing is clicked again before then because a second
-    // click opens a second screen on a slow server.
+    // A second click opens a second screen on a slow server.
     private static final int OPEN_WAIT = 40;
 
-    // Clicks and placings in a row that may open no table before the module gives up.
     private static final int MOST_TRIES = 4;
 
-    // Ticks a table the module put down gets to break before it is left standing.
     private static final int MINE_LIMIT = 200;
 
-    // Ticks the module rests after a run of its own before it looks at what you carry again.
     private static final int RUN_GAP = 20;
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
@@ -100,36 +93,25 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         .under(restock);
 
     private List<Recipes.Craft> crafts;
-    // The recipe book's own list as it stood when the crafts were read. The book makes a new one
-    // each time a recipe is learnt.
+    // The book makes a new list each time a recipe is learnt.
     private List<RecipeCollection> bookRead;
-    // What the grid was last filled for. Null whilst no result is awaited.
     private String placed;
-    // True whilst the grid holds a map and an empty map.
     private boolean copying;
-    // The maps copied since the module was switched on.
     private final Set<MapId> copied = new HashSet<>();
     private boolean refusedOnce;
     private int lastRequest = -PLACE_GAP;
     private int crafted;
     private final Takings takings = new Takings();
     private final InventoryUtil.HotbarLoan tableLoan = new InventoryUtil.HotbarLoan();
-    // True whilst a run of the module's own is under way. It starts with a click on a table or a
-    // table put down and ends once the module shuts the table or gives up. Every crafting table
-    // that opens meanwhile belongs to the run.
+    // Every crafting table that opens whilst a run of the module's own is under way belongs to the
+    // run.
     private boolean serving;
-    // True once a table of the run has opened.
     private boolean arrived;
-    // Clicks and placings of the run that have opened no table yet.
     private int tries;
     private int resumeAt;
-    // True whilst the open grid is one the module has finished with. It waits for it to close.
     private boolean idle;
-    // What a run another module asked for crafts in place of the chosen items. Null for your own.
     private Predicate<Recipes.Craft> only;
-    // The table such a run put down. It is mined back once the run is through.
     private BlockPos ownTable;
-    // True once such a run has nothing left to craft. What follows only clears up after it.
     private boolean wrappingUp;
     private int minedFor;
     private int settled;
@@ -174,9 +156,7 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         ownTable = null;
     }
 
-    // Crafts every recipe that passes the test at a table in reach or one you carry and then
-    // switches off again. A table it put down is mined back. InfinityMiner turns what it mined
-    // into blocks this way. False when no run started.
+    // A table the run put down is mined back. False when no run started.
     public boolean craftOnly(Predicate<Recipes.Craft> wanted) {
         if (isEnabled() || !inGame()) {
             return false;
@@ -198,7 +178,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return isEnabled();
     }
 
-    // What a run crafts in place of the chosen items. The recipes are looked up afresh.
     private void askedBy(Predicate<Recipes.Craft> test) {
         only = test;
         crafts = null;
@@ -214,8 +193,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         takings.forget();
     }
 
-    // Reaches for a table once a chosen item has run out. One in reach is opened and otherwise
-    // one you carry goes down first.
     @Override
     protected void away() {
         boolean asked = only != null;
@@ -246,14 +223,11 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         reachOut(asked);
     }
 
-    // True whilst what you carry pays for one of the recipes through the recipe book.
     private boolean craftable() {
         StackedItemContents contents = Recipes.carried();
         return crafts().stream().anyMatch(craft -> !craft.byHand() && craft.entry().canCraft(contents));
     }
 
-    // Clicks the nearest table in reach. Without one a table you carry goes down first. A run
-    // another module asked for gives up at once when it has no table to reach for.
     private void reachOut(boolean asked) {
         FaceMode face = rotate.isOn() ? FaceMode.SERVER : FaceMode.OFF;
         BlockPos table = nearestTable();
@@ -285,15 +259,12 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         tried(TABLE_WAIT);
     }
 
-    // A click or a placing went out. The run waits that many ticks before it looks again.
     private void tried(int wait) {
         serving = true;
         tries++;
         resumeAt = ticks() + wait;
     }
 
-    // Stops reaching out for a table. A run another module asked for clears up after itself
-    // and a restock switches the module off.
     private void giveUp(String reason) {
         serving = false;
         tries = 0;
@@ -305,8 +276,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         wrappingUp = true;
     }
 
-    // The table of a run has closed. A restock rests a moment before it looks again and a run
-    // another module asked for clears up after itself.
     private void endRun() {
         serving = false;
         arrived = false;
@@ -318,8 +287,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         }
     }
 
-    // Ends a run another module asked for. The table it put down is mined back and its drop
-    // gets a moment to reach you. One that will not break in time is left standing.
     private void packUp() {
         boolean standing = ownTable != null && BlockUtil.state(ownTable).is(Blocks.CRAFTING_TABLE);
         if (standing && ++minedFor < MINE_LIMIT) {
@@ -343,7 +310,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return InventoryUtil.findSlot(Items.CRAFTING_TABLE, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // A chosen item you carry none of that the recipe book can craft from what you do carry.
     private boolean shouldRestock() {
         if (onlyInHole.isOn() && !Holes.playerInHole() || EntityUtil.healthAtOrBelow(aboveHealth.getValue())
             || InventoryUtil.emptySlots() < roomNeeded.getInt()) {
@@ -361,8 +327,7 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return false;
     }
 
-    // The nearest free spot where a table would lean on a block face. A click into the empty
-    // spot itself comes last because some servers refuse one.
+    // A click into the empty spot itself comes last because some servers refuse one.
     private static BlockPos tableSpot(double reach) {
         BlockPos leaning = BlockUtil.nearestWithin(reach, pos -> takesTable(pos, reach, true));
         return leaning != null ? leaning : BlockUtil.nearestWithin(reach, pos -> takesTable(pos, reach, false));
@@ -376,11 +341,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return click != null && (!leaning || click.support() != null);
     }
 
-    // The work at the open grid is over. A table the module opened itself is shut first.
-    // Trouble switches the module off and says why. A restock then waits for a chosen item to
-    // run out again and a run another module asked for clears up after itself. A grid you
-    // opened is left alone until it closes with Restock by itself on and otherwise the module
-    // switches off and says why.
     private void stop(String reason, boolean trouble) {
         boolean own = serving;
         if (own) {
@@ -488,7 +448,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return !serving && throwOut.isOn();
     }
 
-    // How many times the grid can be crafted from. The smallest stack in it runs out first.
     private static int sets(AbstractCraftingMenu menu) {
         int sets = 0;
         for (Slot slot : menu.getInputGridSlots()) {
@@ -547,8 +506,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
             : "Your recipe book has no recipe for the chosen items that fits this grid.", false);
     }
 
-    // One map and one empty map go into the first two cells of the grid. False when no map is
-    // left to copy or no empty map is carried.
     private boolean copyNextMap(AbstractCraftingMenu menu) {
         int map = MenuClicks.firstInventorySlot(menu, this::uncopied);
         int blank = MenuClicks.firstInventorySlot(menu, stack -> stack.is(Items.MAP));
@@ -565,7 +522,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return true;
     }
 
-    // A map the game can clone that has not had its copy yet.
     private boolean uncopied(ItemStack stack) {
         MapId id = stack.get(DataComponents.MAP_ID);
         return id != null && stack.is(ItemTags.CLONABLE_MAPS) && !copied.contains(id);
@@ -583,7 +539,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         startClock();
     }
 
-    // Recipe book entries for the chosen items in the order they were picked.
     private List<Recipes.Craft> crafts() {
         List<RecipeCollection> book = mc.player.getRecipeBook().getCollections();
         if (crafts != null && book == bookRead) {
@@ -602,7 +557,6 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return crafts;
     }
 
-    // The inventory slot each ingredient comes from or null when one is missing.
     // Named stacks are fine here but worn or enchanted ones never go in.
     private int[] handSources(AbstractCraftingMenu menu, Recipes.Craft craft) {
         Map<Integer, Integer> taken = new HashMap<>();

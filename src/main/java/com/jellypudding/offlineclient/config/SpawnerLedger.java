@@ -9,23 +9,16 @@ import net.minecraft.resources.RegistryOps;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-// What each spawner on the server you play on showed the last time it was read and how long
-// you stood within its reach since. A reading that moved further than your own time there
-// explains was moved by someone else. Spots you came near or dug in are remembered for good.
-// The spots of every dimension share one file beside the finds.
+// A reading that moved further than your own time there explains was moved by someone else.
 public final class SpawnerLedger extends ServerLedger<SpawnerLedger.Spot, SpawnerLedger.Entry> {
 
-    // A spawner's count or a trial spawner's state when it was last read and the ticks you
-    // stood within its reach since. Near says you came within reach of the spot at any time.
     public record Entry(int reading, int ticksNear, boolean near) {
 
-        // False for a spot you came near or dug in whose spawner was never read.
         public boolean hasReading() {
             return reading != NO_READING;
         }
     }
 
-    // Where a spawner stands. The same position in another dimension is another spot.
     record Spot(String dimension, long pos) {
     }
 
@@ -42,7 +35,6 @@ public final class SpawnerLedger extends ServerLedger<SpawnerLedger.Spot, Spawne
         super(FILE, MAX_SPOTS, WHAT);
     }
 
-    // Null for a spot never read or visited in the dimension you are in.
     public Entry get(long pos) {
         Spot spot = here(pos);
         return spot == null ? null : get(spot);
@@ -57,7 +49,6 @@ public final class SpawnerLedger extends ServerLedger<SpawnerLedger.Spot, Spawne
         }
     }
 
-    // One more tick near a spawner or one more dig in a room since its last reading.
     public void cameNear(long pos) {
         Spot spot = here(pos);
         if (spot != null) {
@@ -76,13 +67,11 @@ public final class SpawnerLedger extends ServerLedger<SpawnerLedger.Spot, Spawne
         }
     }
 
-    // The spot in the dimension you are in. Null outside a world.
     private static Spot here(long pos) {
         String dimension = ServerInfo.dimension();
         return dimension.isEmpty() ? null : new Spot(dimension, pos);
     }
 
-    // A line or a dimension that cannot be read only loses itself.
     @Override
     protected void parse(JsonElement root, Map<Spot, Entry> into, RegistryOps<JsonElement> ops) {
         DataFiles.members(root, (dimension, lines) -> DataFiles.entries(lines, SpawnerLedger::entry, WHAT),
@@ -91,15 +80,12 @@ public final class SpawnerLedger extends ServerLedger<SpawnerLedger.Spot, Spawne
                 line.getValue())));
     }
 
-    // The position of a spot and what it showed.
     private static Map.Entry<Long, Entry> entry(JsonElement line) {
         String[] parts = line.getAsString().split(" ");
         return Map.entry(Long.parseLong(parts[0]),
             new Entry(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), NEAR.equals(parts[3])));
     }
 
-    // One line for each spot such as its position and its reading and the ticks you stood near
-    // since and whether you ever went near. The lines of a dimension go together.
     @Override
     protected JsonElement encode(Map<Spot, Entry> readings, RegistryOps<JsonElement> ops) {
         Map<String, JsonArray> byDimension = new LinkedHashMap<>();

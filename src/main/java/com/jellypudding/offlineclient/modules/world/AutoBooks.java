@@ -28,11 +28,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// Puts the enchanted books you carry onto your gear at an open anvil one book after another.
 // The anvil works its result out on this side as well. A pair that shows none is one it refuses.
 public final class AutoBooks extends StationModule<AnvilMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
     // The anvil calls a job too expensive once it would cost this many levels.
@@ -40,8 +38,6 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
 
     private static final String NOTHING_TICKED = "Tick the enchantments to put on first.";
 
-    // A piece and a book the anvil showed no result for. Neither is tried with the other again
-    // until one of them changes.
     private record Refused(ItemStack gear, ItemStack book) {
     }
 
@@ -57,7 +53,6 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
 
     private final List<Refused> refused = new ArrayList<>();
     private boolean waiting;
-    // True whilst AutoRename has the anvil. It is said once for each anvil.
     private boolean yielding;
     private int applied;
 
@@ -144,8 +139,6 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
         }
     }
 
-    // The best piece a book fits goes in first and takes the left slot. The book then lands
-    // beside it.
     private void placeNext(AnvilMenu menu) {
         List<Integer> mine = MenuClicks.inventorySlots(menu);
         Map<Integer, Double> scores = new HashMap<>();
@@ -171,7 +164,6 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
             : "No book left that the anvil will put on your gear.");
     }
 
-    // Only the ticked enchantments go on and none is ticked.
     private boolean nothingTicked() {
         return listMode.is(ListMode.WHITELIST) && others.size() == 0
             && lists.values().stream().allMatch(list -> list.size() == 0);
@@ -202,9 +194,8 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
         return false;
     }
 
-    // True when the book belongs on the piece. Everything on the book has to be wanted for that
-    // kind of gear and able to go on beside what the piece carries and at least one enchantment
-    // has to come out stronger. A book with anything else on it would waste that part.
+    // Everything on the book has to be wanted for that kind of gear and able to go on beside what
+    // the piece carries and at least one enchantment has to come out stronger.
     private boolean fits(ItemStack gear, ItemStack book) {
         if (!book.is(Items.ENCHANTED_BOOK) || gear.getCount() != 1 || gear.is(Items.ENCHANTED_BOOK)) {
             return false;
@@ -248,7 +239,7 @@ public final class AutoBooks extends StationModule<AnvilMenu> {
         return list == null ? others : list;
     }
 
-    // The enchantments the world knows that can go on the item. Empty until a world is loaded.
+    // Empty until a world is loaded.
     private static Collection<String> fitting(Item sample) {
         if (mc.level == null) {
             return List.of();

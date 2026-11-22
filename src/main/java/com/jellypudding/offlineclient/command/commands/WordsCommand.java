@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// The help for the live words. Every text that takes them points here.
 public final class WordsCommand extends Command {
 
     public WordsCommand() {
@@ -30,7 +29,6 @@ public final class WordsCommand extends Command {
         }
     }
 
-    // One line for each group with its words as they are typed.
     private static void list() {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         for (LiveText.Help word : LiveText.help()) {
@@ -41,7 +39,6 @@ public final class WordsCommand extends Command {
             + "words health§7 to read what a word shows. A number takes its decimals such as §f{speed 2}§7.");
     }
 
-    // The braces may be typed or left off.
     private static void describe(String typed) {
         String name = typed.replace("{", "").replace("}", "");
         for (LiveText.Help word : LiveText.help()) {

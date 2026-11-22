@@ -40,17 +40,13 @@ public final class Jesus extends Module {
     public enum Bypass { WOBBLE, NONE }
     private enum Liquid { NONE, WATER, LAVA }
 
-    // Upward speed whilst climbing out of the liquid.
     private static final double RISE_SPEED = 0.11;
-    // Extra lift per tick whilst bobbing in dolphin mode.
     private static final double DOLPHIN_LIFT = 0.04;
 
     // Any count past the two ticks of a lift out of the liquid. No lift is due.
     private static final int SETTLED = 2;
-    // How far the sent height wobbles above and below the real one.
     private static final double PACKET_WOBBLE = 0.05;
 
-    // Fire Resistance with less than this left is not worth swimming on.
     private static final int SHORT_RESISTANCE_TICKS = 15 * SharedConstants.TICKS_PER_SECOND;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -102,7 +98,6 @@ public final class Jesus extends Module {
 
     private int ticksSinceExit = SETTLED;
 
-    // Set on a tick that lifts the player onto held liquid.
     private boolean lifting;
     private double liftX;
     private double liftZ;
@@ -143,7 +138,6 @@ public final class Jesus extends Module {
         return !player.isPassenger() || riding.isOn();
     }
 
-    // The thing being carried. The vehicle whilst riding and the player otherwise.
     private Entity mover(LocalPlayer player) {
         Entity vehicle = player.getVehicle();
         return vehicle != null && riding.isOn() ? vehicle : player;
@@ -157,7 +151,6 @@ public final class Jesus extends Module {
         return limit.getValue() > 0 && player.fallDistance > limit.getValue();
     }
 
-    // True whilst water ought to hold the player up.
     private boolean waterWanted() {
         LocalPlayer player = mc.player;
         if (!mode.is(Mode.SOLID) || !water.isOn() || !active()) {
@@ -172,7 +165,6 @@ public final class Jesus extends Module {
         return !sneakingToDip() && !fallenPast(player, dipFall);
     }
 
-    // True whilst lava ought to hold the player up.
     private boolean lavaWanted() {
         LocalPlayer player = mc.player;
         if (!mode.is(Mode.SOLID) || !lava.isOn() || !active()) {
@@ -190,7 +182,6 @@ public final class Jesus extends Module {
         return !fallenPast(player, lavaDipFall);
     }
 
-    // Enough Fire Resistance to swim through lava. Burning time scales the threshold.
     private static boolean longFireResistance(LocalPlayer player) {
         MobEffectInstance effect = player.getEffect(MobEffects.FIRE_RESISTANCE);
         if (effect == null) {
@@ -282,7 +273,6 @@ public final class Jesus extends Module {
         mc.player.setDeltaMovement(Vec3.ZERO);
     }
 
-    // True when the ledge ahead is liquid this module holds.
     private boolean heldLiquidAhead(LocalPlayer player, Vec3 heading) {
         AABB probe = MovementUtil.ledgeProbe(player, heading);
         int feet = Mth.floor(player.getY());
@@ -351,7 +341,6 @@ public final class Jesus extends Module {
         return !mc.level.getFluidState(mover.blockPosition().below()).isEmpty();
     }
 
-    // True whilst the feet rest on a liquid the module means to hold.
     private boolean overWantedLiquid(LocalPlayer player, ClientLevel level) {
         return switch (standingOnLiquid(mover(player), level)) {
             case WATER -> waterWanted();
@@ -360,7 +349,6 @@ public final class Jesus extends Module {
         };
     }
 
-    // The liquid under the whole box. Any solid block there means none.
     private static Liquid standingOnLiquid(Entity mover, ClientLevel level) {
         AABB slice = mover.getBoundingBox().move(0, -0.01, 0);
         Liquid found = Liquid.NONE;

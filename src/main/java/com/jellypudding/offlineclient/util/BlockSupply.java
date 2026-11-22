@@ -9,10 +9,9 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.function.Predicate;
 
-// Where a builder gets the block for its next click. A stack already in a hand comes first and
-// then the slots the take from choice allows. A stack outside the hotbar is borrowed into it
-// and goes home when the builder lets go. A creative player who carries none gets the block
-// out of thin air for the one click.
+// A stack already in a hand comes first and then the slots the take from choice allows. A stack
+// outside the hotbar is borrowed into it and goes home when the builder lets go. A creative player
+// who carries none gets the block out of thin air for the one click.
 public final class BlockSupply {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -20,15 +19,14 @@ public final class BlockSupply {
     // The slot of a stack that sits in none. The offhand holds it or it is yet to be conjured.
     private static final int NO_SLOT = -1;
 
-    // A stack found for a click with the hand that will hold it and the inventory slot it sits in.
     public record Source(ItemStack stack, InteractionHand hand, int slot) {
     }
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private InventoryUtil.Conjured conjured;
 
-    // The first stack that fits. A creative player gets a stack of the given item when nothing
-    // carried fits and the item is not null. Null when there is nothing to place with.
+    // A creative player gets a stack of the given item when nothing carried fits and the item is
+    // not null. Null when there is nothing to place with.
     public Source find(Predicate<ItemStack> fits, TakeFrom from, Item creative) {
         LocalPlayer player = MC.player;
         if (fits.test(player.getMainHandItem())) {
@@ -45,8 +43,7 @@ public final class BlockSupply {
             ? new Source(new ItemStack(creative), InteractionHand.MAIN_HAND, NO_SLOT) : null;
     }
 
-    // Brings the stack to the hand that clicks with it. False when the inventory would not
-    // take the swap this tick.
+    // False when the inventory would not take the swap this tick.
     public boolean hold(Source source) {
         if (source.hand() == InteractionHand.OFF_HAND) {
             return true;

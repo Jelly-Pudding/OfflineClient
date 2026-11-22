@@ -76,7 +76,6 @@ public record StickFigure(Vec3 crown, Vec3 neck, Vec3 eyes, Vec3 gaze,
             rightHip.add(by), leftHip.add(by), rightFoot.add(by), leftFoot.add(by));
     }
 
-    // Points on a part's own first box in the pose that part is drawn with.
     private record Limb(Matrix4f pose, ModelPart.Cube box) {
 
         private Vec3 at(float x, float y, float z) {
@@ -96,7 +95,6 @@ public record StickFigure(Vec3 crown, Vec3 neck, Vec3 eyes, Vec3 gaze,
             return (box.minZ + box.maxZ) / 2;
         }
 
-        // Down the middle of an arm or a leg from the joint it swings on.
         private Vec3 joint() {
             return at(midX(), 0, midZ());
         }
@@ -105,7 +103,6 @@ public record StickFigure(Vec3 crown, Vec3 neck, Vec3 eyes, Vec3 gaze,
             return at(midX(), box.maxY, midZ());
         }
 
-        // Null for a part with no box of its own.
         private static Limb of(ModelPart part, PoseStack poseStack) {
             Limb[] found = new Limb[1];
             part.visit(poseStack, (pose, path, index, box) -> {
@@ -117,8 +114,7 @@ public record StickFigure(Vec3 crown, Vec3 neck, Vec3 eyes, Vec3 gaze,
         }
     }
 
-    // Takes the main model as it is handed in and lets everything else fall away. A baby
-    // and an adult have a model each and the renderer picks one as it draws.
+    // A baby and an adult have a model each and the renderer picks one as it draws.
     private static final class Capture extends SubmitNodeStorage {
 
         private final LivingEntityRenderer<?, ?, ?> renderer;

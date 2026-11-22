@@ -52,14 +52,12 @@ public final class ChorusHold extends Module {
     // Written on the network thread and read on the game thread.
     private final AtomicReference<ClientboundPlayerPositionPacket> held = new AtomicReference<>();
     private volatile boolean armed;
-    // The number of the newest teleport the server has sent whether kept or not.
     private volatile int newestId;
 
     // A teleport came that this client could not keep. Nothing more is kept until the
     // fruit has been put away once.
     private volatile boolean stoodDown;
     private int biteTick = NEVER;
-    // Ticks the kept teleport has been held back.
     private int heldTicks;
 
     public ChorusHold() {
@@ -146,15 +144,13 @@ public final class ChorusHold extends Module {
         event.cancel();
     }
 
-    // Drops the kept teleport unanswered.
     private void forget() {
         armed = false;
         stoodDown = false;
         held.set(null);
     }
 
-    // Hands the kept teleport to the game with the view left where you look. One the server
-    // has replaced is dropped. It only reads an answer to its newest number.
+    // The server only reads an answer to its newest number and one it has replaced is dropped.
     private void release() {
         ClientboundPlayerPositionPacket teleport = held.getAndSet(null);
         ClientPacketListener connection = mc.getConnection();

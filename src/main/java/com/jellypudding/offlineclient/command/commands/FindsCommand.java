@@ -21,10 +21,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-// What the hunting modules found on this server. On its own it opens the finds list.
 public final class FindsCommand extends Command {
 
-    // One find and how far it lies from you.
     private record Near(FindLog log, Find find, double distance) {
     }
 
@@ -62,7 +60,6 @@ public final class FindsCommand extends Command {
         }
     }
 
-    // The nearest finds in the dimension you are in. A click on the coordinates walks there.
     private void near(String[] args) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
@@ -97,8 +94,6 @@ public final class FindsCommand extends Command {
         }
     }
 
-    // The dimension you are in or with all every dimension of this server. Like the rows
-    // that do the same it waits for the command a second time.
     private void clear(String[] args) {
         boolean everywhere = args.length == 3 && args[2].equalsIgnoreCase(ALL);
         if (args.length != 2 && !everywhere) {
@@ -111,7 +106,6 @@ public final class FindsCommand extends Command {
         }
     }
 
-    // A spreadsheet file of every find on this server beside the saved one.
     private void export(String[] args) {
         if (args.length != 2) {
             usage("finds export <module>");
@@ -132,7 +126,6 @@ public final class FindsCommand extends Command {
         }));
     }
 
-    // Null after telling the player no module of that name keeps finds.
     private static FindLog log(String name) {
         FindLog log = FindSource.named(name);
         if (log == null) {

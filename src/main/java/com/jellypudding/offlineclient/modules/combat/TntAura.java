@@ -43,11 +43,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-// Sets lit TNT on enemies and lights the TNT you place or pass. Lit TNT drops to the ground
-// before it goes off and TNT set over a head lands at the feet below.
+// Lit TNT drops to the ground before it goes off and TNT set over a head lands at the feet below.
 public final class TntAura extends Module {
 
-    // Fire comes from flint and steel or a fire charge in the order Light with sets.
     public enum Lighter {
         FIRE(Items.FLINT_AND_STEEL),
         REDSTONE_BLOCK(Items.REDSTONE_BLOCK),
@@ -64,8 +62,6 @@ public final class TntAura extends Module {
         }
     }
 
-    // What setting off TNT at a spot comes to. Each reason to leave TNT unlit is told once until
-    // no TNT is left unlit for it.
     private enum Verdict {
         LIGHT(null),
         HURTS_YOU("TNT is left unlit. It and the TNT it sets off would hurt you more than you allow."),
@@ -80,13 +76,11 @@ public final class TntAura extends Module {
         }
     }
 
-    // Ticks a TNT just lit is left alone. It stays on screen until the server says it is gone.
+    // A TNT just lit stays on screen until the server says it is gone.
     private static final int LIT_TICKS = 20;
 
-    // Ticks a placed TNT may wait past its time for you to come back in reach before it is left unlit.
     private static final int GIVE_UP = 100;
 
-    // Placed TNT still to be lit. The oldest drop off past this.
     private static final int MAX_WAITING = 64;
 
     private static final String NO_LIGHTER = "Nothing in your offhand or hotbar can light TNT.";
@@ -126,8 +120,6 @@ public final class TntAura extends Module {
     private final ChatWarning warning = new ChatWarning();
     private final Map<Verdict, ChatWarning> told = new EnumMap<>(Verdict.class);
 
-    // The TNT round you as this tick found it and what each spot and each group judged this tick
-    // came to. The TNT is read the first time something asks.
     private TntChain chain;
     private final Map<BlockPos, Verdict> verdicts = new HashMap<>();
     private final Map<List<TntChain.Blast>, Verdict> weighed = new IdentityHashMap<>();
@@ -135,12 +127,11 @@ public final class TntAura extends Module {
     // Placed TNT and the tick it is due to be lit.
     private final Map<BlockPos, Integer> waiting = new BoundedMap<>(MAX_WAITING);
 
-    // Set whilst this module clicks. Its own clicks are never taken for a placement.
+    // Its own clicks are never taken for a placement.
     private boolean clicking;
 
     private int timer;
     private String targetName;
-    // TNT in reach that Light any left unlit on the last tick.
     private int spared;
 
     public TntAura() {
@@ -196,7 +187,6 @@ public final class TntAura extends Module {
         if (!lightPlaced.isOn()) {
             waiting.clear();
         }
-        // A meal or ShulkerPacker or an item in use has the hands.
         if (Hands.slotsTaken() || mc.player.isUsingItem()) {
             return;
         }
@@ -225,8 +215,8 @@ public final class TntAura extends Module {
         }
     }
 
-    // A use with TNT in hand. A player's click is judged by what the hand held as it began
-    // because placing the last TNT leaves the hand empty. Lighting clicks never count.
+    // A player's click is judged by what the hand held as it began because placing the last TNT
+    // leaves the hand empty.
     private static boolean placesTnt(ServerboundUseItemOnPacket packet) {
         Item before = UseClick.heldAtClick(packet.hand());
         if (before != null) {
@@ -265,8 +255,7 @@ public final class TntAura extends Module {
         }
     }
 
-    // Every unlit TNT block in reach goes up nearest first whilst a lighter and the use limit last.
-    // Placed TNT still waiting is left to its own time. The count left unlit for safety comes back.
+    // Hands back the count left unlit for safety.
     private int lightAll() {
         Map<Verdict, Integer> unlit = new EnumMap<>(Verdict.class);
         boolean lighting = true;
@@ -318,7 +307,6 @@ public final class TntAura extends Module {
         }
     }
 
-    // Over the head the lit TNT falls to the feet. Beside the feet it goes off there.
     private BlockPos spotFor(Entity enemy) {
         BlockPos feet = enemy.blockPosition();
         List<BlockPos> spots = List.of(feet.above(2),
@@ -365,8 +353,7 @@ public final class TntAura extends Module {
         return Verdict.LIGHT;
     }
 
-    // Places the TNT unless it is already there and lights it straight after. Each click is a
-    // use packet and all of them have to fit under the server's limit.
+    // Each click is a use packet and all of them have to fit under the server's limit.
     private boolean blowUp(BlockPos spot) {
         Lighter lighter = firstLighter(spot);
         boolean placing = !BlockUtil.state(spot).is(Blocks.TNT);
@@ -403,7 +390,6 @@ public final class TntAura extends Module {
         return light(lighter, spot);
     }
 
-    // The first lighter on the list that is at hand and has somewhere to go.
     private Lighter firstLighter(BlockPos spot) {
         for (Lighter lighter : lighters.ranked()) {
             boolean ready = switch (lighter) {
@@ -435,9 +421,8 @@ public final class TntAura extends Module {
         return torch != null && BlockUtil.place(torch, Direction.DOWN, rotate.isOn(), true);
     }
 
-    // A click on the TNT itself with flint and steel or a fire charge primes it. One in the
-    // offhand needs no swap. BlockUtil.interact lets go of the sneak for the click and the
-    // server primes the TNT rather than setting fire beside it.
+    // BlockUtil.interact lets go of the sneak for the click and the server primes the TNT rather
+    // than setting fire beside it.
     private boolean strike(BlockPos spot) {
         Direction side = BlockUtil.facingSide(spot);
         if (rotate.isOn()) {

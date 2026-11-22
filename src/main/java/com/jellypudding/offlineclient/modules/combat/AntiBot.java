@@ -20,12 +20,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-// The one place that decides what a bot is. Combat modules skip a bot through Modules.isBot
-// and ESP and Nametags and Tracers ask Modules.hidesBot. Every tell comes from the server.
-// A player cannot fake one to slip past a combat module.
+// Every tell comes from the server. A player cannot fake one to slip past a combat module.
 public final class AntiBot extends Module {
 
-    // The render modules that can leave bots out.
     public enum View {
         ESP,
         NAMETAGS,
@@ -58,7 +55,7 @@ public final class AntiBot extends Module {
     private final BoolSetting hideTracers = new BoolSetting("Hide from Tracers",
         "Draws no tracer to a bot.", true);
 
-    // Ping updates in a row that showed a player at zero. Filled on the netty thread.
+    // Filled on the netty thread.
     private final Map<UUID, Integer> silent = Collections.synchronizedMap(new BoundedMap<>(MAX_TRACKED));
 
     public AntiBot() {

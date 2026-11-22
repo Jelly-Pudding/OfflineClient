@@ -17,7 +17,6 @@ import java.util.function.Supplier;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 
-// The shape and colours of the boxes a render module draws.
 public final class BoxStyle {
 
     public enum Shape { LINES, SIDES, BOTH }
@@ -30,7 +29,6 @@ public final class BoxStyle {
     private final ColorSetting fillColor;
     private final NumberSetting fillOpacity;
 
-    // A switch the whole style sits beneath. Always open until under is called.
     private Supplier<Boolean> gate = () -> true;
 
     // A prefix such as "Safe" gives "Safe shape" and "Safe line colour"
@@ -52,7 +50,6 @@ public final class BoxStyle {
         return shapeOnly("", defaultShape);
     }
 
-    // The same with a prefix such as Box that gives Box shape and Box fill opacity.
     public static BoxStyle shapeOnly(String prefix, Shape defaultShape) {
         return new BoxStyle(prefix, defaultShape, 0, DEFAULT_SATURATION, false);
     }
@@ -77,14 +74,12 @@ public final class BoxStyle {
             .under(shape, () -> gate.get() && shape.isAny(Shape.SIDES, Shape.BOTH));
     }
 
-    // Makes every row of the style a sub option of a switch.
     public BoxStyle under(BoolSetting parent) {
         shape.under(parent);
         gate = parent::isOn;
         return this;
     }
 
-    // Makes every row of the style a sub option of the given choices of an enum.
     @SafeVarargs
     @SuppressWarnings("varargs")
     public final <E extends Enum<E>> BoxStyle under(EnumSetting<E> parent, E... values) {
@@ -93,12 +88,10 @@ public final class BoxStyle {
         return this;
     }
 
-    // The shape of the style for a module that draws the boxes itself.
     public Shape shape() {
         return shape.getValue();
     }
 
-    // The fill opacity as a share from nought to one.
     public float fillShare() {
         return fillOpacity.getFloat() / 100f;
     }
@@ -120,7 +113,6 @@ public final class BoxStyle {
         return all.toArray(new Setting<?>[0]);
     }
 
-    // The rows in their own order. A module keeping styles of its own saves them this way.
     public JsonArray toJson() {
         JsonArray rows = new JsonArray();
         for (Setting<?> setting : settings()) {
@@ -158,7 +150,6 @@ public final class BoxStyle {
         }
     }
 
-    // The same shape in a colour worked out per box such as an entity colour.
     public void draw(DrawBatch batch, AABB box, int color, boolean throughWalls) {
         draw(batch, box, color, color, throughWalls);
     }
@@ -167,13 +158,11 @@ public final class BoxStyle {
         draw(batch, DrawBatch.blockBox(pos), color, color, throughWalls);
     }
 
-    // The usual colours at a share of their strength for a box that is fading out.
     public void drawFading(DrawBatch batch, AABB box, float strength, boolean throughWalls) {
         draw(batch, box, ColorUtil.fade(lineColor.getColor(), strength),
             ColorUtil.fade(fillColor.getColor(), strength), throughWalls);
     }
 
-    // One face of a box in the usual colours.
     public void drawFace(DrawBatch batch, AABB box, Direction side, boolean throughWalls) {
         if (drawsLines()) {
             batch.outlineFace(box, side, lineColor.getColor(), throughWalls);
@@ -183,8 +172,7 @@ public final class BoxStyle {
         }
     }
 
-    // A box with the faces it shares with a neighbour left out. A run of
-    // touching boxes reads as one shape. The mask holds a bit per side.
+    // The mask holds a bit for each hidden side.
     public void drawJoined(DrawBatch batch, AABB box, int hidden, boolean throughWalls) {
         drawJoined(batch, box, hidden, lineColor.getColor(), fillColor.getColor(), throughWalls);
     }
@@ -207,7 +195,6 @@ public final class BoxStyle {
         return !shape.is(Shape.LINES);
     }
 
-    // The same shape with an edge colour and a face colour worked out per box.
     public void draw(DrawBatch batch, AABB box, int line, int fill, boolean throughWalls) {
         if (drawsLines()) {
             batch.outlineBox(box, line, throughWalls);
@@ -217,7 +204,7 @@ public final class BoxStyle {
         }
     }
 
-    // A flat face between four corners in order round its edge such as the cloth of a banner.
+    // The corners go in order round the edge.
     public void drawQuad(DrawBatch batch, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
         if (drawsLines()) {
             batch.outlineQuad(a, b, c, d, color, throughWalls);

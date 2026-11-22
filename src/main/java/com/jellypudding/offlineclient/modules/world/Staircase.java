@@ -19,6 +19,7 @@ import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
@@ -51,9 +52,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-// Builds a staircase up or down. At a walking pace the next step goes down in front of you
-// as you walk. At a rapid pace a step goes down and you stand on it every tick. The run
-// remembers its lowest and highest step for the flow time command.
+// At a walking pace the next step goes down in front of you as you walk. At a rapid pace a step
+// goes down and you stand on it every tick.
 public final class Staircase extends Module {
 
     public enum Pace { WALK, RAPID }
@@ -62,7 +62,6 @@ public final class Staircase extends Module {
 
     public enum Movement { AUTO, MANUAL }
 
-    // The lowest and highest step of a run and the ground under each.
     public record Run(BlockPos lowest, BlockPos highest, int groundUnderLowest, int groundUnderHighest) {
 
         private static Run from(BlockPos step) {
@@ -80,7 +79,6 @@ public final class Staircase extends Module {
             return this;
         }
 
-        // Flow steps for lava poured on the top step.
         public int flowSteps() {
             return LavaReach.staircaseSteps(highest.getY(), lowest.getY(), groundUnderHighest, groundUnderLowest);
         }
@@ -97,7 +95,6 @@ public final class Staircase extends Module {
     // A stair clicked in the lower half of its space lands the right way up.
     private static final double LOWER_QUARTER = 0.25;
 
-    // Walking that gets less than this far across for the whole wait counts as stuck.
     // Jumping on the spot moves you up and down and never across.
     private static final double STUCK_DISTANCE = 0.5;
     private static final int STUCK_TICKS = 40;
@@ -120,7 +117,6 @@ public final class Staircase extends Module {
     // left unanswered this long was thrown away.
     private static final long ANSWER_MILLIS = 1000;
 
-    // A step refused this many times will not stay.
     private static final int MAX_ATTEMPTS = 3;
 
     // The server refuses a single move of more than ten blocks. A rise of nine with a block
@@ -131,7 +127,6 @@ public final class Staircase extends Module {
     // The move lands and every move packet claims the ground. The server never banks the descent.
     private static final Vec3 ONTO_STEP = new Vec3(0, -MovementUtil.GRAVITY * LivingEntity.BASE_VERTICAL_AIR_DRAG, 0);
 
-    // Knocked further than this from the step you stand on ends the run. Closer is pulled back.
     private static final double LOST_DISTANCE = 2;
     private static final double DRIFT = 0.01;
 
@@ -210,6 +205,7 @@ public final class Staircase extends Module {
     private final BoxStyle endsStyle = new BoxStyle("Ends", BoxStyle.Shape.LINES, 190).under(showEnds);
 
     private final HotbarLoan loan = new HotbarLoan();
+    private boolean waiting;
     private final HeldKey forward = new HeldKey(options -> options.keyUp);
     private final AxisWalker walker = new AxisWalker();
     private final PlacementWatch placements = new PlacementWatch();
@@ -217,7 +213,6 @@ public final class Staircase extends Module {
 
     private Run run;
 
-    // Walking pace. The heading Walk for you keeps and the progress that tells it is stuck.
     private Direction lineHeading;
     private Vec3 lastPos;
     private int stillTicks;
@@ -227,7 +222,6 @@ public final class Staircase extends Module {
     private boolean justTurned;
     private BlockPos lastStep;
 
-    // Rapid pace.
     private boolean paused;
     private boolean useHeld;
     private Keys keys = Keys.NONE;
@@ -255,7 +249,6 @@ public final class Staircase extends Module {
         searchTags("stairs", "steps", "mountain", "climb");
     }
 
-    // The last run since the game started. Null before the first.
     public Run lastRun() {
         return run;
     }
@@ -326,6 +319,11 @@ public final class Staircase extends Module {
         placements.clear();
     }
 
+    // Read by LocalPlayerMixin. A player who walks by hand is held on the step meanwhile.
+    public boolean holdsAtEdge() {
+        return isEnabled() && waiting;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         // A dead player still ticks and the server ignores every click it makes.
@@ -339,6 +337,7 @@ public final class Staircase extends Module {
             Timer.override(TIMER_KEY, 1);
             return;
         }
+        waiting = false;
         if (pace.is(Pace.WALK)) {
             leaveRapid();
             Timer.override(TIMER_KEY, speedUp.getFloat());
@@ -367,7 +366,7 @@ public final class Staircase extends Module {
     // repeat is swallowed.
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (!pace.is(Pace.RAPID) || !movement.is(Movement.AUTO) || !inGame()) {
+        if (!pace.is(Pace.RAPID) || !movement.is(Movement.AUTO) || !inGame() || event.byModule()) {
             return;
         }
         event.cancel();
@@ -409,7 +408,6 @@ public final class Staircase extends Module {
         run = run == null ? Run.from(step) : run.with(step);
     }
 
-    // True for the way up. Following the view in rapid pace the pitch decides.
     private boolean climbing() {
         if (pace.is(Pace.RAPID) && thenCast.isOn()) {
             return true;
@@ -429,7 +427,6 @@ public final class Staircase extends Module {
         }
     }
 
-    // The step's feet are past a height the settings keep them within. Null whilst inside.
     private String limitPassed(boolean up, int feetY) {
         if (up && pace.is(Pace.RAPID) && thenCast.isOn() && feetY > mountainTop()) {
             return "at the mountain height";
@@ -443,16 +440,13 @@ public final class Staircase extends Module {
         return null;
     }
 
-    // The feet height a mountain climbs to from the lowest step of the run. It stops low
-    // enough under the top of the world for every layer of the cast after it.
+    // It stops low enough under the top of the world for every layer of the cast after it.
     private int mountainTop() {
         LavaCast cast = Modules.get(LavaCast.class);
         int room = cast == null ? 0 : cast.climbRoom();
         return Math.min(run.lowest().getY() + 1 + mountainHeight.getInt(), mc.level.getMaxY() - room);
     }
 
-    // Turns the stairs around at an end when the settings ask for it. False when they do
-    // not or the last end already turned them.
     private boolean turnBack(boolean up) {
         if (justTurned || !(up ? turnBackAtTop.isOn() : turnBackAtBottom.isOn())) {
             return false;
@@ -469,6 +463,12 @@ public final class Staircase extends Module {
         } else if (!walkForYou.isOn() && walker.isLocked()) {
             stopWalking();
         }
+        // A change of slot would cut a meal short. The stairs wait on the step until it is down.
+        waiting = mc.player.onGround() && Hands.slotsTaken();
+        if (waiting) {
+            standStill();
+            return;
+        }
         if (mc.player.onGround()) {
             recordStep(mc.player.getOnPos());
             boolean going = placeWalkStep();
@@ -482,7 +482,6 @@ public final class Staircase extends Module {
         }
     }
 
-    // The step in front of you. Null where the ground itself goes on.
     private BlockPos walkStep() {
         BlockPos ahead = mc.player.getOnPos().relative(walkHeading());
         if (climbing()) {
@@ -495,7 +494,6 @@ public final class Staircase extends Module {
         return walker.isLocked() ? lineHeading : mc.player.getDirection();
     }
 
-    // Puts the step in front down when it is missing. False once the module has stopped.
     private boolean placeWalkStep() {
         BlockPos step = walkStep();
         if (step == null) {
@@ -521,15 +519,12 @@ public final class Staircase extends Module {
         return true;
     }
 
-    // Holds forward along the line and jumps onto a full block step once you walk into it.
-    // Stairs need no jump. Your back key stands you still. On the ground the walk waits
-    // whilst the next step is missing. Mid jump it carries on to the step it jumps for.
+    // A full block step needs a jump and stairs need none. On the ground the walk waits whilst the
+    // next step is missing. Mid jump it carries on to the step it jumps for.
     private void walk() {
         releaseStrafe();
         if (InputUtil.physicallyHeld(mc.options.keyDown)) {
-            forward.letGo();
-            lastPos = null;
-            stillTicks = 0;
+            standStill();
             return;
         }
         BlockPos step = walkStep();
@@ -553,6 +548,12 @@ public final class Staircase extends Module {
         }
     }
 
+    private void standStill() {
+        forward.letGo();
+        lastPos = null;
+        stillTicks = 0;
+    }
+
     private void stuckWalking() {
         lastPos = null;
         stillTicks = 0;
@@ -573,9 +574,7 @@ public final class Staircase extends Module {
             InputUtil.release(mc.options.keyRight);
             walker.clear();
         }
-        forward.letGo();
-        lastPos = null;
-        stillTicks = 0;
+        standStill();
     }
 
     private void rapidTick() {
@@ -623,13 +622,12 @@ public final class Staircase extends Module {
             delayLeft--;
             return;
         }
-        if (movement.is(Movement.MANUAL) && !held.forward() && !held.back()) {
+        if (movement.is(Movement.MANUAL) && !held.forward() && !held.back() || Hands.slotsTaken()) {
             return;
         }
         step(held.jump());
     }
 
-    // Drops the rapid run once the pace is changed to walking.
     private void leaveRapid() {
         thaw();
         standingOn = null;
@@ -637,8 +635,6 @@ public final class Staircase extends Module {
         placements.clear();
     }
 
-    // Starts or resumes a rapid run on the block under you. Mountains check the cast can
-    // follow before the first step.
     private void startRapid() {
         if (thenCast.isOn() && !castReady()) {
             return;
@@ -677,12 +673,10 @@ public final class Staircase extends Module {
         return true;
     }
 
-    // The block your feet rest on. In the air it is the one just below your feet.
     private BlockPos footing() {
         return mc.player.onGround() ? mc.player.getOnPos() : mc.player.blockPosition().below();
     }
 
-    // Puts a block in the footing when it is open. False once the module has stopped for want of one.
     private boolean fillFooting(BlockPos under) {
         if (!BlockUtil.isReplaceable(under) || placeStep(under, mc.player.getDirection(), true)) {
             return true;
@@ -706,13 +700,10 @@ public final class Staircase extends Module {
         return mc.player.position().distanceTo(stepSpot()) > LOST_DISTANCE;
     }
 
-    // The middle of the top of the step you stand on.
     private Vec3 stepSpot() {
         return new Vec3(standingOn.getX() + 0.5, standY, standingOn.getZ() + 0.5);
     }
 
-    // Turns on a fresh press of left or right. With the view left alone forward and back
-    // choose the way up or down.
     private void steer(Keys held) {
         if (held.left() && !keys.left()) {
             turn(-1);
@@ -746,8 +737,6 @@ public final class Staircase extends Module {
         return Math.floorMod(Math.round(Mth.wrapDegrees(yaw) / (EIGHTH * step)) * step, EIGHTHS);
     }
 
-    // Following the view the heading is the view's. Without Diagonal it keeps to the four
-    // straight ways. Either switch changed mid run carries on from where the stairs point.
     private void followHeading() {
         if (followView.isOn()) {
             heading = snapHeading(mc.player.getYRot());
@@ -862,7 +851,6 @@ public final class Staircase extends Module {
             && mc.level.getWorldBorder().isWithinBounds(pos);
     }
 
-    // A step to place or one already there whose top is level with the top of its block.
     private boolean canStandOn(BlockPos step) {
         if (BlockUtil.isReplaceable(step)) {
             return BlockUtil.unobstructed(step);
@@ -871,8 +859,6 @@ public final class Staircase extends Module {
         return !shape.isEmpty() && shape.max(Direction.Axis.Y) == 1;
     }
 
-    // The stairs can go no further this way. A mountain hands over to the cast. Otherwise
-    // they turn back when asked or the run pauses.
     private void reachedEnd(boolean up, String where) {
         if (thenCast.isOn() && run.highest().getY() > run.lowest().getY()) {
             handOver();
@@ -881,7 +867,6 @@ public final class Staircase extends Module {
         }
     }
 
-    // Pauses an automatic run. A manual one says once why the key does nothing.
     private void halt(String where) {
         if (movement.is(Movement.AUTO)) {
             pause(where);
@@ -914,13 +899,10 @@ public final class Staircase extends Module {
         }
     }
 
-    // The way of the last step or the way you face before the first.
     private Direction lastWay() {
         return lastWay == null ? mc.player.getDirection() : lastWay;
     }
 
-    // Puts back every step the server refused or threw away that is still in reach.
-    // False once the run has stopped.
     private boolean keepSteps() {
         for (BlockPos missing : placements.sweep()) {
             if (placements.attempts(missing) >= MAX_ATTEMPTS) {
@@ -946,7 +928,7 @@ public final class Staircase extends Module {
     private void askAgain() {
         long now = System.currentTimeMillis();
         if (placements.longestWait() < ANSWER_MILLIS || now - lastSettleAt < ANSWER_MILLIS
-            || standingOn == null || !mc.player.blockPosition().equals(standingOn.above())) {
+            || standingOn == null || !mc.player.blockPosition().equals(standingOn.above()) || Hands.slotsTaken()) {
             return;
         }
         int slot = stepSlot(standingOn.above());
@@ -982,7 +964,6 @@ public final class Staircase extends Module {
         return InputUtil.physicallyHeld(key);
     }
 
-    // The top step of a climb with a height to reach when the stairs run straight.
     private BlockPos topStep() {
         if (pace.is(Pace.WALK) || paused || standingOn == null || !climbing() || heading % 2 != 0) {
             return null;
@@ -1001,7 +982,6 @@ public final class Staircase extends Module {
         return standingOn.relative(wayOf(heading), climb).above(climb);
     }
 
-    // Places a step. Stairs face up the slope. False when there is nothing to place.
     private boolean placeStep(BlockPos step, Direction way, boolean up) {
         int slot = stepSlot(step);
         if (slot == -1 || !loan.select(slot)) {

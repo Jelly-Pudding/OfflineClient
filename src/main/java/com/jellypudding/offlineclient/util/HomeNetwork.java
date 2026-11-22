@@ -10,7 +10,6 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-// Tells an address on your own machine or on the network around it from one out on the internet.
 public final class HomeNetwork {
 
     // Addresses that name this network. Some systems take them to this machine.
@@ -56,7 +55,6 @@ public final class HomeNetwork {
         return older == null ? (bytes[0] & UNIQUE_LOCAL_MASK) == UNIQUE_LOCAL : holds(older);
     }
 
-    // The older address a newer one carries. Null for one that carries none.
     private static InetAddress carried(byte[] bytes) {
         for (byte[] start : CARRIERS) {
             if (Arrays.equals(bytes, 0, start.length, start, 0, start.length)) {
@@ -71,8 +69,7 @@ public final class HomeNetwork {
         return null;
     }
 
-    // True for a name that always stands for the machine it is looked up on. Through a proxy that
-    // is the machine of the proxy.
+    // Through a proxy the name stands for the machine of the proxy.
     public static boolean namesHome(String host) {
         String name = host.toLowerCase(Locale.ROOT);
         while (name.endsWith(".")) {

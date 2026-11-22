@@ -11,13 +11,10 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 // CameraMixin and MouseHandlerMixin apply the zoom at read time. The saved options are never touched.
 public final class Zoom extends Module {
 
-    // Share of the remaining distance the ease covers each frame.
     private static final double EASE = 0.3;
 
-    // Below this the ease has arrived.
     private static final double SETTLED = 0.005;
 
-    // Share of the current zoom that one wheel notch moves it by.
     private static final double NOTCH_SHARE = 0.25;
 
     private final NumberSetting factor = new NumberSetting("Factor",
@@ -36,7 +33,6 @@ public final class Zoom extends Module {
 
     private double smoothed = 1;
 
-    // What the game settings were before the zoom touched them.
     private boolean savedCinematic;
     private boolean hidHud;
 
@@ -77,7 +73,6 @@ public final class Zoom extends Module {
         hidHud = false;
     }
 
-    // Picks up a setting change made whilst the zoom is running.
     @Subscribe
     private void onTick(TickEvent event) {
         apply();

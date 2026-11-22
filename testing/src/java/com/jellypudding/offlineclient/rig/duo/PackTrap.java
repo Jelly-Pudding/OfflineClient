@@ -26,7 +26,6 @@ public final class PackTrap implements AutoCloseable {
         counter.start();
     }
 
-    // Every caller is counted and sent away with nothing.
     private void count() {
         while (!door.isClosed()) {
             try (Socket caller = door.accept()) {

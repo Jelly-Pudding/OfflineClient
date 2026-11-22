@@ -68,19 +68,15 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Opens the containers around you one at a time. ChestStealer's rules decide what
-// comes out and InventoryTweaks' dump filter decides what goes in.
+// ChestStealer's rules decide what comes out and InventoryTweaks' dump filter decides what goes in.
 public final class ChestAura extends Module {
 
     public enum Mode { TAKE, STORE, BOTH }
 
-    // Ticks a clicked container gets to open before it is passed over.
     private static final int OPEN_TIMEOUT = 20;
 
-    // How far another player's crosshair reaches when deciding what they look at.
     private static final double LOOK_REACH = 5;
 
-    // Feet this close to the top of a container stand on it.
     private static final double STAND_BAND = 0.5;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -121,7 +117,6 @@ public final class ChestAura extends Module {
             + " Works whilst the aura is off.",
         KeybindSetting.UNBOUND);
 
-    // The container a visit clicks. A block or a vehicle that carries one.
     private sealed interface Target permits BlockTarget, VehicleTarget {
     }
 
@@ -131,20 +126,17 @@ public final class ChestAura extends Module {
     private record VehicleTarget(int id) implements Target {
     }
 
-    // Every container finished with or passed over. A double chest adds both halves.
+    // A double chest adds both halves.
     private final Set<Target> done = new HashSet<>();
-    // Containers a full inventory walked away from. They are tried again once a slot frees up.
     private final Set<Target> later = new HashSet<>();
     private final WorldWatch world = new WorldWatch();
     private final JoinWatch joins = new JoinWatch();
     private final FrameLabels labels = new FrameLabels();
 
-    // The container clicked last. Null between visits.
     private Target visiting;
     private boolean opened;
     // The live menu as the container was clicked. Only a menu opened after it is the visit's own.
     private int clickedMenu;
-    // Set once a visit in both modes has stored what it can and moves on to taking.
     private boolean stored;
     private int waited;
     private int resting;
@@ -181,7 +173,6 @@ public final class ChestAura extends Module {
         return count(finished, "done");
     }
 
-    // Containers already finished with are skipped until the aura is switched off and on.
     @Override
     protected void onEnable() {
         done.clear();
@@ -233,7 +224,6 @@ public final class ChestAura extends Module {
         open(stealer);
     }
 
-    // One line each time the inventory fills. A freed slot brings back what it walked away from.
     private void noticeFull(ChestStealer stealer) {
         if (stealer.roomToTake()) {
             fullTold = false;
@@ -255,7 +245,6 @@ public final class ChestAura extends Module {
             || !stopWhenFull.isOn() && (stealer.extrasToStore() || stealer.mayUpgrade());
     }
 
-    // The nearest block or vehicle in reach that the stealer works and nobody else is using.
     private void open(ChestStealer stealer) {
         if (sortsByFrames()) {
             labels.read(pos -> mc.level.getBlockEntity(pos) instanceof BlockEntity entity && menuFor(entity) != null,
@@ -335,8 +324,8 @@ public final class ChestAura extends Module {
         }
     }
 
-    // The screen the click opened once its items are in. A click that opened nothing leaves the
-    // wait open to a screen you open yourself. Your ender chest is never one the aura clicked.
+    // A click that opened nothing leaves the wait open to a screen you open yourself. Your ender
+    // chest is never one the aura clicked.
     private boolean ownScreen(ChestStealer stealer) {
         Screen screen = mc.gui.screen();
         return InventoryUtil.openedSince(clickedMenu) != null && stealer.handles(screen)
@@ -358,7 +347,6 @@ public final class ChestAura extends Module {
         return stealer.take();
     }
 
-    // Closes the container. One finished for good is not opened again.
     private void finish(boolean forGood) {
         ChestStealer stealer = Modules.get(ChestStealer.class);
         if (visiting != null && stealer != null && stealer.handles(mc.gui.screen())) {
@@ -393,7 +381,6 @@ public final class ChestAura extends Module {
         return sortByFrames.isOn() && !mode.is(Mode.TAKE);
     }
 
-    // With Sort by frames a container takes only what its frames show as read when it was picked.
     private Predicate<ItemStack> takes(Target target) {
         if (!sortsByFrames()) {
             return _ -> true;
@@ -428,7 +415,6 @@ public final class ChestAura extends Module {
         return !BlockUtil.keptShut(entity) && !inUse(entity, other) && !watched(pos, other);
     }
 
-    // The nearest cart or boat with a container in reach. One another player rides is theirs.
     private Entity nearestVehicle(ChestStealer stealer) {
         Vec3 eye = mc.player.getEyePosition();
         double best = range.getValue() * range.getValue();
@@ -448,7 +434,6 @@ public final class ChestAura extends Module {
         return nearest;
     }
 
-    // A block the aura knows how to open and read.
     private static boolean opens(Block block) {
         return block instanceof ChestBlock || block instanceof BarrelBlock || block instanceof ShulkerBoxBlock
             || block instanceof HopperBlock || block instanceof DispenserBlock
@@ -456,7 +441,6 @@ public final class ChestAura extends Module {
             || block instanceof CrafterBlock;
     }
 
-    // The screen a container opens. Null for anything the aura leaves alone such as an ender chest.
     private static MenuType<?> menuFor(BlockEntity entity) {
         return switch (entity) {
             case ChestBlockEntity chest -> BlockUtil.otherChestHalf(chest.getBlockPos(), chest.getBlockState()) == null
@@ -494,7 +478,6 @@ public final class ChestAura extends Module {
         return state.hasProperty(BarrelBlock.OPEN) && state.getValue(BarrelBlock.OPEN);
     }
 
-    // Another player stands on the container or has their crosshair on it.
     private boolean watched(BlockPos pos, BlockPos other) {
         for (AbstractClientPlayer player : mc.level.players()) {
             if (!EntityUtil.isOtherPlayer(player)) {

@@ -31,7 +31,7 @@ public final class EntityPipelines {
     private record Key(Identifier texture, boolean solid) {
     }
 
-    // One render type per skin for each phase it can go in. Only touched from the render thread.
+    // Only touched from the render thread.
     private static final Map<Key, RenderType> TYPES = new HashMap<>();
 
     private EntityPipelines() {

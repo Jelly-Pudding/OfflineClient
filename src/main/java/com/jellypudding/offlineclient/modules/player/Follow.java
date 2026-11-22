@@ -24,14 +24,11 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
 
-// Goes after another player or an entity. The pathfinder picks the way or the
-// player heads straight at the target.
 public final class Follow extends Module {
 
-    // Ticks between two searches. A moving target must not thrash the worker.
+    // A moving target must not thrash the worker.
     private static final int SEARCH_DELAY = 20;
 
-    // How far the target has to move before the path is worked out again.
     private static final double MOVED = 3;
 
     public enum Target { NEAREST, NAME, ENTITY }

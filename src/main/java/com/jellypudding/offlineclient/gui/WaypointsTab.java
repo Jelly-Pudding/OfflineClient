@@ -14,10 +14,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-// The waypoints of the world you are in from A to Z. A click walks there and closes the GUI.
 final class WaypointsTab implements TabView.Source {
 
-    // A waypoint typed with its spot is a name and three coordinates.
     private static final int SPOT_WORDS = 4;
 
     @Override
@@ -60,8 +58,6 @@ final class WaypointsTab implements TabView.Source {
         return "type a name and press enter";
     }
 
-    // Only shown until this server has a waypoint. The tab walks and marks and removes and
-    // the list does the rest.
     @Override
     public List<TabView.Hint> hints(String query) {
         if (!query.isEmpty() || !WaypointStore.get().onServer().isEmpty()) {
@@ -116,11 +112,10 @@ final class WaypointsTab implements TabView.Source {
         WaypointStore.get().remove(name);
     }
 
-    // A waypoint typed in the tab. A name alone has no spot and marks where you stand.
+    // A name alone has no spot and marks where you stand.
     private record Mark(String name, BlockPos spot) {
     }
 
-    // A name alone or a name and x y z. Null for any other text.
     private static Mark mark(String text) {
         String[] words = text.trim().split("\\s+");
         if (words.length == 1) {

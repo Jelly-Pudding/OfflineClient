@@ -19,7 +19,6 @@ public final class DisconnectCommand extends Command {
             "disconnect [quit|chat|hurt|move] [reason]", "leave");
     }
 
-    // A first word that names no way is the start of the reason.
     @Override
     public void execute(String[] args) {
         if (OfflineClient.MC.getConnection() == null) {

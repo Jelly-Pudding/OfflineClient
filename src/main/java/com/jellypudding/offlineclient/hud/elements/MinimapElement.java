@@ -16,16 +16,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
-// The land around you. It is on whilst the Minimap module is. The module picks what shows and
-// this decides where it sits and how big it is.
 public final class MinimapElement extends HudElement {
 
-    // The square before any stretch.
     private static final int SIZE = 100;
 
     private final TerrainPicture land = new TerrainPicture();
-    // The layer at your height over the land whilst a roof is over you. What it has not read is
-    // clear and the land shows through.
     private final TerrainPicture cave = new TerrainPicture();
     private final NumberSetting arrowSize = new NumberSetting("Minimap arrow size",
         "How big the arrow that marks you is drawn next to its normal size.", 1, 0.5, 3, 0.1, "x").min(0.1);
@@ -47,7 +42,6 @@ public final class MinimapElement extends HudElement {
         return OfflineClient.MC.player != null && OfflineClient.MC.level != null;
     }
 
-    // Laid out in GUI pixels. A stretch shows more land and leaves the marks their size.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         Minimap minimap = Modules.active(Minimap.class);

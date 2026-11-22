@@ -14,7 +14,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// Buttons under the vanilla pair that switch AutoRespawn or Ghost on from the death screen.
 @Mixin(DeathScreen.class)
 public abstract class DeathScreenMixin extends Screen {
 

@@ -21,7 +21,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 // must hear of each one.
 public final class PullBacks {
 
-    // A pull back puts you within this many blocks of a spot you stood on in the last few seconds.
     private static final double REACH = 1;
     private static final int LOOK_BACK_TICKS = 100;
 
@@ -40,7 +39,6 @@ public final class PullBacks {
     private final Queue<Vec3> moved = new ConcurrentLinkedQueue<>();
     private final PositionHistory history = new PositionHistory();
     private final WorldWatch world = new WorldWatch();
-    // How many blocks each pull back moved you.
     private final Feed<Double> pulls = new Feed<>();
 
     private PullBacks() {

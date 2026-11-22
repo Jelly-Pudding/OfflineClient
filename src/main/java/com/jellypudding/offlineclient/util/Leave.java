@@ -18,10 +18,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-// The ways the client leaves a server on purpose. Whatever walks out goes through here. A plain
-// quit shows its words on the disconnected screen. A way that gets you kicked leaves that screen
-// to the server and keeps the words to go under the kick text. A way the server lets pass
-// ends in a plain quit with the reason under the words. Going back to the menu takes no words.
+// A plain quit shows its words on the disconnected screen. A way that gets you kicked leaves that
+// screen to the server and keeps the words to go under the kick text. A way the server lets pass
+// ends in a plain quit with the reason under the words.
 public enum Leave {
 
     QUIT,
@@ -41,7 +40,6 @@ public enum Leave {
     private static Component note;
     private static long notedAt;
 
-    // The word a command takes for the way.
     public String word() {
         return name().toLowerCase(Locale.ROOT);
     }
@@ -50,13 +48,11 @@ public enum Leave {
         return Arrays.stream(values()).map(Leave::word).toList();
     }
 
-    // Null when no way goes by that word.
     public static Leave named(String word) {
         return Arrays.stream(values()).filter(way -> way.word().equalsIgnoreCase(word)).findFirst().orElse(null);
     }
 
-    // Leaves this way with words for the disconnected screen. Does nothing off a server. A world
-    // Linger holds has no connection left to close and is let go instead.
+    // A world Linger holds has no connection left to close and is let go instead.
     public void go(String words) {
         ClientPacketListener game = OfflineClient.MC.getConnection();
         LocalPlayer player = OfflineClient.MC.player;
@@ -81,8 +77,6 @@ public enum Leave {
         OfflineClient.INSTANCE.getEventBus().register(new Fallback(connection, words));
     }
 
-    // Leaves the world the way the pause menu does and opens the menu it came from. A single
-    // player world is saved first.
     public static void toMenu() {
         OfflineClient.MC.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
     }
@@ -118,8 +112,7 @@ public enum Leave {
             + (reason == null ? "" : "\n§7" + reason))));
     }
 
-    // The words for the disconnected screen after a kick asked for here. Null once read and for
-    // a disconnect long after.
+    // Null once read and for a disconnect long after.
     public static Component takeNote() {
         Component fresh = System.currentTimeMillis() - notedAt <= NOTE_MILLIS ? note : null;
         note = null;

@@ -65,14 +65,11 @@ public final class Nametags extends Module {
     public enum DistanceColor { GRADIENT, FLAT }
 
     private static final int ITEM_SIZE = 16;
-    // Pixels between the effect icons and at the ends of their row.
     private static final int EFFECT_GAP = 1;
-    // Enchantments are written at half size before their own scale.
     private static final float ENCHANT_SIZE = 0.5f;
     private static final int GOLD = 0xFFE8B923;
     private static final int TICKS_PER_HOUR = SharedConstants.TICKS_PER_MINUTE * 60;
 
-    // The order the six item slots are drawn in.
     private static final EquipmentSlot[] SLOTS = {
         EquipmentSlot.MAINHAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST,
         EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.OFFHAND
@@ -243,7 +240,7 @@ public final class Nametags extends Module {
         return self.isOn() && AwayView.ownBodyVisible();
     }
 
-    // The size of the tag over an entity or nought when it has none. EntityOwner stacks its label on it.
+    // Nought when the entity has no tag. EntityOwner stacks its label on it.
     public float tagScale(Entity entity, double distance) {
         return isEnabled() && distance <= range.getValue() && wanted(entity) ? factor(distance) : 0;
     }
@@ -252,7 +249,6 @@ public final class Nametags extends Module {
         return (float) (scale.getValue() * RenderUtil.labelShrink(distance));
     }
 
-    // Items sit low and their tag hugs them. Everything else gets a little headroom.
     public static double tagHeight(Entity entity) {
         boolean item = entity instanceof ItemEntity || entity instanceof ItemFrame;
         return entity.getEyeHeight() + (item ? 0.2 : 0.5);
@@ -312,7 +308,6 @@ public final class Nametags extends Module {
         drawGear(context, tag, player, factor);
     }
 
-    // A row of icons just under the tag. Each icon stands as tall as a line of text.
     private void drawEffects(GuiGraphicsExtractor context, Tag tag, Player player, float factor) {
         List<Holder<MobEffect>> seen = SeenEffects.of(player);
         if (seen.isEmpty()) {
@@ -370,7 +365,6 @@ public final class Nametags extends Module {
         label(context, tag, factor, List.of(text), List.of(nameColor.getColor()));
     }
 
-    // The network id goes on the end for the kinds picked.
     private void label(GuiGraphicsExtractor context, Tag tag, float factor,
                        List<String> parts, List<Integer> colors) {
         List<String> words = parts;
@@ -394,7 +388,6 @@ public final class Nametags extends Module {
         colors.add(ColorUtil.redToGreen(EntityUtil.healthShare(living)));
     }
 
-    // Full health then speed and jump each coloured by how it compares with wild horses.
     private static void addMountStats(List<String> parts, List<Integer> colors, LivingEntity mount) {
         for (Mounts.Figure figure : Mounts.figures(mount)) {
             parts.add(switch (figure.measure()) {
@@ -435,7 +428,6 @@ public final class Nametags extends Module {
         return EntityUtil.gameModeLetter(info == null ? null : info.getGameMode());
     }
 
-    // Seconds with a tenth whilst short and whole minutes or hours beyond.
     private static String fuseText(int ticks) {
         if (ticks > TICKS_PER_HOUR) {
             return ticks / TICKS_PER_HOUR + " h";

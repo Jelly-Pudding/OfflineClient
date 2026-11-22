@@ -42,7 +42,7 @@ public enum UseClick {
         clicking = false;
     }
 
-    // The item the hand held as the player's click began. Null outside a click.
+    // Null outside a click.
     public static Item heldAtClick(InteractionHand hand) {
         return clicking ? held[hand.ordinal()] : null;
     }

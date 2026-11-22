@@ -112,6 +112,9 @@ public final class AutoAnvil extends Module {
             timer--;
             return;
         }
+        if (Hands.slotsTaken()) {
+            return;
+        }
 
         // Only the first placement of the tick turns.
         boolean rotated = placeTrigger(feet);
@@ -170,7 +173,6 @@ public final class AutoAnvil extends Module {
         return rotate.isOn();
     }
 
-    // The anvil needs the whole column free to reach their head.
     private boolean clearPath(BlockPos feet, BlockPos above) {
         for (int y = feet.getY() + 1; y <= above.getY(); y++) {
             if (!BlockUtil.isReplaceable(new BlockPos(feet.getX(), y, feet.getZ()))) {

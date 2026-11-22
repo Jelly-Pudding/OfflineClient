@@ -18,10 +18,8 @@ import net.minecraft.world.item.crafting.RecipePropertySet;
 
 import java.util.List;
 
-// Keeps a furnace fed whilst its screen is open and takes what comes out.
 public final class AutoSmelter extends StationModule<AbstractFurnaceMenu> {
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 10;
 
     private final RegistryListSetting<Item> fuels = new RegistryListSetting<>("Fuel",
@@ -117,7 +115,6 @@ public final class AutoSmelter extends StationModule<AbstractFurnaceMenu> {
         MenuClicks.quickMove(furnace, slot);
     }
 
-    // Each furnace type takes its own set of inputs.
     private static ResourceKey<RecipePropertySet> recipesFor(AbstractFurnaceMenu furnace) {
         if (furnace instanceof BlastFurnaceMenu) {
             return RecipePropertySet.BLAST_FURNACE_INPUT;

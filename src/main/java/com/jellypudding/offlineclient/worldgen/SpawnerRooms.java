@@ -30,7 +30,6 @@ public final class SpawnerRooms {
                        int chests) {
     }
 
-    // One step of a spider corridor run and what its six cells held.
     private record Run(Direction.Axis axis, int across, int floor, int first, int last, int webs, int caveAir,
                        boolean plainAir, boolean spawner) {
 
@@ -79,13 +78,11 @@ public final class SpawnerRooms {
     private static final int PORTAL_ROOM_REACH = 3;
     private static final int PORTAL_ROOM_DEPTH = 2;
 
-    // How far round a room water lava and fire are looked for.
     private static final int FLOW_REACH = 4;
 
     private SpawnerRooms() {
     }
 
-    // Every dungeon and spider corridor the scanned chunk owns. It waits for the chunks round it.
     public static void scan(ChunkScanner.View view, List<Room> out) {
         if (!view.complete()) {
             return;
@@ -124,14 +121,11 @@ public final class SpawnerRooms {
         });
     }
 
-    // The spider corridor a cobweb hangs in or null.
     private static Room corridorThrough(SeenBlocks world, int x, int y, int z) {
         Run run = bestRun(world, x, y, z, false);
         return run == null ? null : corridor(world, run);
     }
 
-    // The room a structure spawner stands in or null when its place has none or the blocks
-    // there do not match one.
     public static Room around(SpawnerPlace place, SeenBlocks world, BlockPos spawner) {
         return switch (place) {
             case DUNGEON -> dungeon(world, spawner);
@@ -159,8 +153,7 @@ public final class SpawnerRooms {
         return false;
     }
 
-    // The dungeon round a spawner spot or null when the blocks there are no dungeon. A size
-    // too small puts the walls inside the room and one too big puts them in the floor plan.
+    // A size too small puts the walls inside the room and one too big puts them in the floor plan.
     public static Room dungeon(SeenBlocks world, BlockPos centre) {
         if (!openAbove(world, centre)) {
             return null;
@@ -222,7 +215,6 @@ public final class SpawnerRooms {
         return cobble >= cells * WALL_SHARE;
     }
 
-    // How many cells one side of the walls has and how many of them are cobblestone.
     private static int[] sideCobble(SeenBlocks world, BlockPos centre, int x0, int x1, int z0, int z1) {
         int cells = 0;
         int cobble = 0;
@@ -241,7 +233,6 @@ public final class SpawnerRooms {
         return state.is(Blocks.COBBLESTONE) || state.is(Blocks.MOSSY_COBBLESTONE);
     }
 
-    // The inside of a fitted dungeon or null when it holds too much that no dungeon would.
     private static Room inside(SeenBlocks world, BlockPos centre, int halfX, int halfZ) {
         int cells = 0;
         int caveAir = 0;
@@ -325,8 +316,6 @@ public final class SpawnerRooms {
         return run.length() >= SHORTEST_RUN && run.webs() >= cells * WEB_SHARE && run.caveAir() > 0 ? run : null;
     }
 
-    // How many sections the run takes in one way from where it starts. What they hold goes in
-    // the tally.
     private static int grow(SeenBlocks world, Direction.Axis axis, int across, int floor, int start, int step,
                             int[] tally) {
         int taken = 0;
@@ -439,8 +428,8 @@ public final class SpawnerRooms {
         return new Room(SpawnerPlace.STRONGHOLD, spawner.immutable(), box, true, false, plainAir, 0);
     }
 
-    // True when water lava or fire lies within reach of the box. Fire burns supports away and
-    // a flow cut off from its source draws back and leaves plain air behind.
+    // Fire burns supports away and a flow cut off from its source draws back and leaves plain air
+    // behind.
     private static boolean nearFlow(SeenBlocks world, AABB box) {
         AABB reach = box.inflate(FLOW_REACH);
         for (int x = (int) Math.floor(reach.minX); x < reach.maxX; x++) {

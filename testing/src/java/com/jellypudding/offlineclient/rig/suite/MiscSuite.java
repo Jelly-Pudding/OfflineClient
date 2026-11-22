@@ -22,12 +22,17 @@ import net.minecraft.client.telemetry.TelemetryEventType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
+import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.phys.Vec3;
@@ -67,6 +72,10 @@ public final class MiscSuite implements Suite {
     private static final int CRASH_BLOCKS = (1 << 20) + 1;
     private static final String PLAIN_BLAST = "AntiCrash lets a plain blast pass without a word";
     private static final String CRASH_BLAST = "AntiCrash speaks up about a blast no real explosion could send";
+    private static final String WILD_MOVE = "AntiCrash drops a move past the edge of the world and stills a push no "
+        + "game makes";
+    private static final double PAST_THE_EDGE = 4.0e7;
+    private static final double WILD_PUSH = 1.0e5;
     private static final int ACT_TICKS = 100;
     // A beacon counts its pyramid every four seconds.
     private static final int BEACON_TICKS = 100;
@@ -98,7 +107,7 @@ public final class MiscSuite implements Suite {
     @Override
     public void run(Rig rig) {
         Grounds.play(rig, NAME, plays(), stage -> home = stage.home(),
-            Grounds.Limits.NONE.aloneOnly(CRASH_BLAST).holdsBack(PLAIN_BLAST));
+            Grounds.Limits.NONE.aloneOnly(CRASH_BLAST, WILD_MOVE).holdsBack(PLAIN_BLAST));
     }
 
     private Map<String, Case.Body> plays() {
@@ -123,6 +132,7 @@ public final class MiscSuite implements Suite {
         plays.put("AntiCrash keeps a crowd of entities under its cap", this::antiCrash);
         plays.put(PLAIN_BLAST, this::plainBlast);
         plays.put(CRASH_BLAST, this::crashBlast);
+        plays.put(WILD_MOVE, this::wildMove);
         plays.put("PacketCanceller drops the server's chat lines", this::packetCanceller);
         plays.put("Triggers switches a module on once you are badly hurt and off again", this::triggers);
         plays.put("Webhook posts its test line and a line when you are hurt", this::webhook);
@@ -203,7 +213,6 @@ public final class MiscSuite implements Suite {
         rig.expect(!guarded.isEmpty() && !guarded.contains(me), "The chat still shows the real name");
     }
 
-    // Says the words and hands back the line of chat the screen then shows them in.
     private static String chatLine(Rig rig, String words) {
         said(rig, words);
         for (String text : rig.frames().capture("chat " + words).texts()) {
@@ -439,7 +448,6 @@ public final class MiscSuite implements Suite {
         rig.expect(dropped, "A line from the server still reached chat");
     }
 
-    // Has the server say the words to the player and says whether they reached chat.
     private static boolean hears(Rig rig, String words) {
         World world = rig.world();
         rig.act(mc -> mc.gui.hud.getChat().clearMessages(true));
@@ -461,23 +469,52 @@ public final class MiscSuite implements Suite {
         rig.expect(said.isEmpty(), "AntiCrash raised an alarm over a stick of TNT and said " + said);
     }
 
-    // No blast of a real server holds a million blocks. Only the single player server can be
-    // made to send one.
+    // No blast of a real server holds a million blocks.
     private void crashBlast(Rig rig) {
         rig.client().set("AntiCrash", "Notify", "on");
         rig.client().enable("AntiCrash");
         int mark = rig.client().chatMark();
         Vec3 centre = Vec3.atCenterOf(home.above(BLAST_HEIGHT));
-        rig.local().server(server -> {
-            server.getPlayerList().getPlayers().getFirst().connection.send(new ClientboundExplodePacket(centre,
-                BLAST_RADIUS, CRASH_BLOCKS, Optional.empty(), ParticleTypes.EXPLOSION, SoundEvents.GENERIC_EXPLODE,
-                WeightedList.of(), false));
-            return true;
-        });
+        sends(rig, new ClientboundExplodePacket(centre, BLAST_RADIUS, CRASH_BLOCKS, Optional.empty(),
+            ParticleTypes.EXPLOSION, SoundEvents.GENERIC_EXPLODE, WeightedList.of(), false));
         rig.ticks(CHAT_TICKS);
         List<String> said = rig.client().saidSince(mark);
         rig.expect(said.stream().anyMatch(line -> line.contains("explosion")), "AntiCrash said nothing of a blast of "
             + CRASH_BLOCKS + " blocks. It said " + said);
+    }
+
+    // The first move is dropped whole. The second is sound but for its push and has to arrive.
+    private void wildMove(Rig rig) {
+        rig.client().set("AntiCrash", "Notify", "on");
+        rig.client().enable("AntiCrash");
+        Props.summon(rig, "armor_stand", home.north(3), CROWD);
+        LivingEntity stand = rig.local().living(each -> each.getType() == EntityTypes.ARMOR_STAND).getFirst();
+        int id = stand.getId();
+        Vec3 stood = stand.position();
+        Vec3 raised = stood.add(0, 1, 0);
+        sends(rig, teleport(id, new Vec3(PAST_THE_EDGE, stood.y, stood.z), Vec3.ZERO));
+        rig.ticks(SEEN_TICKS);
+        Vec3 kept = rig.ask(mc -> mc.level.getEntity(id).position());
+        sends(rig, teleport(id, raised, new Vec3(WILD_PUSH, 0, 0)));
+        rig.ticks(SEEN_TICKS);
+        Vec3 moved = rig.ask(mc -> mc.level.getEntity(id).position());
+        double push = rig.ask(mc -> mc.level.getEntity(id).getDeltaMovement().length());
+        rig.note("The armour stand stayed at " + kept + " and then went to " + moved + " with a push of " + push);
+        rig.expect(kept.distanceTo(stood) < 1, "The armour stand went past the edge of the world");
+        rig.expect(moved.distanceTo(raised) < 1, "The sound half of a move with a wild push never arrived");
+        rig.expect(push < 1, "The armour stand kept the wild push");
+    }
+
+    private static ClientboundTeleportEntityPacket teleport(int id, Vec3 to, Vec3 push) {
+        return new ClientboundTeleportEntityPacket(id, new PositionMoveRotation(to, push, 0, 0), Set.of(), true);
+    }
+
+    // Only the single player server can be made to send what no real server would.
+    private static void sends(Rig rig, Packet<?> packet) {
+        rig.local().server(server -> {
+            server.getPlayerList().getPlayers().getFirst().connection.send(packet);
+            return true;
+        });
     }
 
     // Two hearts are left after the blow and the rule asks for fewer than three.
@@ -596,7 +633,6 @@ public final class MiscSuite implements Suite {
         rig.expect(all > plain, "The beacon offers no more effects than its pyramid is worth");
     }
 
-    // Opens the beacon and counts the effect buttons that can be pressed.
     private static int effectsOffered(Rig rig, BlockPos beacon) {
         rig.controls().aimAt(Vec3.atCenterOf(beacon));
         rig.ticks(2);
@@ -637,7 +673,6 @@ public final class MiscSuite implements Suite {
         rig.expect(held >= plain + 2, "The server was no further behind the player");
     }
 
-    // How far the server has the player behind where the game has them at the end of a walk.
     private static double behind(Rig rig) {
         rig.controls().hold(FORWARD);
         rig.ticks(WALK_TICKS);

@@ -54,7 +54,6 @@ public final class Web {
     private Web() {
     }
 
-    // Runs the work on a virtual thread named after it.
     public static void later(String name, Runnable work) {
         Thread.ofVirtual().name("offlineclient " + name).start(work);
     }
@@ -69,7 +68,6 @@ public final class Web {
         return postJson(address, json, null, TIMEOUT);
     }
 
-    // The same with a bearer key when one is given and a wait of the caller's choosing.
     public static Page postJson(String address, String json, String key, Duration wait) {
         return send(address, wait, request -> {
             if (key != null) {

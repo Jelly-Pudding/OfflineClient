@@ -77,7 +77,6 @@ public final class AutoDrop extends Module {
         "Ticks between each throw.", 2, 0, 20, 1, " ticks");
 
     private int timer;
-    // Where among the picked slots the next turn starts.
     private int turn;
 
     public AutoDrop() {
@@ -129,8 +128,7 @@ public final class AutoDrop extends Module {
         return false;
     }
 
-    // Junk is what the list names. With a keep list it is whatever the list leaves out. The
-    // blocks Scaffold is building with are never junk.
+    // The blocks Scaffold is building with are never junk.
     private boolean unwanted(ItemStack stack) {
         if (Modules.scaffoldBuildsWith(stack)) {
             return false;
@@ -184,7 +182,6 @@ public final class AutoDrop extends Module {
         return thrown > 0;
     }
 
-    // Hotbar indexes counted from nought on the left.
     private List<Integer> pickedSlots() {
         List<Integer> picked = new ArrayList<>();
         for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {

@@ -25,7 +25,6 @@ public final class TextAudit {
     private TextAudit() {
     }
 
-    // One line for each rule a text of the frame breaks.
     public static List<String> problems(List<Drawn> frame, int screenWidth, int screenHeight) {
         Set<String> problems = new LinkedHashSet<>();
         Drawn.Box screen = new Drawn.Box(0, 0, screenWidth, screenHeight);

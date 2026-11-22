@@ -8,7 +8,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
 
-// For testing movement. A tilde keeps the speed you already have on that axis.
+// For testing movement.
 public final class VelocityCommand extends Command {
 
     public VelocityCommand() {

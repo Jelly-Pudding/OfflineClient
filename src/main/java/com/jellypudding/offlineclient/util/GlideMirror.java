@@ -93,22 +93,18 @@ public final class GlideMirror {
             return sideways ? (speedBefore - kept.horizontalDistance()) * CRASH_SCALE - CRASH_FREE : 0;
         }
 
-        // True whilst the step is fast enough to cost anything at all.
         public boolean canHurt() {
             return speedBefore * CRASH_SCALE > CRASH_FREE;
         }
 
-        // True when a block cuts the step short sideways from a place.
         public boolean blocked(LocalPlayer player, AABB box) {
             return cutSideways(swept(player, box));
         }
 
-        // The velocity the copy has after the step from a place.
         private Vec3 after(LocalPlayer player, AABB box) {
             return kept(travelled(player, box));
         }
 
-        // How far the step gets from a place before anything stops it.
         private Vec3 swept(LocalPlayer player, AABB box) {
             Level level = player.level();
             return Entity.collideBoundingBox(player, movement, box, level,
@@ -145,12 +141,10 @@ public final class GlideMirror {
     // The one it takes next and the fastest and the last of them. One step can be two of them.
     public record Ahead(Step next, Step fastest, Step last) {
 
-        // True whilst any of them is fast enough to cost anything at all.
         public boolean canHurt() {
             return fastest.canHurt();
         }
 
-        // True when any of them would hurt from a place.
         public boolean hurts(LocalPlayer player, AABB box) {
             return Stream.of(next, fastest, last).distinct().anyMatch(step -> step.damage(player, box) > 0);
         }
@@ -197,7 +191,6 @@ public final class GlideMirror {
         return lookHeld ? RotationManager.serverPitch() : player.getXRot();
     }
 
-    // That look with the pitch taken out.
     public Vec3 levelLook(LocalPlayer player) {
         return Vec3.directionFromRotation(0, yaw(player));
     }

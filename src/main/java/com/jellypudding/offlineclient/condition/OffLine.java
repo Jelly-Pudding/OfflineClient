@@ -5,15 +5,14 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
 
-// Drifting sideways off a straight line such as a highway. The line starts where you stand as
-// the watching begins and runs the way you face rounded to the nearest eighth turn.
+// The line starts where you stand as the watching begins and runs the way you face rounded to the
+// nearest eighth turn.
 final class OffLine extends Condition {
 
     private static final float EIGHTH_TURN = 45;
 
     private final NumberSetting drift;
 
-    // A point on the line and the unit vector along it. Null until the line is taken.
     private Vec3 origin;
     private Vec3 along;
     private double off;
@@ -37,7 +36,6 @@ final class OffLine extends Condition {
         along = new Vec3(-Math.sin(yaw), 0, Math.cos(yaw));
     }
 
-    // The line is taken on the next tick in a world.
     @Override
     public void start() {
         origin = null;

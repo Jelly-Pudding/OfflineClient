@@ -64,15 +64,13 @@ public final class ChestEsp extends Module {
 
     public enum Mode { BOX, GLOW, SHADER }
 
-    // The box of a container with the colour it gets and whether it has a fancy renderer. A vehicle
-    // keeps its entity. A block keeps the boxes of its shape whilst the shader draws it.
+    // A vehicle keeps its entity. A block keeps the boxes of its shape whilst the shader draws it.
     private record Target(BlockPos pos, AABB box, int color, boolean modelled, Entity vehicle, List<AABB> shape) {
     }
 
     // One sixteenth of a block. Chest models sit this far in from the block edge.
     private static final double PIXEL = 1.0 / 16;
-    // A chest not yet judged natural or placed is looked at once in this many ticks. The chests
-    // take turns and no tick judges them all at once.
+    // The chests take turns and no tick judges them all at once.
     private static final int JUDGE_TICKS = 20;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "How containers are marked.", Mode.BOX)
@@ -178,7 +176,6 @@ public final class ChestEsp extends Module {
     private final Long2BooleanOpenHashMap naturalAt = new Long2BooleanOpenHashMap();
     private int ticks;
 
-    // The colour the block entity being drawn should glow in. Zero for none.
     private static int currentGlow;
 
     public ChestEsp() {
@@ -221,7 +218,6 @@ public final class ChestEsp extends Module {
         return currentGlow;
     }
 
-    // Zero when the block entity there gets no glow.
     public int glowFor(BlockPos pos) {
         if (!isEnabled() || !mode.is(Mode.GLOW) || Conceal.hides(Conceal.Part.WORLD)) {
             return 0;
@@ -229,7 +225,6 @@ public final class ChestEsp extends Module {
         return glows.getOrDefault(pos, 0);
     }
 
-    // Only the containers the settings mark count as opened.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         opened.noteClick(event.getPacket(), blockEntity -> colorFor(blockEntity) != 0);
@@ -322,8 +317,6 @@ public final class ChestEsp extends Module {
         }
     }
 
-    // The boxes of the block's shape and for a double chest those of the other half too. A block
-    // with no shape keeps its marking box.
     private List<AABB> shapeOf(BlockPos pos, BlockState state, BlockPos other, AABB box) {
         List<AABB> parts = new ArrayList<>();
         for (AABB part : state.getShape(mc.level, pos).toAabbs()) {
@@ -346,9 +339,8 @@ public final class ChestEsp extends Module {
         }
     }
 
-    // True for a single chest a dungeon or village or camp or trial chamber put down. Only the
-    // Overworld builds them. A chest with chunks round it still missing counts as placed until
-    // its turn comes again. Only the village test needs the chunks a whole village spans.
+    // Only the Overworld builds them. A chest with chunks round it still missing counts as placed
+    // until its turn comes again. Only the village test needs the chunks a whole village spans.
     private boolean natural(BlockEntity blockEntity) {
         BlockPos pos = blockEntity.getBlockPos();
         if (!(blockEntity instanceof ChestBlockEntity) || blockEntity instanceof TrappedChestBlockEntity
@@ -381,7 +373,6 @@ public final class ChestEsp extends Module {
         return village;
     }
 
-    // Zero for a vehicle the settings leave out.
     private int vehicleColorFor(Entity entity) {
         if (entity instanceof MinecartChest) {
             return chestCarts.isOn() ? chestCartColor.getColor() : 0;
@@ -401,7 +392,7 @@ public final class ChestEsp extends Module {
             pos.getX() + 1 - PIXEL, pos.getY() + 1 - 2 * PIXEL, pos.getZ() + 1 - PIXEL);
     }
 
-    // Zero for a container the settings leave out. Subclasses are tested before their parents.
+    // Subclasses are tested before their parents.
     private int colorFor(BlockEntity blockEntity) {
         if (blockEntity instanceof TrappedChestBlockEntity) {
             return trappedChests.isOn() ? trappedColor.getColor() : 0;

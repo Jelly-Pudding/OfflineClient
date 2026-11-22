@@ -25,14 +25,12 @@ import java.util.Set;
 public final class ScreensSuite implements Suite {
 
     private static final String NAME = "Screens";
-    // Ticks a screen gets to lay itself out before its picture.
     private static final int SETTLE_TICKS = 10;
     private static final int MOST_TOLD = 8;
     private static final String CHOOSE_TAB = "chooseTab";
     private static final String HUD = "HUD";
     private static final String HIDE_IN_DEBUG = "Hide in debug screen";
     private static final String IN_LIST = "In module list";
-    // Ticks a piece of the overlay gets to find a free place before the next one is switched on.
     private static final int SEAT_TICKS = 2;
     // Pieces a player might well have on together. Each has something to show in an empty world
     // or shows a sample of itself in the editor.

@@ -61,15 +61,12 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
-// Plays Note Block Studio songs on the note blocks around you.
-// Blocks are tuned with clicks then struck on the beat. The bind pauses and resumes.
 public final class Notebot extends Module {
 
     public enum Instruments { EXACT, ANY }
 
     public enum Detect { BLOCK_STATE, BELOW_BLOCK }
 
-    // Where the notes of one instrument are sent. Same leaves them alone.
     public enum Remap {
         SAME, NONE, HARP, BASEDRUM, SNARE, HAT, BASS, FLUTE, BELL, GUITAR, CHIME,
         XYLOPHONE, IRON_XYLOPHONE, COW_BELL, DIDGERIDOO, BIT, BANJO, PLING
@@ -77,7 +74,6 @@ public final class Notebot extends Module {
 
     private enum Stage { SCAN, TUNE, RECHECK, PLAY, PREVIEW }
 
-    // The instruments a note block can be tuned to.
     private static final NoteBlockInstrument[] PLAYABLE = {
         NoteBlockInstrument.HARP, NoteBlockInstrument.BASEDRUM, NoteBlockInstrument.SNARE,
         NoteBlockInstrument.HAT, NoteBlockInstrument.BASS, NoteBlockInstrument.FLUTE,
@@ -90,10 +86,9 @@ public final class Notebot extends Module {
     // Note block pitches wrap after this many clicks.
     private static final int PITCHES = 25;
 
-    // Ticks a note may wait for its turn under One note a tick before it is left out.
     private static final int CARRY_TICKS = 4;
 
-    // The most notes one recording holds. Hours of music fit.
+    // Hours of music fit.
     private static final int MAX_RECORDED = 200000;
     private static final int MAX_NAME = 48;
     private static final String RECORDING = "recording";
@@ -159,7 +154,6 @@ public final class Notebot extends Module {
         .under(showScanned);
     private final TextSetting recordName = new TextSetting("Recording name",
         "The name the next recording is saved under in the songs folder.", RECORDING);
-    // One of the two rows shows at a time and says what a press does.
     private final ActionSetting record = new ActionSetting("Record",
         "Starts writing down every note block you hear whether Notebot is on or off.", this::startRecording)
         .visibleWhen(() -> !recording());
@@ -168,13 +162,11 @@ public final class Notebot extends Module {
         this::saveRecording)
         .visibleWhen(this::recording);
 
-    // A note waiting for its strike and the song tick it belongs to.
     private record Late(Note note, int due) {
     }
 
     private NoteSong loaded;
     private Stage stage;
-    // Holds a slot that cannot finish a note block whilst the song plays.
     private final SlotSwap slots = new SlotSwap();
 
     private boolean paused;
@@ -186,15 +178,12 @@ public final class Notebot extends Module {
     // Clicks still owed to each block whilst tuning.
     private final Map<BlockPos, Integer> tuning = new HashMap<>();
 
-    // Blocks struck this tick for the renderer.
     private final Set<BlockPos> struck = new HashSet<>();
 
-    // Every note block the scan saw whether the song uses it or not.
     private final Set<BlockPos> scanned = new HashSet<>();
 
     private int tuneWait;
 
-    // Notes of the song not struck yet. Only One note a tick leaves any waiting.
     private final Deque<Late> owed = new ArrayDeque<>();
 
     private final Recorder recorder = new Recorder();
@@ -216,7 +205,6 @@ public final class Notebot extends Module {
         searchTags("note block", "music", "nbs", "record song");
     }
 
-    // One row per instrument a note block can play.
     private Setting<?>[] buildRemaps() {
         List<Setting<?>> rows = new ArrayList<>();
         for (NoteBlockInstrument instrument : PLAYABLE) {
@@ -303,8 +291,7 @@ public final class Notebot extends Module {
         slots.restore();
     }
 
-    // Listens for the note block sounds the server sends and keeps them by the tick they came
-    // in on. It runs whether the module is on or off.
+    // Runs whether the module is on or off.
     private final class Recorder {
 
         // Filled on the network thread.
@@ -323,7 +310,6 @@ public final class Notebot extends Module {
             watch(this);
         }
 
-        // The notes with the first of them moved to tick nought.
         private SortedMap<Integer, List<Note>> stop() {
             unwatch(this);
             running = false;
@@ -378,7 +364,6 @@ public final class Notebot extends Module {
         return recorder.running;
     }
 
-    // The Record row. A command can name it whilst a recording runs.
     private String startRecording() {
         if (recorder.running) {
             return "Already recording";
@@ -387,7 +372,6 @@ public final class Notebot extends Module {
         return "Recording";
     }
 
-    // The Stop and save row and a recording that has filled up.
     private String saveRecording() {
         if (!recorder.running) {
             return "Nothing is being recorded";
@@ -409,7 +393,6 @@ public final class Notebot extends Module {
         return "Saved";
     }
 
-    // A file in the songs folder no earlier recording has. A taken name gets a number after it.
     private static Path freeFile(String name) {
         Path folder = songsFolder();
         Path file = folder.resolve(name + ".txt");
@@ -447,7 +430,6 @@ public final class Notebot extends Module {
             + (loaded.author().isBlank() ? "" : " §7by §f" + loaded.author()) + "§7.");
     }
 
-    // A picked file or a random one. Null when nothing fits and the module is off.
     private Path pickFile(Path folder) {
         List<Path> files = new ArrayList<>();
         try (Stream<Path> stream = Files.list(folder)) {
@@ -463,7 +445,6 @@ public final class Notebot extends Module {
         return files.get(random.nextInt(files.size()));
     }
 
-    // What each instrument in the file is turned into. Empty when nothing is remapped.
     private Map<NoteBlockInstrument, NoteBlockInstrument> remapTable() {
         Map<NoteBlockInstrument, NoteBlockInstrument> table = new EnumMap<>(NoteBlockInstrument.class);
         if (!remap.isOn() || !instruments.is(Instruments.EXACT)) {
@@ -515,7 +496,6 @@ public final class Notebot extends Module {
         stage = Stage.TUNE;
     }
 
-    // Every note block in reach keyed by the note it plays before any tuning.
     private Map<Note, List<BlockPos>> findNoteBlocks() {
         Map<Note, List<BlockPos>> found = new LinkedHashMap<>();
         scanned.clear();
@@ -542,13 +522,10 @@ public final class Notebot extends Module {
             ? BlockUtil.state(pos.below()).instrument() : state.getValue(NoteBlock.INSTRUMENT);
     }
 
-    // A note the song needs but the file stored with an instrument the scan ignores.
     private Note wanted(Note note) {
         return instruments.is(Instruments.EXACT) ? note : new Note(null, note.pitch());
     }
 
-    // Blocks already on the right pitch are kept as they are.
-    // The rest are handed out by instrument to the notes still missing.
     private void assign(Map<Note, List<BlockPos>> found) {
         assigned.clear();
         List<Note> missing = new ArrayList<>();
@@ -597,7 +574,6 @@ public final class Notebot extends Module {
             stage = Stage.RECHECK;
             return;
         }
-        // The tuning clicks use the hand and wait whilst something else has it.
         if (--tuneWait > 0 || Hands.taken()) {
             return;
         }
@@ -754,7 +730,6 @@ public final class Notebot extends Module {
         return tuning.containsKey(pos) ? untunedStyle : tunedStyle;
     }
 
-    // The pitch each block sits on with the clicks it still owes after it.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         if (loaded == null || !render.isOn() || !renderText.isOn() || !inGame() || !WorldToScreen.update()) {

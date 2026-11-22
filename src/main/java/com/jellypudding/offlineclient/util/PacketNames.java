@@ -16,14 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// Every packet kind the game knows in either direction. Built once from the
-// protocol templates. A list can offer them before one has ever been seen.
+// Built once from the protocol templates. A list can offer every packet kind before one has ever
+// been seen.
 public final class PacketNames {
 
     private static final Map<String, PacketType<?>> OUTGOING = new LinkedHashMap<>();
     private static final Map<String, PacketType<?>> INCOMING = new LinkedHashMap<>();
 
-    // The kinds that travel once a world is joined.
     private static final Map<String, PacketType<?>> PLAY_OUTGOING = new LinkedHashMap<>();
     private static final Map<String, PacketType<?>> PLAY_INCOMING = new LinkedHashMap<>();
 
@@ -63,7 +62,7 @@ public final class PacketNames {
         return sorted(PLAY_INCOMING.keySet());
     }
 
-    // The kinds a list of picked names stands for. A name the game does not know is skipped.
+    // A name the game does not know is skipped.
     public static Set<PacketType<?>> outgoingTypes(Collection<String> names) {
         return resolve(names, OUTGOING);
     }

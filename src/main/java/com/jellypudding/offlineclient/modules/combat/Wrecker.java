@@ -28,7 +28,6 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 // first one straight on the wire and land in the same tick.
 public final class Wrecker extends Module {
 
-    // The damage a vehicle breaks past and what each point of a hit adds to it.
     private static final float BREAKS_PAST = 40;
     private static final float PER_POINT = 10;
 
@@ -125,8 +124,8 @@ public final class Wrecker extends Module {
             mc.player.getCurrentItemAttackStrengthDelay(), mc.player.getAttackStrengthScale(RESET_CHARGE - TIMER_LAG));
     }
 
-    // The fewest hits whose damage passes the break line. The first carries the charge the swing
-    // had and every later one the charge left right after a hit. Hits that do no damage never get there.
+    // The first hit carries the charge the swing had and every later one the charge left right
+    // after a hit.
     private static int hitsFor(float damage, float delay, float firstCharge) {
         float first = damage * strength(firstCharge);
         float later = damage * strength(Math.clamp(RESET_CHARGE / delay, 0, 1));
@@ -137,7 +136,6 @@ public final class Wrecker extends Module {
         return left < 0 ? 1 : 2 + (int) Math.floor(left / later);
     }
 
-    // The share of a full hit a swing at that charge deals.
     private static float strength(float charge) {
         return 0.2f + charge * charge * 0.8f;
     }

@@ -36,7 +36,6 @@ public final class MovementSuite implements Suite {
     private static final int SPRINT = InputConstants.KEY_LCONTROL;
     private static final int USE = InputConstants.MOUSE_BUTTON_RIGHT;
 
-    // A second and a half of holding a key. Long enough to tell one pace from another.
     private static final int RUN_TICKS = 30;
     private static final int TAP_TICKS = 2;
     private static final int JUMP_TICKS = 30;
@@ -50,6 +49,9 @@ public final class MovementSuite implements Suite {
     private static final String NO_DODGE = "Flight with no dodge of the kick is thrown out in a climb of seven seconds";
     private static final String CLIMB = "Flight climbs for seven seconds in every mode with either dodge of the kick";
     private static final String DIPS = "Flight hovers and drifts through sixteen dips in a row with either dodge of the kick";
+    private static final String GROUNDED = "Flight leaves you on the ground until you take off";
+    private static final String STILL = "Flight hangs dead still in a world of your own";
+    private static final double STILL_WITHIN = 0.01;
     private static final List<String> FLIGHT_MODES = List.of("creative", "direct", "teleport");
     private static final List<String> KICK_DODGES = List.of("dip", "packet");
     private static final int CLIMB_TICKS = 140;
@@ -65,7 +67,6 @@ public final class MovementSuite implements Suite {
     // A trident is ready to throw after ten ticks in the hand.
     private static final int CHARGE_TICKS = 14;
     private static final int THROW_TICKS = 50;
-    // The wall begins a block and a bit ahead and is two blocks thick.
     private static final double WALL_AT = 2;
     private static final double BEYOND = 3.5;
     private static final int FAR = 40;
@@ -85,7 +86,6 @@ public final class MovementSuite implements Suite {
         return NAME;
     }
 
-    // The ground the cases stand on. Its plain paces are measured anew.
     void standOn(BlockPos stageHome) {
         home = stageHome;
         paces = null;
@@ -101,6 +101,8 @@ public final class MovementSuite implements Suite {
         plays.put(NO_DODGE, this::flightNoDodge);
         plays.put(CLIMB, this::flightLongClimb);
         plays.put(DIPS, this::flightManyDips);
+        plays.put(GROUNDED, this::flightOnTheGround);
+        plays.put(STILL, this::flightStillAtHome);
         plays.put("NoFall takes the hurt out of a deadly fall off a ledge", this::noFallLedge);
         plays.put("NoFall takes the hurt out of a deadly fall that a teleport began", this::noFallTeleport);
         plays.put("NoFall in its Airborne mode takes a deadly fall and charges nothing once it is off",
@@ -145,11 +147,18 @@ public final class MovementSuite implements Suite {
         return plays;
     }
 
+    // The plays an anti cheat has a say in. One speaks of a world of your own alone.
+    Map<String, Case.Body> servedPlays() {
+        Map<String, Case.Body> plays = plays();
+        plays.remove(STILL);
+        return plays;
+    }
+
     @Override
     public void run(Rig rig) {
         Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()),
             Grounds.Limits.NONE.serverOnly(TIMER, PHASE_CREATIVE, PHASE_REFUSED, STALL, NO_DODGE, CLIMB, DIPS)
-                .aloneOnly(PHASE));
+                .aloneOnly(PHASE, STILL).holdsBack(GROUNDED));
     }
 
     // Measured once on each ground with no module on.
@@ -181,8 +190,7 @@ public final class MovementSuite implements Suite {
         }, () -> { });
     }
 
-    // Blocks the player drops in a second from rest high in the air. It is put there in
-    // creative where no fall hurts.
+    // The player is put high in the air in creative where no fall hurts.
     private double drop(Rig rig) {
         World world = rig.world();
         world.gameMode("creative");
@@ -196,7 +204,6 @@ public final class MovementSuite implements Suite {
         return dropped;
     }
 
-    // Puts the player that many blocks straight above its home with nothing under it.
     private void lift(Rig rig, int height) {
         World world = rig.world();
         world.command("tp " + world.player() + " " + (home.getX() + 0.5) + " " + (home.getY() + height) + " "
@@ -219,7 +226,6 @@ public final class MovementSuite implements Suite {
         rig.expect(boosted >= plain * 1.3, "A doubled boost threw the player no further");
     }
 
-    // How far the server saw a riptide trident carry the player along the ground.
     private double thrown(Rig rig) {
         goHome(rig);
         Props.hold(rig, 0, "trident[enchantments={\"minecraft:riptide\":3}]");
@@ -230,7 +236,6 @@ public final class MovementSuite implements Suite {
         }, () -> { }).across();
     }
 
-    // A wall two blocks thick and three high right ahead.
     private Moved pushedAtWall(Rig rig) {
         goHome(rig);
         rig.world().refill(home.offset(-1, 0, -3), home.offset(1, 2, -2), "stone");
@@ -270,8 +275,7 @@ public final class MovementSuite implements Suite {
         expectNoSetback(rig, pushed);
     }
 
-    // A wall three blocks high stands across the way. The crosshair rests on the side of its top
-    // block. No cushion stands on a side and it goes on top.
+    // No cushion stands on the side of a block and it goes on top.
     private void cushionHop(Rig rig) {
         BlockPos top = home.offset(0, 2, -3);
         rig.world().refill(home.offset(-1, 0, -3), home.offset(1, 2, -3), "stone");
@@ -318,6 +322,34 @@ public final class MovementSuite implements Suite {
 
     private static void expectNoSetback(Rig rig, Moved moved) {
         rig.expect(moved.setbacks() == 0, "The server put the player back " + moved.setbacks() + " times");
+    }
+
+    // The dodge of the kick drops a hovering player a hair and lifts them back. On the ground the
+    // drop goes nowhere and the lift alone would raise the player with every dip.
+    private void flightOnTheGround(Rig rig) {
+        rig.client().enable("Flight");
+        Moved stood = Motion.hold(rig, HOVER_TICKS);
+        rig.client().disable("Flight");
+        rig.note(String.format(Locale.ROOT, "The player rose %.3f blocks at most in %d ticks", stood.highest(),
+            HOVER_TICKS));
+        rig.expect(stood.highest() < STILL_WITHIN, "Flight lifted a player who never asked to rise");
+    }
+
+    // A world of your own throws nobody out for floating and Flight has no kick to dodge there.
+    private void flightStillAtHome(Rig rig) {
+        rig.client().enable("Flight");
+        Motion.hold(rig, RUN_TICKS / 2, JUMP);
+        // The rise drifts out over a few ticks once the key is up.
+        rig.ticks(RUN_TICKS);
+        Moved hover = Motion.hold(rig, HOVER_TICKS);
+        double height = rig.ask(mc -> mc.player.getY()) - home.getY();
+        goHome(rig);
+        rig.client().disable("Flight");
+        double swing = hover.highest() - hover.lowest();
+        rig.note(String.format(Locale.ROOT, "The height swung %.3f blocks in a hover of %d ticks %.1f blocks up",
+            swing, HOVER_TICKS, height));
+        rig.expect(height >= 1, "Flight never lifted the player. That proves nothing");
+        rig.expect(swing < STILL_WITHIN, "Flight dipped where nothing kicks for floating");
     }
 
     private void sprint(Rig rig) {
@@ -478,7 +510,6 @@ public final class MovementSuite implements Suite {
         }
     }
 
-    // The player stands on one block high in the air and the block is taken away.
     private void noFallLedge(Rig rig) {
         World world = rig.world();
         BlockPos ledge = home.above(DEADLY_DROP - 1);
@@ -512,7 +543,6 @@ public final class MovementSuite implements Suite {
         walkedUnhurt(rig, "NoFall was off");
     }
 
-    // The first steps after Airborne tell the server the truth again.
     private static void walkedUnhurt(Rig rig, String when) {
         Motion.hold(rig, RUN_TICKS, FORWARD);
         rig.ticks(TAP_TICKS * 5);
@@ -631,7 +661,6 @@ public final class MovementSuite implements Suite {
         rig.expect(!rig.world().holds("sneaking"), "The server still holds the player as sneaking with Sneak off");
     }
 
-    // A pit three deep lies ahead.
     private void pit(Rig rig) {
         rig.world().fill(home.offset(-1, -3, -4), home.offset(1, -1, -3), "air");
     }
@@ -689,7 +718,6 @@ public final class MovementSuite implements Suite {
         rig.expect(apart < 0.5, "The server did not catch up once Blink was off");
     }
 
-    // A ladder up a stone column right in front of the player.
     private void quickClimb(Rig rig) {
         paces(rig);
         rig.world().fill(home.offset(0, 0, -2), home.offset(0, 12, -2), "stone");
@@ -725,8 +753,6 @@ public final class MovementSuite implements Suite {
         rig.expect(flown <= 1.5 && flown <= plain - 2, "ElytraFly lost " + told(flown) + " blocks of height");
     }
 
-    // Blocks of height a glide straight ahead loses. It starts high up in creative where no
-    // landing hurts.
     private double glided(Rig rig) {
         World world = rig.world();
         Props.wear(rig, "armor.chest", "elytra");
@@ -761,7 +787,6 @@ public final class MovementSuite implements Suite {
         rig.expect(slippery >= plain + 1, "Slippy slid no further");
     }
 
-    // Blocks the player slides on once the keys of a sprint are let go.
     private static double slid(Rig rig) {
         rig.controls().hold(FORWARD);
         rig.controls().hold(SPRINT);
@@ -799,8 +824,6 @@ public final class MovementSuite implements Suite {
         rig.expect(held <= 0.1, "The current still carried the player off");
     }
 
-    // A spring three blocks ahead floods the stage for three seconds. Blocks its current took the
-    // player from its place.
     private double carriedOff(Rig rig) {
         World world = rig.world();
         world.setBlock(home.north(3), "water");
@@ -823,7 +846,6 @@ public final class MovementSuite implements Suite {
         rig.expect(held <= 0.05, "The hit still pushed the player");
     }
 
-    // The server deals a hit in the name of the husk. Blocks it moved the player.
     private static double hitByMob(Rig rig) {
         World world = rig.world();
         Vec3 from = world.where();
@@ -858,7 +880,6 @@ public final class MovementSuite implements Suite {
         rig.expect(jumped >= plain.jumped() + 2, "WindJump jumped no higher");
     }
 
-    // A hole one block wide with obsidian all round lies in the way of a sprint.
     private void holeSnap(Rig rig) {
         World world = rig.world();
         BlockPos hole = home.offset(0, -1, -3);
@@ -876,7 +897,6 @@ public final class MovementSuite implements Suite {
         rig.expect(into.rise() < -0.9 && into.across() < 4.5, "The sprint did not end in the hole");
     }
 
-    // A shaft through the bedrock two blocks ahead.
     private void antiVoid(Rig rig) {
         World world = rig.world();
         BlockPos shaft = home.north(2);
@@ -960,7 +980,6 @@ public final class MovementSuite implements Suite {
         return ticks / ((System.nanoTime() - began) / NANOS);
     }
 
-    // A sprint south and a longer sprint back north. Blocks south of the start the player ends up.
     private void noReturn(Rig rig) {
         double free = thereAndBack(rig);
         goHome(rig);
@@ -975,7 +994,6 @@ public final class MovementSuite implements Suite {
         rig.expect(held >= 10, "The player got back to where NoReturn went on");
     }
 
-    // The way out ends well past the two chunks that stay closed south of the start.
     private double thereAndBack(Rig rig) {
         rig.controls().look(0, 0);
         Motion.hold(rig, RUN_TICKS * 6, FORWARD, SPRINT);

@@ -5,10 +5,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// The player's own words swapped for other text as a line goes out.
 public final class Shortcuts {
 
-    // What is typed and what goes out in its place.
     public record Pair(String typed, String sent) {
     }
 
@@ -22,16 +20,14 @@ public final class Shortcuts {
     private Shortcuts() {
     }
 
-    // The text with every shortcut in it swapped. A shortcut counts whatever its case and only
-    // where it stands apart. One that starts or ends with a letter has no letter beside it
-    // there. What a swap puts in is never searched again.
+    // A shortcut counts whatever its case and only where it stands apart. What a swap puts in is
+    // never searched again.
     public static String swap(String text, List<Pair> pairs) {
         return swap(text, pairs, kept -> false);
     }
 
-    // The same for the words after the command itself. A word that is the name of a player
-    // stays as it is because the command may act on that player. A command that carries a
-    // password is left alone.
+    // A word that is the name of a player stays as it is because the command may act on that
+    // player. A command that carries a password is left alone.
     public static String swapInCommand(String command, List<Pair> pairs, Predicate<String> isPlayer) {
         int space = command.indexOf(' ');
         if (space == -1 || carriesPassword(command)) {
@@ -58,7 +54,6 @@ public final class Shortcuts {
         return out.toString();
     }
 
-    // True for a command that logs in or registers or changes a password.
     public static boolean carriesPassword(String command) {
         return PASSWORD_COMMANDS.contains(commandWord(command));
     }

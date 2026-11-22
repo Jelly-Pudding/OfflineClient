@@ -7,8 +7,7 @@ import net.minecraft.resources.RegistryOps;
 
 import java.util.Map;
 
-// The sweep the autopilot flew last in each dimension of the server you play on and the place
-// it reached. The file sits beside the finds. A sweep that does not read back whole is left out.
+// A sweep that does not read back whole is left out.
 public final class SweepLedger extends ServerLedger<String, Sweep> {
 
     private static final String FILE = "sweeps.json";

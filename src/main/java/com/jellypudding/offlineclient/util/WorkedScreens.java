@@ -9,7 +9,6 @@ import java.util.WeakHashMap;
 // these alone.
 public final class WorkedScreens {
 
-    // A helper that opens a container and works it through its screen.
     interface Worker {
         // True whilst the screen up is the one this helper opened. Its items may still be on their way.
         boolean ownsScreen();
@@ -25,12 +24,10 @@ public final class WorkedScreens {
         WORKERS.add(worker);
     }
 
-    // True whilst one of our helpers works the screen up.
     public static boolean showing() {
         return showingBesides(null);
     }
 
-    // True whilst a helper other than the one asking works the screen up.
     static boolean showingBesides(Worker asking) {
         for (Worker worker : WORKERS) {
             if (worker != asking && worker.ownsScreen()) {

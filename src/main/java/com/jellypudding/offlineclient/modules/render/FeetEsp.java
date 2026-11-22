@@ -20,8 +20,6 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 
-// Marks the block each player stands in the way crystal fighters check who sits safe.
-// A hole walled in blast proof blocks and a burrow keep a crystal off the feet.
 public final class FeetEsp extends Module {
 
     private enum Cover { HOLE, BURROWED, OPEN }

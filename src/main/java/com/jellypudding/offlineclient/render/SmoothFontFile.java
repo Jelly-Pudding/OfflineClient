@@ -21,9 +21,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
-// The bytes the smooth font is made from. The player's own font.ttf in the client folder wins whilst
-// the game's TrueType loader takes it and the built in font stands in otherwise. The files are looked
-// at once a second off the game thread and chat says once what went wrong.
+// The player's own font.ttf in the client folder wins whilst the game's TrueType loader takes it
+// and the built in font stands in otherwise.
 final class SmoothFontFile {
 
     // Inter 4.1 by the Inter Project Authors under the SIL Open Font Licence. The licence lies beside it.
@@ -34,7 +33,6 @@ final class SmoothFontFile {
     // No font made for reading comes near this.
     private static final int MOST_MEGABYTES = 32;
     private static final int MOST_BYTES = MOST_MEGABYTES * 1024 * 1024;
-    // File times of a font that is not there and of one never looked at.
     private static final long ABSENT = Long.MIN_VALUE;
     private static final long UNREAD = Long.MIN_VALUE + 1;
     // Only the loader sees this name. The bytes it reads are always the chosen ones.
@@ -52,7 +50,7 @@ final class SmoothFontFile {
     private static final String OWN_UNDRAWABLE = OWN_NAME
         + " in the offlineclient folder has letters the game cannot draw. The built in smooth font is used.";
 
-    // The bytes of a font file. Stamp is the file time of the player's own and absent for the built in one.
+    // Stamp is the file time of the player's own font and absent for the built in one.
     record Source(byte[] bytes, long stamp) {
 
         boolean own() {
@@ -60,8 +58,8 @@ final class SmoothFontFile {
         }
     }
 
-    // What one look found. Same is true whilst the player's file is as it was. Source is null when no
-    // font can be used and problem says why for chat or is null when all went well.
+    // Source is null when no font can be used and problem says why for chat or is null when all
+    // went well.
     private record Look(boolean same, long stamp, Source source, String problem) {
 
         private static final Look SAME = new Look(true, UNREAD, null, null);
@@ -79,13 +77,11 @@ final class SmoothFontFile {
     private String said;
     private String pending;
 
-    // The bytes in use. Null whilst the first look is out or no font can be used.
+    // Null whilst the first look is out or no font can be used.
     Source current() {
         return source;
     }
 
-    // The font made from these bytes failed after its check passed. It stays unused until its file
-    // changes and the next look picks again.
     void failed(Source from, Throwable cause) {
         OfflineClient.LOG.error("The smooth font cannot be drawn", cause);
         if (from.own()) {
@@ -100,7 +96,6 @@ final class SmoothFontFile {
         }
     }
 
-    // Once a tick whilst the client is awake. A line waiting for chat is said and the folder looked at.
     void tick() {
         if (pending != null && OfflineClient.MC.player != null) {
             ChatUtil.error(pending);
@@ -109,7 +104,6 @@ final class SmoothFontFile {
         look();
     }
 
-    // Forgets the files. The next look reads them afresh and tries again what failed.
     void release() {
         source = null;
         ownStamp = UNREAD;
@@ -120,7 +114,6 @@ final class SmoothFontFile {
         looks.release();
     }
 
-    // The files are read and checked on a worker and the game thread takes what was found.
     void look() {
         if (!looks.due()) {
             return;
@@ -132,7 +125,7 @@ final class SmoothFontFile {
         looks.start(() -> read(own, known, bad, builtIn), () -> new Look(false, known, null, BUILT_IN_FAILED));
     }
 
-    // Off the game thread. The player's own file wins whilst the game's loader takes it.
+    // Off the game thread.
     private static Look read(Path own, long known, long bad, boolean builtInUsable) {
         long stamp = stampOf(own);
         if (stamp == known) {
@@ -178,7 +171,6 @@ final class SmoothFontFile {
         }
     }
 
-    // Whether the game's TrueType loader takes the file. It is opened and closed straight away.
     private static boolean loads(byte[] bytes) {
         try (GlyphProvider glyphs = load(bytes, 1)) {
             return glyphs != null;

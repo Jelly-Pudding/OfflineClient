@@ -83,7 +83,6 @@ public final class SaveSkinCommand extends Command {
         }
     }
 
-    // False after logging why the file could not be written.
     private static boolean save(ClientAsset.Texture texture, Path file) {
         if (texture instanceof ClientAsset.DownloadedTexture) {
             AbstractTexture loaded = OfflineClient.MC.getTextureManager().getTexture(texture.texturePath());
@@ -99,7 +98,6 @@ public final class SaveSkinCommand extends Command {
             OfflineClient.LOG.warn("No resource pack holds {}", texture.texturePath());
             return false;
         }
-        // A failed write leaves its temporary file behind for the next try to replace.
         return DataFiles.writeSafely(file, temp -> {
             try (InputStream in = resource.get().open()) {
                 Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);

@@ -58,7 +58,6 @@ public final class BlockSelection extends Module {
         }
     }
 
-    // Every edge and every sub box the shape is made of.
     private void drawShape(DrawBatch batch, VoxelShape shape, BlockPos pos) {
         if (style.drawsLines()) {
             int line = style.lineColor();

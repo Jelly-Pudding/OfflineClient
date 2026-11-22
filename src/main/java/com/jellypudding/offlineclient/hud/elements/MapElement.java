@@ -24,28 +24,24 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// A map you carry drawn on the screen. Until told otherwise it is the one in your hand and then
-// the first one in your bag that the server has sent. The server moves your marker four times a
-// second and turns it in sixteen steps. An arrow drawn here every frame stands in for it.
+// The server moves your marker four times a second and turns it in sixteen steps. An arrow drawn
+// here every frame stands in for it.
 public final class MapElement extends HudElement {
 
     public enum Shows { CARRIED, IN_HAND, SLOT }
 
-    // The picture of a map with your own marker taken off and the land it covers. Whilst that
-    // marker cannot be told apart the view is null and the picture is just as the server sent it.
+    // Whilst your marker cannot be told apart the view is null and the picture is as the server
+    // sent it.
     private record Shown(MapRenderState state, MapView view) {
     }
 
-    // Half the size a map is drawn at in your hand before any stretch.
     private static final int SIZE = 64;
-    // The pale paper of an empty map.
     private static final int SAMPLE_PAPER = 0x60D8C8A0;
     private static final int SAMPLE_EDGE = 0xC0A08A60;
 
     private final EnumSetting<Shows> shows;
     private final NumberSetting slot;
     private final OwnMarker own = new OwnMarker();
-    // Each search builds the picture of the map it finds.
     private final RowCache<Shown> found = new RowCache<>(this::find);
 
     public MapElement(int number) {
@@ -76,7 +72,6 @@ public final class MapElement extends HudElement {
         return maps.isEmpty() ? null : maps.getFirst();
     }
 
-    // The first of the stacks the pick looks through that is a map the server has sent.
     private List<Shown> find() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
@@ -104,7 +99,6 @@ public final class MapElement extends HudElement {
         return List.of();
     }
 
-    // Null for anything but a map the server has sent.
     private Shown shown(ItemStack stack) {
         MapId id = stack.get(DataComponents.MAP_ID);
         MapItemSavedData data = MapPreview.dataOf(id);
@@ -120,7 +114,6 @@ public final class MapElement extends HudElement {
         return new Shown(state, mine.view(SIZE));
     }
 
-    // A blank sheet the size of the map stands in whilst the editor is open and you carry none.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         Shown shown = map();

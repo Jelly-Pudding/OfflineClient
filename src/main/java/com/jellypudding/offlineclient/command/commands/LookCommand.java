@@ -10,8 +10,6 @@ import net.minecraft.util.Mth;
 import java.util.Locale;
 import java.util.OptionalDouble;
 
-// A bare rotation switches the Rotation module. The alias still reaches this command once a yaw
-// and a pitch follow it.
 public final class LookCommand extends Command {
 
     public LookCommand() {

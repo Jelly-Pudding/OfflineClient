@@ -8,8 +8,6 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
-// The numbers the game moves a loosed projectile by on every tick of its flight and what
-// holds one still.
 public final class ProjectileUtil {
 
     // The share of its speed a projectile keeps each tick in open air.
@@ -28,19 +26,16 @@ public final class ProjectileUtil {
     private ProjectileUtil() {
     }
 
-    // True for a projectile a bubble column carries. It never flies its usual path.
     public static boolean inBubbles(Entity projectile) {
         return column(projectile) != null;
     }
 
-    // True for a pearl a rising column holds still as in a stasis chamber. Ocean magma pulls
-    // columns down and never holds one.
+    // Ocean magma pulls columns down and never holds a pearl.
     public static boolean inStasis(Entity pearl) {
         BlockState column = column(pearl);
         return column != null && !column.getValue(BubbleColumnBlock.DRAG_DOWN);
     }
 
-    // The bubble column the projectile sits in or just above. Null when there is none.
     private static BlockState column(Entity projectile) {
         BlockPos pos = projectile.blockPosition();
         for (BlockPos at : List.of(pos, pos.below())) {

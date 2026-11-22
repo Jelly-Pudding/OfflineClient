@@ -60,8 +60,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-// Legit mode mines one block at a time like a held click.
-// Instant mode fires the break packets straight away.
 public final class Nuker extends Module {
 
     public enum Shape { SPHERE, UNIFORM_CUBE, CUBE }
@@ -74,14 +72,12 @@ public final class Nuker extends Module {
 
     private static final int MAX_HIGHLIGHTS = 64;
 
-    // The furthest a cube side may reach out.
     private static final int MAX_SIDE = 6;
 
     // The most hits one frame or painting takes. A frame holding an item lets the item go on the
     // first and breaks on the second.
     private static final int HANGING_HITS = 2;
 
-    // Frames and paintings whose hits are counted. The oldest are let go first.
     private static final int MAX_HANGING = 64;
 
     private final EnumSetting<Shape> shape = new EnumSetting<>("Shape",
@@ -183,13 +179,10 @@ public final class Nuker extends Module {
 
     private final SlotSwap slots = new SlotSwap();
 
-    // Filled once a tick and read by the renderer.
     private final List<BlockPos> candidates = new ArrayList<>();
 
-    // The stack Auto tool would hold for each kind of block. Worked out once a tick.
     private final Map<BlockState, ItemStack> toolFor = new HashMap<>();
 
-    // The drawn cube for the two box shapes. Null whilst the shape is a sphere.
     private AABB region;
 
     // The hits each frame or painting has taken by entity id. Another world hands out its own ids.
@@ -281,9 +274,8 @@ public final class Nuker extends Module {
         tell("now breaks §f" + BlockUtil.blockName(selected) + "§7.");
     }
 
-    // Only on click takes the attack key over. A click on a block breaks the blocks around you
-    // and vanilla starts no mining of its own. In Selected mode the click still picks the block
-    // type. A click on an entity still lands.
+    // Only on click takes the attack key over and vanilla starts no mining of its own. A click on
+    // an entity still lands.
     @Subscribe
     private void onLeftClick(LeftClickEvent event) {
         if (onlyOnClick.isOn() && !candidates.isEmpty() && mc.hitResult instanceof BlockHitResult hit
@@ -295,7 +287,6 @@ public final class Nuker extends Module {
         }
     }
 
-    // A real click on a block in Selected mode picks that block type.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
         if (BlockMiner.isSelfCall() || !mode.is(Mode.SELECTED) || !inGame()) {
@@ -400,15 +391,13 @@ public final class Nuker extends Module {
         claimClick();
     }
 
-    // With Only on click the held attack key belongs to Nuker and vanilla mines nothing.
     private void claimClick() {
         if (onlyOnClick.isOn()) {
             BlockMiner.keepControl();
         }
     }
 
-    // One hit a tick on the nearest frame or painting in reach that still has hits left. One
-    // that outlasts them all is fixed or protected and is left alone.
+    // A frame or painting that outlasts its hits is fixed or protected and is left alone.
     private void hitHanging() {
         double reach = Math.min(EntityUtil.serverEntityReach(), range.getValue());
         Entity hanging = EntityUtil.nearest(Double.MAX_VALUE, entity -> entity instanceof HangingEntity
@@ -421,7 +410,6 @@ public final class Nuker extends Module {
         }
     }
 
-    // Fills the candidate list with every block the region and the filters allow.
     private void collect() {
         if (shape.is(Shape.SPHERE)) {
             for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
@@ -540,7 +528,6 @@ public final class Nuker extends Module {
         return true;
     }
 
-    // Judged with the tool Auto tool would put in hand for the block.
     private boolean breaksInOneTick(BlockPos pos, BlockState state) {
         if (!autoTool.isOn() || mc.player.getAbilities().instabuild) {
             return BreakTime.breaksInOneTick(pos);

@@ -11,10 +11,10 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SprintPause;
@@ -32,21 +32,18 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.function.Predicate;
 
-// Launches off a wind charge beside the target and smashes it with a mace on the way
-// down. The server scales the smash by the fall it watched. The hit waits for the last
-// tick before the ground or before the target slips out of reach.
+// The server scales the smash by the fall it watched. The hit waits for the last tick before the
+// ground or before the target slips out of reach.
 public final class MaceCombo extends Module implements Targeting {
 
-    // Room the launch needs above your head. A lower ceiling cuts the fall short.
+    // A lower ceiling cuts the fall short.
     private static final double HEADROOM = 4;
 
-    // A combo still in the air after this long has missed.
     private static final int GIVE_UP_TICKS = 80;
 
-    // Steering stops this close. Nearer only pushes you into the target.
+    // Nearer only pushes you into the target.
     private static final double STEER_STOP = 1.5;
 
-    // How far a new target is looked for once the first one is gone mid air.
     private static final double AIR_SCAN = 16;
 
     private static final Predicate<ItemStack> MACE = stack -> stack.getItem() instanceof MaceItem;
@@ -89,7 +86,6 @@ public final class MaceCombo extends Module implements Targeting {
         return target == null ? null : EntityUtil.displayNameOf(target);
     }
 
-    // What the combo is after from the throw to the smash. Null otherwise.
     @Override
     public Entity getFought() {
         return target;
@@ -144,7 +140,7 @@ public final class MaceCombo extends Module implements Targeting {
     }
 
     private void tryLaunch() {
-        if (mc.gui.screen() != null || Modules.feedersPauseCombat()
+        if (mc.gui.screen() != null || Feeding.pausingCombat()
             || (onlyOnClick.isOn() && !mc.options.keyAttack.isDown())) {
             return;
         }
@@ -161,7 +157,6 @@ public final class MaceCombo extends Module implements Targeting {
         return mc.level.noCollision(mc.player, mc.player.getBoundingBox().expandTowards(0, HEADROOM, 0));
     }
 
-    // The hotbar comes first and the mace already in hand before that.
     private int maceSlot() {
         int slot = InventoryUtil.hotbarSlot(MACE);
         if (slot == -1 && fromInventory.isOn()) {
@@ -203,8 +198,7 @@ public final class MaceCombo extends Module implements Targeting {
         }
     }
 
-    // The fall is longest on the last tick before the ground or before the target slips out
-    // of reach. The hit goes out before this tick's move and the server measures it there.
+    // The hit goes out before this tick's move and the server measures the fall there.
     private boolean lastChance(Entity target, Vec3 velocity, double reach) {
         if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, velocity.y, 0))) {
             return true;
@@ -242,7 +236,6 @@ public final class MaceCombo extends Module implements Targeting {
         loan.release();
     }
 
-    // Ends the combo where no swap can put the mace back.
     private void abandon() {
         loan.forget();
         launch.stop();

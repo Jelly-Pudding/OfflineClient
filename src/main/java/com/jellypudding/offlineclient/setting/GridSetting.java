@@ -10,8 +10,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 
-// A small square of cells each switched on or off. The ClickGUI draws it as a grid to
-// paint on. A command types it one row to a word with a hash for on and a dot for off.
+// A command types it one row to a word with a hash for on and a dot for off.
 public final class GridSetting extends Setting<GridSetting.Pattern> {
 
     // Odd sizes keep one cell in the middle.
@@ -64,7 +63,6 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
             return new Pattern(newSize, field);
         }
 
-        // The cells switched on row by row from the top.
         public List<Cell> cellsOn() {
             List<Cell> on = new ArrayList<>();
             for (int row = 0; row < size; row++) {
@@ -85,8 +83,6 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
             return out.toString();
         }
 
-        // The same size with every cell that size shows alike. Cells past the edge do nothing
-        // until the size grows.
         private boolean sameCells(Pattern other) {
             if (other.size != size) {
                 return false;
@@ -110,7 +106,6 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
         }
     }
 
-    // Null unless the rows make an odd square from the smallest size to the largest.
     private static Pattern parse(List<String> rows) {
         int size = rows.size();
         if (size < MIN_SIZE || size > MAX_SIZE || size % 2 == 0) {
@@ -145,7 +140,6 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
         value = value.with(column, row, on);
     }
 
-    // One size up or down. A step past either end wraps round to the other.
     public void cycleSize(boolean up) {
         int next = value.size() + (up ? SIZE_STEP : -SIZE_STEP);
         if (next > MAX_SIZE) {
@@ -165,7 +159,6 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
         return value.sameCells(defaultValue);
     }
 
-    // One word for each row. False when the words do not make an odd square that fits.
     public boolean setFromWords(String text) {
         Pattern parsed = parse(Arrays.asList(text.trim().split("\\s+")));
         if (parsed == null) {

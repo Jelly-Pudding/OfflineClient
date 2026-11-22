@@ -30,7 +30,6 @@ public final class NoRender extends Module {
 
     public enum Banners { SHOW, POLE_ONLY, HIDE }
 
-    // Sign sides remembered before the answers are thrown away and worked out afresh.
     private static final int SIGN_CACHE = 4096;
 
     // The worn armour of people and mobs and of wolves and horses and llamas and nautiluses.
@@ -97,8 +96,8 @@ public final class NoRender extends Module {
     private final ChunkRebuild rebuild = new ChunkRebuild();
     private int meshKey;
 
-    // Whether each sign side drawn carries a listed word. A sign keeps the same text object
-    // until it is edited and the answer is worked out once for each.
+    // A sign keeps the same text object until it is edited and the answer is worked out once for
+    // each.
     private final Map<SignText, Boolean> wordy = new IdentityHashMap<>();
     private List<String> words = List.of();
     private String wordsTyped = "";
@@ -166,8 +165,6 @@ public final class NoRender extends Module {
         return isEnabled() && fireworks.isOn();
     }
 
-    // True for a sign whose writing is left out. With words typed that is only a sign with one
-    // of them on either side.
     public boolean blanksSign(SignText front, SignText back) {
         if (!isEnabled() || !signText.isOn()) {
             return false;
@@ -236,7 +233,6 @@ public final class NoRender extends Module {
         return isEnabled() && entities.contains(type);
     }
 
-    // True for a hidden kind and for anything mid death animation whilst that is hidden.
     public boolean hidesEntity(Entity entity) {
         if (!isEnabled()) {
             return false;

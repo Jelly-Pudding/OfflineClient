@@ -4,8 +4,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-// A screen of the client drawn at the ClickGUI scale. Everything it draws goes through the scale
-// and every pointer position is divided by it to match.
 abstract class ScaledScreen extends Screen implements ClientScreen {
 
     private final LatchedScale latched = new LatchedScale();
@@ -18,7 +16,6 @@ abstract class ScaledScreen extends Screen implements ClientScreen {
     protected abstract void renderScaled(GuiGraphicsExtractor context, double mouseX, double mouseY,
                                          float partialTicks);
 
-    // What the last frame drew at.
     protected final float scale() {
         return latched.get();
     }
@@ -35,7 +32,6 @@ abstract class ScaledScreen extends Screen implements ClientScreen {
         return latched.toView(screen);
     }
 
-    // Each screen holds the scale from the press it takes until the release.
     protected final void holdScale(boolean held) {
         latched.hold(held);
     }

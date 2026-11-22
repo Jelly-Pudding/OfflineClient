@@ -21,13 +21,11 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.regex.MatchResult;
 
-// The chat BetterChat keeps from you. A line that matches a pattern is hidden or starred out and
-// what other players write can be hidden for everyone or for the muted players alone.
+// The lines BetterChat keeps from you.
 final class ChatFilter {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // What a pattern match is covered with letter for letter.
     private static final char STAR = '*';
 
     enum Matched { HIDE_LINE, STAR_OUT }
@@ -71,8 +69,6 @@ final class ChatFilter {
         return rows.toArray(Setting<?>[]::new);
     }
 
-    // True when a line must never reach the chat. A pattern hides any line and the rest only
-    // ever hide what other players write.
     boolean filters(Component message, GuiMessageSource source) {
         if (!enabled.getAsBoolean()) {
             return false;
@@ -117,12 +113,10 @@ final class ChatFilter {
         return muted.all();
     }
 
-    // True whilst BetterChat is on and hides the chat of that player.
     boolean mutes(String name) {
         return enabled.getAsBoolean() && muted.holds(name);
     }
 
-    // Patterns are rebuilt only after the rows change. A bad one is dropped with a warning.
     private List<BoundedRegex> compiledPatterns() {
         List<String> rows = patterns.all();
         String key = String.join("\n", rows);
@@ -140,8 +134,6 @@ final class ChatFilter {
         return compiled;
     }
 
-    // The line with stars over every stretch a pattern matched whilst matches are starred out.
-    // The styles of the line stay. Otherwise the line comes back as it is.
     Component starOut(Component message) {
         if (!filterRegex.isOn() || !matched.is(Matched.STAR_OUT)) {
             return message;

@@ -21,15 +21,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-// Any text you like with live words swapped in for their values and colour codes read the way
-// holograms read them. A rule can keep it off the screen until a live word says it matters.
 public final class TextElement extends RowsElement {
 
-    // How many custom texts a fresh install has. More can be added.
     public static final int USUAL = 3;
 
-    // Where the texts start out. The first sits at the top in the middle and each one after it
-    // a little lower.
     private static final double START_X = 50;
     private static final double START_Y = 4;
     private static final double START_STEP = 6;
@@ -40,7 +35,6 @@ public final class TextElement extends RowsElement {
     private final TextSetting text;
     private final ColorSetting color;
     private final ShowRule rule;
-    // The lines are measured and drawn several times a frame.
     private final RowCache<Component> lines = new RowCache<>(this::build);
 
     public TextElement(int number) {
@@ -56,15 +50,14 @@ public final class TextElement extends RowsElement {
         add(rule.settings().toArray(new Setting<?>[0]));
     }
 
-    // Live words that fill to nothing and colour codes or spaces alone leave nothing to show.
     @Override
     public boolean visible() {
         return isActive() && lines.get().stream().anyMatch(line -> !line.getString().isBlank());
     }
 
-    // The live words are filled in after the codes are read. NameProtect then hides names in
-    // them as it does in chat. A rule that cannot work says why in place of the words. In the
-    // editor the words show whatever the rule says or there would be nothing to place.
+    // The live words are filled in after the codes are read. NameProtect then hides names in them
+    // as it does in chat. In the editor the words show whatever the rule says or there would be
+    // nothing to place.
     private List<Component> build() {
         ShowRule.Verdict verdict = rule.judge();
         if (verdict.problem() != null) {
@@ -80,7 +73,6 @@ public final class TextElement extends RowsElement {
         return built;
     }
 
-    // A rainbow runs down the lines.
     @Override
     protected List<TextRow> rows(Font font) {
         List<Component> filled = lines.get();
@@ -91,8 +83,7 @@ public final class TextElement extends RowsElement {
         return rows;
     }
 
-    // Each run of one style becomes a part. The font reads the bold and italic and other marks as
-    // codes in front of the words and a run without a colour of its own takes the given one.
+    // A run without a colour of its own takes the given one.
     private static TextRow rowOf(Font font, Component line, int color) {
         List<String> parts = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();

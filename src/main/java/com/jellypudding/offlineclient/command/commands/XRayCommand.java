@@ -14,10 +14,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import java.util.ArrayList;
 import java.util.List;
 
-// The bare name toggles the module like any other. This adds blocks to its list.
 public final class XRayCommand extends Command {
 
-    // Stands for the block under the crosshair.
     private static final String THIS = "this";
 
     public XRayCommand() {

@@ -37,10 +37,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
-// The position of every player is cached each tick.
 public final class LogoutSpots extends Module {
 
-    // Where a player was last seen and on which tick. A spot gets the time its player logged out.
     private record Spot(String name, AABB box, float health, float maxHealth, int seenTick, long loggedOut) {
 
         Spot loggedOutNow() {
@@ -48,7 +46,6 @@ public final class LogoutSpots extends Module {
         }
     }
 
-    // Saved waypoints are named Logout and the player such as LogoutSteve1.
     private static final String WAYPOINT_PREFIX = "Logout";
     // A player seen within this many ticks of leaving the tab list was still in view. The body and
     // the tab list entry go in separate packets that can land either side of a tick.

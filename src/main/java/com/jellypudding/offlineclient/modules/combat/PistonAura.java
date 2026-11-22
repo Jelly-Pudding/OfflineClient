@@ -49,13 +49,11 @@ public final class PistonAura extends Module {
     // The head leaves an entity 0.01 past its face on each of those ticks. A push needs room for both.
     private static final double PUSH_SLACK = 0.02;
 
-    // Ticks a placed crystal is waited on before it is hit wherever it stands.
     private static final int PUSH_WAIT = 8;
 
-    // How close to where it should end up a pushed crystal has to come before the hit.
     private static final double ARRIVED = 0.25;
 
-    // One way to hit the target. The crystal is null for a push.
+    // The crystal is null for a push.
     private record Setup(BlockPos piston, Direction facing, boolean reuse, BlockPos crystal,
                          BlockPos power, boolean torch, Vec3 blast) {
     }
@@ -89,8 +87,8 @@ public final class PistonAura extends Module {
     private final SlotSwap slots = new SlotSwap();
     private Setup planned;
     private Pending pending;
-    // Ticks the pending crystal has been watched. A respawn or a change of world starts the
-    // player's own clock again and leaves this one running.
+    // A respawn or a change of world starts the player's own clock again and leaves this one
+    // running.
     private int watched;
     private boolean turning;
     private int timer;
@@ -112,8 +110,7 @@ public final class PistonAura extends Module {
         return suffix(targetName, status);
     }
 
-    // True whilst a piston is being turned for or its crystal is still out.
-    // CrystalAura stands aside for that long.
+    // CrystalAura stands aside whilst this is true.
     public boolean isFiring() {
         return turning || pending != null;
     }
@@ -153,7 +150,7 @@ public final class PistonAura extends Module {
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
         targetName = EntityUtil.displayNameOf(target);
         planned = null;
-        if (target == null || timer > 0) {
+        if (target == null || timer > 0 || Hands.slotsTaken()) {
             return;
         }
         fireAt(target);
@@ -286,7 +283,6 @@ public final class PistonAura extends Module {
         return best;
     }
 
-    // True when a full push along the facing carries the target's body clear of its block.
     private static boolean shovable(Player target, BlockPos feet, Direction facing) {
         AABB body = target.getBoundingBox();
         double needed = switch (facing) {
@@ -320,9 +316,8 @@ public final class PistonAura extends Module {
         return mc.level.hasNeighborSignal(pos) || mc.level.hasNeighborSignal(pos.above());
     }
 
-    // A spot beside the piston for the power. A torch is tried first since any blast takes
-    // it away and the spot is free for the next round. A redstone block often survives and
-    // would fire the next piston the moment it went down. The front is where the head goes.
+    // A torch is tried first since any blast takes it away and the spot is free for the next round.
+    // A redstone block often survives and would fire the next piston the moment it went down.
     private Setup withPower(BlockPos piston, Direction facing, boolean reuse, BlockPos crystal, Vec3 blast,
                             boolean blocks, boolean torches, AABB crystalBox) {
         for (boolean torch : new boolean[] {true, false}) {
@@ -358,7 +353,6 @@ public final class PistonAura extends Module {
         return EntityTypes.END_CRYSTAL.getDimensions().makeBoundingBox(Vec3.atBottomCenterOf(crystal));
     }
 
-    // Where the crystal stops once the head has carried it as far as the blocks allow.
     private static Vec3 pushedCrystal(BlockPos crystal, Direction facing) {
         Vec3 start = Vec3.atBottomCenterOf(crystal);
         Vec3 shove = facing.getUnitVec3().scale(PUSH_REACH);
@@ -370,7 +364,6 @@ public final class PistonAura extends Module {
         return limits.allows(blast, ExplosionUtil.CRYSTAL_POWER);
     }
 
-    // Hits the crystal once the head has carried it into place or the wait runs out.
     private void watchCrystal() {
         int waited = ++watched;
         EndCrystal crystal = pendingCrystal();
@@ -392,7 +385,6 @@ public final class PistonAura extends Module {
         pending = null;
     }
 
-    // The crystal nearest where the pushed one should end up. It may still sit where it went down.
     private EndCrystal pendingCrystal() {
         AABB around = new AABB(pending.crystal()).inflate(PUSH_REACH);
         EndCrystal nearest = null;

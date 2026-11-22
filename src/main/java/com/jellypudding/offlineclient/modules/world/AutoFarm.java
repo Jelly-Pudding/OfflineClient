@@ -62,17 +62,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Cuts the ripe crops around you and puts the seeds back in the ground. It
-// never walks anywhere and only farms what is already in reach.
 public final class AutoFarm extends Module {
 
-    // A block test that needs the state as well as the position.
     private interface PlantTest {
         boolean matches(BlockPos pos, BlockState state);
     }
 
-    // One kind of plant. The spot test marks where a seed belongs and the mine
-    // and interact tests say when the grown part is ready to take.
+    // The spot test marks where a seed belongs and the mine and interact tests say when the grown
+    // part is ready to take.
     private record Plant(String name, Item seed, PlantTest spot, Predicate<BlockPos> surface,
                          PlantTest mine, PlantTest interact) {
     }
@@ -183,7 +180,6 @@ public final class AutoFarm extends Module {
     private static final List<String> PLANTS_ON = PLANT_NAMES.stream()
         .filter(name -> !name.endsWith("vines")).toList();
 
-    // The plants whose seed goes straight onto bare farmland or soul sand.
     private static final List<String> SOWN_NAMES = List.of("Beetroots", "Carrots", "Melons", "Nether wart",
         "Pitcher plants", "Potatoes", "Pumpkins", "Torchflowers", "Wheat");
 
@@ -191,11 +187,10 @@ public final class AutoFarm extends Module {
     private static final List<String> SOWN_ON = List.of("Beetroots", "Carrots", "Nether wart", "Potatoes",
         "Wheat");
 
-    // Ticks a cut spot waits for its seed.
     private static final int PLANT_TICKS = 60;
 
-    // Ticks a spot that was given a seed or soil that met the hoe is passed over. A click the
-    // server turned down leaves it as it was and it would otherwise be clicked again and again.
+    // A click the server turned down leaves the spot as it was and it would otherwise be clicked
+    // again and again.
     private static final int RETRY_TICKS = 20;
 
     private static final AABB NODE = new AABB(BlockPos.ZERO).deflate(0.3);
@@ -336,7 +331,6 @@ public final class AutoFarm extends Module {
         List<BlockPos> toMine = new ArrayList<>();
         List<BlockPos> toInteract = new ArrayList<>();
         List<BlockPos> toFeed = new ArrayList<>();
-        // Nearest first like the scan.
         Map<BlockPos, Plant> toPlant = new LinkedHashMap<>();
         List<Plant> sowable = sow.isOn() ? sowable() : List.of();
         sort(scan, sowable, toMine, toInteract, toPlant, toFeed);
@@ -442,7 +436,6 @@ public final class AutoFarm extends Module {
         return false;
     }
 
-    // The plants ticked for sowing whose seed is at hand. Creative conjures any seed.
     private List<Plant> sowable() {
         return PLANTS.stream()
             .filter(plant -> sowPlants.contains(plant.name()))
@@ -451,8 +444,7 @@ public final class AutoFarm extends Module {
             .toList();
     }
 
-    // The first of the plants that grows on the soil under the empty spot. A crop the game would
-    // not let stand there for want of light is passed over. Null when none fits.
+    // A crop the game would not let stand there for want of light is passed over.
     private Plant sown(BlockPos pos, List<Plant> sowable) {
         for (Plant plant : sowable) {
             if (plant.surface().test(pos)
@@ -486,7 +478,6 @@ public final class AutoFarm extends Module {
         return false;
     }
 
-    // Takes the seed from anywhere in the inventory and conjures one in creative.
     private boolean holdSeed(Item seed) {
         if (mc.player.getMainHandItem().is(seed)) {
             return true;
@@ -499,8 +490,6 @@ public final class AutoFarm extends Module {
         return InventoryUtil.freeHotbarSlot() != -1 && InventoryUtil.conjure(new ItemStack(seed)) != null;
     }
 
-    // Tills one block of soil a seed at hand could go on. The hoe comes from anywhere in the
-    // inventory and the one in hand goes first.
     private boolean tillSoil(List<BlockPos> scan, List<Plant> sowable, int now) {
         if (!till.isOn() || now - lastUse < InputUtil.USE_DELAY || UseBudget.remaining() == 0
             || !seedForFarmland(sowable)) {
@@ -555,7 +544,6 @@ public final class AutoFarm extends Module {
         return true;
     }
 
-    // The crops and stems and cocoa of a farm that bone meal still grows.
     private boolean takesBoneMeal(BlockPos pos, BlockState state) {
         Block block = state.getBlock();
         return block instanceof BonemealableBlock plant
@@ -613,7 +601,6 @@ public final class AutoFarm extends Module {
         return BlockUtil.state(pos.below());
     }
 
-    // Whether the plant of that name would put a seed here.
     private static boolean isSpot(String name, BlockPos pos) {
         for (Plant plant : PLANTS) {
             if (plant.name().equals(name)) {

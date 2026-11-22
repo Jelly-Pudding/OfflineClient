@@ -28,9 +28,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Opens a sheet about one entity on its key. The entity looked at comes first and the nearest
-// one included below when the crosshair is on nothing. A mark put on from the sheet glows
-// through walls until it is taken off.
 public final class Inspector extends Module {
 
     private static final String NAME = "{name}";
@@ -49,7 +46,6 @@ public final class Inspector extends Module {
         "A line the sheet offers. It opens the chat box with " + NAME + " swapped for the name and sends"
             + " nothing until you press enter.", "/msg " + NAME, "/tpa " + NAME).plain();
 
-    // The marked entities by network id and the world they were marked in.
     private final IntOpenHashSet marked = new IntOpenHashSet();
     private final WorldWatch world = new WorldWatch();
 
@@ -91,7 +87,6 @@ public final class Inspector extends Module {
         InspectorScreen.open(this, target);
     }
 
-    // The entity the crosshair is on within range. A block in the way hides what is behind it.
     // The crosshair follows the camera whilst Freecam or RemoteView has it.
     private Entity lookedAt() {
         LocalPlayer player = mc.player;
@@ -110,12 +105,10 @@ public final class Inspector extends Module {
         return hit == null ? null : hit.getEntity();
     }
 
-    // Every message line in use with text in it.
     public List<String> messageLines() {
         return messages.all();
     }
 
-    // The line with the name written in.
     public static String fillIn(String line, String name) {
         return line.replace(NAME, name);
     }
@@ -135,7 +128,6 @@ public final class Inspector extends Module {
         return true;
     }
 
-    // Takes every mark off and counts how many there were.
     private int unmarkAll() {
         forgetOldWorld();
         int count = marked.size();
@@ -143,7 +135,6 @@ public final class Inspector extends Module {
         return count;
     }
 
-    // True for a marked entity whilst the client draws in the world.
     public boolean glows(Entity entity) {
         return !marked.isEmpty() && isMarked(entity) && !Conceal.hides(Conceal.Part.WORLD);
     }

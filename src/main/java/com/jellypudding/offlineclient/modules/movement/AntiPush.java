@@ -40,23 +40,19 @@ public final class AntiPush extends Module {
             "velocity", "float");
     }
 
-    // True when no shove at all should land. The cheap path that skips the push outright.
     public boolean blocksEntities() {
         return isEnabled() && entities.isOn() && entityPush.getValue() <= 0;
     }
 
-    // The share of a shove from another entity that still lands.
     public double entityPushScale() {
         return isEnabled() && entities.isOn() ? entityPush.getValue() / 100.0 : 1;
     }
 
-    // True when no current at all should pull. The cheap path that skips the flow maths.
     public boolean blocksCurrents() {
         return isEnabled() && currents.isOn()
             && currentHorizontal.getValue() <= 0 && currentVertical.getValue() <= 0;
     }
 
-    // The flow of a current with the kept share of each axis.
     public Vec3 scaleCurrent(Vec3 flow) {
         if (!isEnabled() || !currents.isOn()) {
             return flow;

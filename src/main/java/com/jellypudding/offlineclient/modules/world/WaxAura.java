@@ -36,9 +36,7 @@ public final class WaxAura extends BlockUseAura {
 
     private enum Job { SCRAPE, WAX, SIGN }
 
-    // How often the signs around you are looked over for the outlines.
     private static final int SCAN_TICKS = 20;
-    // The most signs outlined at once.
     private static final int MAX_OUTLINED = 512;
 
     private final BoolSetting copper = new BoolSetting("Copper",
@@ -55,7 +53,6 @@ public final class WaxAura extends BlockUseAura {
         "Colour of the outline round an unwaxed sign.", 45, false).under(showSigns);
 
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
-    // Signs clicked with honeycomb that have not shown their wax yet.
     private final Set<BlockPos> clicked = new HashSet<>();
     private List<BlockPos> unwaxed = List.of();
     private int scanWait;
@@ -106,7 +103,6 @@ public final class WaxAura extends BlockUseAura {
         }
     }
 
-    // What there is to do to the block. Null when nothing.
     private Job jobAt(BlockPos pos) {
         Block block = BlockUtil.state(pos).getBlock();
         if (HoneycombItem.WAXABLES.get().containsKey(block)) {
@@ -136,7 +132,6 @@ public final class WaxAura extends BlockUseAura {
         return stack.is(ItemTags.AXES) && !ItemUtil.nearlyBroken(stack);
     }
 
-    // Takes the tool from the hotbar and clicks the targets with it. True when any click was taken.
     private boolean work(List<BlockPos> targets, Predicate<ItemStack> tool, Job job) {
         if (targets == null) {
             return false;

@@ -21,7 +21,6 @@ public final class LavaPours {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // A spot lava can go and the point the view turns to for the bucket.
     public record Pour(BlockPos spot, Vec3 aim) {
     }
 
@@ -34,7 +33,6 @@ public final class LavaPours {
             + " and a shorter wait lets it go down closer to you.",
         40, 5, 200, 5, " ticks").min(1).under(takeBack);
 
-    // Where lava went down and the tick it did. Only kept whilst it is to be taken back.
     private final SpotLedger poured = new SpotLedger();
 
     // Borrows the empty buckets for the scoops that go on after the module stops.
@@ -44,14 +42,12 @@ public final class LavaPours {
         return new Setting<?>[] {takeBack, takeBackAfter};
     }
 
-    // Shows both rows only whilst the parent holds the value.
     public <E extends Enum<E>> LavaPours under(EnumSetting<E> parent, E value) {
         Setting.under(settings(), parent, value);
         return this;
     }
 
-    // A pour into the spot that can never reach you. Null when no bucket can pour there or
-    // the flow could run into you.
+    // Null when no bucket can pour there or the flow could run into you.
     public Pour plan(BlockPos spot) {
         if (!takesLava(spot)) {
             return null;
@@ -63,8 +59,6 @@ public final class LavaPours {
         return LavaReach.touches(spot, MC.player.getBoundingBox(), flowSteps()) ? null : new Pour(spot, aim);
     }
 
-    // Empties a lava bucket from anywhere in the inventory. The spot is kept to scoop later.
-    // True when the game took the use.
     public boolean pour(InventoryUtil.HotbarLoan loan, Pour pour) {
         if (!Buckets.use(loan, Items.LAVA_BUCKET, pour.aim())) {
             return false;
@@ -75,8 +69,8 @@ public final class LavaPours {
         return true;
     }
 
-    // Scoops the oldest pour that is due. True when a bucket was used this tick. A pour made
-    // whilst Take back was on is still scooped once it is switched off.
+    // True when a bucket was used this tick. A pour made whilst Take back was on is still scooped
+    // once it is switched off.
     public boolean scoopDue(InventoryUtil.HotbarLoan loan) {
         return poured.undoDue(takeBackAfter.getInt(), LavaPours::stillLava, pos -> scoop(loan, pos));
     }
@@ -114,7 +108,6 @@ public final class LavaPours {
         }
     }
 
-    // True whilst a lava bucket sits anywhere in the inventory.
     public static boolean carried() {
         return InventoryUtil.findSlot(Items.LAVA_BUCKET, InventoryUtil.WHOLE_INVENTORY) != -1;
     }

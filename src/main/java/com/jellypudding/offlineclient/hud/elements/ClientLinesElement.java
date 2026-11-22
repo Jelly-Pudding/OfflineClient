@@ -19,25 +19,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-// The client's own messages. Whilst this is on they come here and stay out of the chat. The
-// newest sits at the bottom the way chat does. A line fades once its time is up and the open
-// chat shows every row whatever its age. A long line wraps onto rows of its own.
+// The newest sits at the bottom the way chat does. The open chat shows every row whatever its age.
 public final class ClientLinesElement extends HudElement {
 
-    // One wrapped row and how strongly it shows from nought to one.
     private record Row(FormattedCharSequence text, int width, float alpha) {
     }
 
     private static final double MILLIS_PER_SECOND = 1000;
 
-    // How long a line takes to fade out once its time is up.
     private static final float FADE_MILLIS = 1000;
 
-    // Lines wrap at about the width of the chat.
     private static final int WRAP_WIDTH = 320;
 
-    // The lines a bind writes as it switches a module stand in whilst the editor is open and
-    // nothing has come yet.
     private static final List<Component> SAMPLE = List.of(sample("Sprint", true), sample("Flight", false));
 
     private final NumberSetting fade = new NumberSetting("Client lines fade",
@@ -92,7 +85,6 @@ public final class ClientLinesElement extends HudElement {
         return kept;
     }
 
-    // The rows of one line with its last row first.
     private static List<Row> wrapped(Font font, Component line, float alpha) {
         List<Row> parts = new ArrayList<>();
         for (FormattedCharSequence part : font.split(line, WRAP_WIDTH)) {
@@ -101,7 +93,6 @@ public final class ClientLinesElement extends HudElement {
         return parts;
     }
 
-    // Full until the line's time is up and down to nought over the fade after it.
     private float strength(long age) {
         double left = fade.getValue() * MILLIS_PER_SECOND - age;
         return (float) Math.clamp(1 + left / FADE_MILLIS, 0, 1);

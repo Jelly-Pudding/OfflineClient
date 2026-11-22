@@ -21,15 +21,13 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
     // A place read back from a file has to lie this close to the line it names.
     private static final double ON_LINE = 1;
 
-    // A square of chunks round the given one. A size that would cross the world border is cut
-    // at it.
+    // A size that would cross the world border is cut at it.
     public static Sweep square(int chunkX, int chunkZ, int size, int gap) {
         int west = chunkX - size / 2;
         int north = chunkZ - size / 2;
         return begun(Shape.SQUARE, west, north, (long) west + size - 1, (long) north + size - 1, gap);
     }
 
-    // Every chunk between two corners given in blocks.
     public static Sweep area(int x1, int z1, int x2, int z2, int gap) {
         int west = SectionPos.blockToSectionCoord(Math.min(x1, x2));
         int north = SectionPos.blockToSectionCoord(Math.min(z1, z2));
@@ -52,7 +50,6 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
         return Math.clamp(chunk, -EDGE, EDGE);
     }
 
-    // The same sweep with the line flown and the place reached on it.
     public Sweep at(int leg, double x, double z) {
         return new Sweep(shape, west, north, east, south, gap, leg, x, z);
     }
@@ -61,7 +58,6 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
         return new Vec3(x, 0, z);
     }
 
-    // True whilst the sweep has a line of this number. A spiral goes on as far as any world can.
     public boolean hasLeg(int leg) {
         if (leg < 0) {
             return false;
@@ -72,8 +68,6 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
         return leg + 1L < 2L * rows();
     }
 
-    // True when the line ends inside the border the world has. A line that runs out of it can
-    // never be flown to its end.
     public boolean endsInside(int leg, WorldBorder border) {
         Vec3 end = turn(leg + 1);
         return border.isWithinBounds(end.x, end.z);
@@ -93,7 +87,6 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
         return alongX() ? centreOf(along, across) : centreOf(across, along);
     }
 
-    // The point of a line nearest a place.
     public Vec3 nearestOn(int leg, double fromX, double fromZ) {
         Vec3 start = turn(leg);
         Vec3 end = turn(leg + 1);
@@ -125,7 +118,6 @@ public record Sweep(Shape shape, int west, int north, int east, int south, int g
             + stepsLeft * (double) gap * SectionPos.SECTION_SIZE;
     }
 
-    // How many times the spiral has gone round by this line. Nought for rows.
     public int ring(int leg) {
         return shape == Shape.SPIRAL ? leg / 4 + 1 : 0;
     }

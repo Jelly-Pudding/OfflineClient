@@ -27,34 +27,25 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-// The map of everything you explored on this server in the dimension you are in. Drag it to move
-// it and scroll to zoom. A click walks there and a right click saves a waypoint. It follows the
-// ClickGUI scale like every other panel.
 public final class WorldMapScreen extends ScaledScreen {
 
     // Blocks a pixel at the closest and the furthest zoom.
     private static final double MIN_ZOOM = 0.125;
     private static final double MAX_ZOOM = 64;
-    // Each notch of the wheel zooms by this much.
     private static final double ZOOM_STEP = Math.sqrt(2);
-    // A press that moves less than this many pixels is a click and not a drag.
     private static final double CLICK_SLOP = 3;
     // The land changes as chunks arrive. The picture catches up at most this often.
     private static final long REPAINT_GAP_MS = 500;
-    // How near the pointer a mark must be to be named at the foot.
     private static final double HOVER_REACH = 5;
-    // Places the scale at the foot is written to.
     private static final int SCALE_PLACES = 1;
-    // Space round the window.
     private static final int GAP = 10;
-    // Land never seen.
     private static final int UNSEEN = 0xFF14141B;
     private static final String WAYPOINT_STEM = "map";
     private static final String SEPARATOR = " · ";
     private static final String HINT = "Drag to move and scroll to zoom. Click to walk there. Right click saves a "
         + "waypoint. Space centres on you.";
 
-    // The zoom the map last had. It opens at it for the rest of the session.
+    // It opens at the zoom it last had for the rest of the session.
     private static double lastZoom = 1;
 
     private final WorldMap worldMap;
@@ -64,7 +55,6 @@ public final class WorldMapScreen extends ScaledScreen {
     private double centreX;
     private double centreZ;
     private double zoom = lastZoom;
-    // Where a press with the left button began and where the map stood then.
     private boolean pressed;
     private boolean dragged;
     private double pressX;
@@ -138,7 +128,6 @@ public final class WorldMapScreen extends ScaledScreen {
         footer.render(context, font, GAP, GAP, ww, wh, pointedAt(mouseX, mouseY));
     }
 
-    // Such as 4 blocks a pixel or 2.8 pixels a block.
     private String scaleText() {
         boolean wide = zoom >= 1;
         String number = ChatUtil.decimal(wide ? zoom : 1 / zoom, SCALE_PLACES);
@@ -159,7 +148,6 @@ public final class WorldMapScreen extends ScaledScreen {
             + HINT;
     }
 
-    // The block under a spot of the map at the height to stand at there.
     private BlockPos spotAt(double screenX, double screenY) {
         int x = Mth.floor(view.worldX(screenX, screenY));
         int z = Mth.floor(view.worldZ(screenX, screenY));
@@ -234,7 +222,6 @@ public final class WorldMapScreen extends ScaledScreen {
         }
     }
 
-    // Zooms about the spot under the pointer.
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         double mx = toView(mouseX);
@@ -271,7 +258,6 @@ public final class WorldMapScreen extends ScaledScreen {
         return super.keyPressed(event);
     }
 
-    // The texture of the map goes with the screen.
     @Override
     public void removed() {
         picture.close();

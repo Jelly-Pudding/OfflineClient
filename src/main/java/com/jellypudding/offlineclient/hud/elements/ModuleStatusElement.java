@@ -15,21 +15,17 @@ import net.minecraft.client.gui.Font;
 import java.util.ArrayList;
 import java.util.List;
 
-// Whether each module you pick is on or off.
 public final class ModuleStatusElement extends RowsElement {
 
-    // The fighting modules most worth keeping an eye on.
     private static final List<String> WATCHED = List.of("KillAura", "CrystalAura", "AnchorAura", "BedAura",
         "Surround");
 
     private static final String ON = "On";
     private static final String OFF = "Off";
 
-    // A module's name and whether it is on with what it is doing. Null when it says nothing.
     private record Status(String name, boolean on, String doing) {
     }
 
-    // Stands in whilst the editor is open and nothing picked is there to show.
     private static final List<Status> SAMPLE = List.of(new Status("KillAura", true, "Zombie"),
         new Status("Surround", false, null));
 
@@ -44,7 +40,6 @@ public final class ModuleStatusElement extends RowsElement {
         "Colour of On and of what a module that is on is doing.", 120, false);
     private final ColorSetting offColor = new ColorSetting("Status off colour",
         "Colour of Off.", 0, false);
-    // Each gathering asks every picked module what it is doing.
     private final RowCache<Status> statuses = new RowCache<>(this::build);
 
     public ModuleStatusElement() {
@@ -52,17 +47,11 @@ public final class ModuleStatusElement extends RowsElement {
         add(watched, details, nameColor, onColor, offColor);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !shown().isEmpty();
-    }
-
     private List<Status> shown() {
         List<Status> built = statuses.get();
         return built.isEmpty() && editing() ? SAMPLE : built;
     }
 
-    // In the order they were picked. A picked name that matches no module is left out.
     private List<Status> build() {
         List<Status> built = new ArrayList<>(watched.size());
         for (String name : watched.getValue()) {
@@ -74,7 +63,6 @@ public final class ModuleStatusElement extends RowsElement {
         return built;
     }
 
-    // The colours are picked a row at a time. A rainbow runs down the rows.
     @Override
     protected List<TextRow> rows(Font font) {
         List<Status> shown = shown();

@@ -29,10 +29,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
-// Feeds bone meal to whatever is still growing around you.
 public final class BonemealAura extends BlockUseAura {
 
-    // Ticks before the same moss top is hit again.
     private static final int CLEAR_TICKS = 10;
 
     private final BoolSetting fastPlace = new BoolSetting("Fast place",
@@ -166,7 +164,6 @@ public final class BonemealAura extends BlockUseAura {
         return BlockTurns.mossSpread(mc.level, pos, moss) >= mossLeast.getInt();
     }
 
-    // The plant on the nearest moss block that is worth feeding. Null when there is none.
     private BlockPos mossTop() {
         cleared.tick();
         for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
@@ -180,7 +177,6 @@ public final class BonemealAura extends BlockUseAura {
         return null;
     }
 
-    // One hit takes the plant off.
     private void clear(BlockPos top) {
         BlockMiner.breakInstantly(top);
         SwingMode.of(swing.isOn()).use();

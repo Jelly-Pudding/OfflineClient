@@ -62,7 +62,6 @@ public final class Slippy extends Module {
         }
     }
 
-    // The friction the block under the player should report.
     public float groundFriction(Block block, float vanilla) {
         if (!isEnabled()) {
             return vanilla;

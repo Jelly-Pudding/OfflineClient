@@ -11,7 +11,6 @@ import org.joml.Vector3fc;
 
 import java.util.List;
 
-// Draws one kind of body into its own picture the way the game draws the inventory body.
 public final class BodyRenderer<T extends BodyPicture> extends PictureInPictureRenderer<T> {
 
     private final Class<T> kind;
@@ -22,7 +21,6 @@ public final class BodyRenderer<T extends BodyPicture> extends PictureInPictureR
         this.dispatcher = dispatcher;
     }
 
-    // One renderer for each kind of body.
     public static List<PictureInPictureRenderer<?>> forEveryBody(EntityRenderDispatcher dispatcher) {
         return List.of(new BodyRenderer<>(BodyPicture.CombatModel.class, dispatcher),
             new BodyRenderer<>(BodyPicture.PlayerModel.class, dispatcher),

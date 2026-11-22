@@ -40,16 +40,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
-// Draws the picture the outline shader works from. Every silhouette is drawn in its number as a
-// colour with nothing blended and nothing hidden by the world. Entities go through the game's own
-// outline drawing and come out with their true shape. Boxes are filled by hand.
+// Every silhouette is drawn in its number as a colour with nothing blended and nothing hidden by
+// the world. Entities go through the game's own outline drawing and come out with their true shape.
 final class SilhouetteMask {
 
     private static final Vector4fc CLEAR = new Vector4f(0, 0, 0, 0);
     // Alpha marks a covered pixel. The low three bytes carry the number.
     private static final int COVERED = 0xFF000000;
-    // An entity whose hitbox grown by this many blocks is out of view is left out. Some models reach
-    // past the hitbox and the glow reaches past the model.
+    // Some models reach past the hitbox and the glow reaches past the model.
     private static final double CULL_MARGIN = 1;
 
     private static final RenderType BOXES = RenderType.create("offlineclient:silhouette_boxes",
@@ -61,9 +59,8 @@ final class SilhouetteMask {
     private SilhouetteMask() {
     }
 
-    // Fills the mask with this frame's silhouettes. Each entity and box carries the number its colour
-    // is kept under. An entity that leaves nothing in the mask joins the boxes as its hitbox. The box
-    // vertices go up through the buffer the caller keeps from frame to frame.
+    // Each entity and box carries the number its colour is kept under. An entity that leaves
+    // nothing in the mask joins the boxes as its hitbox.
     static void draw(RenderTarget mask, StagedVertexBuffer boxVertices, List<Entity> entities, IntList entityIds,
                      List<AABB> boxes, IntList boxIds, float partialTicks) {
         CameraRenderState camera = OfflineClient.MC.gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
@@ -168,7 +165,6 @@ final class SilhouetteMask {
     // Takes in only what the outline pass draws. The rest of an entity is never prepared.
     private static final class OutlineOnlyStorage extends SubmitNodeStorage {
 
-        // How many outline submits were taken in since it was last set to nought.
         private int kept;
 
         @Override
@@ -186,7 +182,6 @@ final class SilhouetteMask {
             this.storage = storage;
         }
 
-        // An outline render type goes to the outline phase alone.
         private static RenderType outlineOf(RenderType type, int outline) {
             if (outline == 0) {
                 return null;

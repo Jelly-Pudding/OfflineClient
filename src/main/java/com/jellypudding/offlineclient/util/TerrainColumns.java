@@ -15,10 +15,8 @@ import net.minecraft.world.level.material.MapColor.Brightness;
 // the column north of it and darkens where it falls. Game thread only.
 final class TerrainColumns {
 
-    // A column whose height is not known.
     static final int UNKNOWN = Integer.MIN_VALUE;
 
-    // Water deeper than this shades the same as this.
     private static final int DEEPEST = 10;
     // The shading a held map uses. Water goes by depth and land by its rise from the north with a
     // fine checker that softens each step.
@@ -30,11 +28,9 @@ final class TerrainColumns {
     private static final double LAND_CHECKER = 0.4;
     private static final double CHECKER_MIDDLE = 0.5;
     private static final double STEEP = 0.6;
-    // The layer you stand on looks this far down from your head for a floor.
     private static final int CAVE_DEPTH = 32;
 
     private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-    // What the last column read found.
     private MapColor colour = MapColor.NONE;
     private int height;
     private int depth;
@@ -47,14 +43,11 @@ final class TerrainColumns {
         return tile(chunk, north, UNKNOWN, roofed);
     }
 
-    // The tile of a chunk seen from your head down. A solid block at your head is a wall and is
-    // drawn dark.
+    // A solid block at your head is a wall and is drawn dark.
     byte[] layer(LevelChunk chunk, LevelChunk north, int headY) {
         return tile(chunk, north, headY, false);
     }
 
-    // The height to stand at on the first floor under the roof of a column. Unknown for a column
-    // with nothing to stand on.
     int floorY(LevelChunk chunk, int x, int z) {
         read(chunk, x, z, UNKNOWN, true);
         return colour == MapColor.NONE ? UNKNOWN : height + 1;
@@ -81,7 +74,6 @@ final class TerrainColumns {
         return tile;
     }
 
-    // Leaves the colour and height and water depth of one column behind.
     private void read(LevelChunk chunk, int x, int z, int headY, boolean roofed) {
         depth = 0;
         wall = false;
@@ -107,8 +99,7 @@ final class TerrainColumns {
         down(chunk, x, z, top, bottom);
     }
 
-    // Walks down from the top to the first block with a colour. Water counts its depth and a
-    // block standing in water that is open on top shows as the water.
+    // Water counts its depth and a block standing in water that is open on top shows as the water.
     private void down(LevelChunk chunk, int x, int z, int top, int bottom) {
         int y = top + 1;
         BlockState state = null;
@@ -140,7 +131,6 @@ final class TerrainColumns {
         }
     }
 
-    // The first open space under the roof of a column. The top itself when there is none.
     private int belowRoof(LevelChunk chunk, int x, int z, int top, int bottom) {
         for (int y = top; y > bottom; y--) {
             if (chunk.getBlockState(pos.set(x, y, z)).isAir()) {
@@ -150,7 +140,6 @@ final class TerrainColumns {
         return top;
     }
 
-    // The colour of the last column read shaded against the height of the column north of it.
     private byte packed(int x, int z, int above) {
         if (colour == MapColor.NONE) {
             return TerrainLayer.VOID;

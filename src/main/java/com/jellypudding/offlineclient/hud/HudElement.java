@@ -19,24 +19,20 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-// One piece of the overlay. Its settings hang off the HUD module and the config
-// and the ClickGUI need to know nothing about elements.
+// Its settings hang off the HUD module and the config and the ClickGUI need to know nothing about
+// elements.
 public abstract class HudElement {
 
-    // Whether an element has a background and whether that starts out switched on.
     protected enum Background { NONE, OFF, ON }
 
-    // The narrowest any element can be stretched either way and the widest most can.
     public static final double MIN_STRETCH = 0.25;
     private static final double MAX_STRETCH = 4;
 
     // Where the stretch sliders stop. A typed or dragged size goes further.
     private static final double SLIDER_STRETCH = 2;
 
-    // The red a piece writes in when it says why it cannot do what it was asked.
     protected static final int PROBLEM_INK = 0xFFFF5555;
 
-    // The soft blue grey most rows of overlay text start out in.
     private static final float LABEL_HUE = 190;
     private static final float LABEL_SATURATION = 0.15f;
     private static final float LABEL_BRIGHTNESS = 0.85f;
@@ -44,7 +40,6 @@ public abstract class HudElement {
     private final String name;
     private final String description;
     private final List<Setting<?>> settings = new ArrayList<>();
-    // Rows that come after the background.
     private final List<Setting<?>> last = new ArrayList<>();
 
     protected final BoolSetting active;
@@ -55,8 +50,8 @@ public abstract class HudElement {
     private final NumberSetting down;
     // Null for an element that never has a background.
     private final Backdrop backdrop;
-    // The size in GUI pixels of the screen the element was last placed on. It keeps the element
-    // as many GUI pixels from the side or the middle its share is nearest on any other screen.
+    // It keeps the element as many GUI pixels from the side or the middle its share is nearest on
+    // any other screen.
     private final NumberSetting placedWidth;
     private final NumberSetting placedHeight;
 
@@ -69,27 +64,23 @@ public abstract class HudElement {
         this(name, description, on, startX, startY, Background.OFF);
     }
 
-    // An element whose background starts on or that has none at all.
     protected HudElement(String name, String description, boolean on, double startX, double startY,
                          Background background) {
         this(name, description, on, startX, startY, 1, MAX_STRETCH, background);
     }
 
-    // A few elements are wordy enough to ship smaller than the rest.
     protected HudElement(String name, String description, boolean on, double startX, double startY,
                          double startSize) {
         this(name, description, on, startX, startY, startSize, MAX_STRETCH, Background.OFF);
     }
 
-    // An element that has to reach across any screen such as a cover sets how far it stretches.
     protected HudElement(String name, String description, boolean on, double startX, double startY,
                          double startSize, double mostStretch, Background background) {
         this(name, description, new BoolSetting(name, description, on), startX, startY, startSize, mostStretch,
             background);
     }
 
-    // An element that draws what a module works out. Its switch is the module's own on or off
-    // state. Two switches for one thing could disagree.
+    // Its switch is the module's own on or off state. Two switches for one thing could disagree.
     protected HudElement(String name, String description, Class<? extends Module> owner, double startX,
                          double startY, Background background) {
         this(name, description, new ModuleSwitch(name, description, owner), startX, startY, 1, MAX_STRETCH,
@@ -134,18 +125,14 @@ public abstract class HudElement {
             0, 0, 1, 1).internal();
     }
 
-    // What follows the name of a piece of a kind there can be several of. The first goes by
-    // the plain name.
     protected static String ordinal(int number) {
         return number == 1 ? "" : " " + number;
     }
 
-    // A colour setting that starts out in the soft label colour.
     protected static ColorSetting labelColor(String name, String description) {
         return new ColorSetting(name, description, LABEL_HUE, LABEL_SATURATION, LABEL_BRIGHTNESS, false);
     }
 
-    // Files settings in display order.
     protected final void add(Setting<?>... more) {
         for (Setting<?> setting : more) {
             hang(setting);
@@ -153,7 +140,6 @@ public abstract class HudElement {
         }
     }
 
-    // Files rows that come last in the block such as the one that adds another piece of the kind.
     public final void addLast(Setting<?>... rows) {
         for (Setting<?> row : rows) {
             hang(row);
@@ -177,8 +163,6 @@ public abstract class HudElement {
         return description;
     }
 
-    // Everything but the switch. The element's own options come before its background and the
-    // screen it was last placed on saves unseen at the end.
     public final List<Setting<?>> getOptions() {
         List<Setting<?>> options = new ArrayList<>(settings);
         if (backdrop != null) {
@@ -190,7 +174,7 @@ public abstract class HudElement {
         return Collections.unmodifiableList(options);
     }
 
-    // The switch itself first. The ClickGUI then shows the group closed.
+    // The switch comes first and the ClickGUI then shows the group closed.
     public final List<Setting<?>> getSettings() {
         List<Setting<?>> all = new ArrayList<>();
         all.add(active);
@@ -198,12 +182,10 @@ public abstract class HudElement {
         return all;
     }
 
-    // The width and height stretch. Putting the size back resets these.
     public final List<Setting<?>> sizeSettings() {
         return List.of(across, down);
     }
 
-    // The share across and down. Putting the element back where it started resets these.
     public final List<Setting<?>> placeSettings() {
         return List.of(x, y);
     }
@@ -216,13 +198,11 @@ public abstract class HudElement {
         return down.getValue();
     }
 
-    // The widest this element may be stretched either way.
     public final double mostStretch() {
         return mostStretch;
     }
 
-    // Where this element landed on screen. A picture in picture draw such as
-    // a player model never sees the pose and has to be told.
+    // A picture in picture draw such as a player model never sees the pose and has to be told.
     final void place(int left, int top, int width, int height) {
         boxLeft = left;
         boxTop = top;
@@ -246,7 +226,6 @@ public abstract class HudElement {
         return boxHeight;
     }
 
-    // Clamped to the settings' own limits.
     public final void setSize(double wide, double tall) {
         across.setValue(wide);
         down.setValue(tall);
@@ -264,8 +243,7 @@ public abstract class HudElement {
         return y.getValue();
     }
 
-    // The screen it was last placed on. Nought for an axis still at its starting share and
-    // before it has been placed. That axis follows whatever screen it is on.
+    // Nought for an axis still at its starting share. That axis follows whatever screen it is on.
     public final double placedWidth() {
         return x.isDefault() ? 0 : placedWidth.getValue();
     }
@@ -274,7 +252,6 @@ public abstract class HudElement {
         return y.isDefault() ? 0 : placedHeight.getValue();
     }
 
-    // The anchor as a share of a screen of this size.
     public final void moveTo(double xPercent, double yPercent, int screenWidth, int screenHeight) {
         x.setValue(xPercent);
         y.setValue(yPercent);
@@ -286,61 +263,48 @@ public abstract class HudElement {
         return x.isDefault() && y.isDefault();
     }
 
-    // Back to the share it starts at. The screen it was last placed on stays as it is. A share
-    // at its start never reads it.
+    // The screen it was last placed on stays as it is. A share at its start never reads it.
     public final void resetPosition() {
         x.reset();
         y.reset();
     }
 
-    // Where the element sits until the player moves it. Null for an element placed
-    // by its anchor alone.
+    // Null for an element placed by its anchor alone.
     public Box home(int screenWidth, int screenHeight) {
         return null;
     }
 
-    // True for an element that may sit flush with the screen edge. Everything else keeps
-    // a small margin.
     public boolean touchesEdges() {
         return false;
     }
 
-    // True for an element drawn once the game has drawn everything else. The rest of the
-    // overlay sits under any menu and under the tab list as well unless it goes over the debug
-    // text.
+    // The rest of the overlay sits under any menu and under the tab list.
     public boolean drawsOnTop() {
         return false;
     }
 
-    // True for an element that keeps drawing with the game's own HUD whilst the rest of the
-    // overlay steps aside for a menu or the debug screen or waits to go over the debug text.
     public boolean staysWhenHidden() {
         return false;
     }
 
-    // True for an element laid over others on purpose such as a cover. It never moves to make
-    // room and nothing moves to make room for it.
+    // It never moves to make room and nothing moves to make room for it.
     public boolean liesOver() {
         return false;
     }
 
-    // How the element lines up against its anchor. Nought is the left edge and one
-    // the right edge and a half the middle.
+    // Nought is the left edge and one the right edge and a half the middle.
     protected final double alignment() {
         return HudManager.align(x.getValue() / 100);
     }
 
-    // True whilst the element is switched on even if it has nothing to say.
     public final boolean isActive() {
         return active.isOn();
     }
 
-    // True for an element whose switch is the on or off state of the module it draws for.
     public final boolean followsModule() {
         return active instanceof ModuleSwitch;
     }
 
-    // True when the switch of this element is one of the settings.
     public final boolean switchIsAmong(Collection<? extends Setting<?>> settings) {
         return settings.contains(active);
     }
@@ -349,22 +313,20 @@ public abstract class HudElement {
         active.setValue(on);
     }
 
-    // False for an element with nothing to say right now. In the editor an element may say
-    // something it would not in play such as a sample of what it shows.
+    // In the editor an element may say something it would not in play such as a sample of what it
+    // shows.
     public boolean visible() {
         return active.isOn();
     }
 
-    // Called as the piece is taken off the overlay. One that holds a texture lets go of it.
+    // One that holds a texture lets go of it.
     public void discard() {
     }
 
-    // True whilst the HUD editor is open.
     public static boolean editing() {
         return OfflineClient.MC.gui.screen() instanceof HudEditorScreen;
     }
 
-    // Whether overlay text has a shadow. The HUD module says.
     protected static boolean textShadow() {
         HudModule hud = Modules.get(HudModule.class);
         return hud == null || hud.textShadow();
@@ -375,7 +337,6 @@ public abstract class HudElement {
         context.text(font, text, x, y, color, textShadow());
     }
 
-    // In the editor an element with nothing to show stands in with its name.
     private boolean blank() {
         return editing() && !visible();
     }
@@ -388,8 +349,7 @@ public abstract class HudElement {
         return blank() ? font.lineHeight : height(font);
     }
 
-    // Measured in GUI pixels round the box the element was placed in. It keeps the same margin
-    // at any stretch.
+    // Measured in GUI pixels. It keeps the same margin at any stretch.
     final void drawBackground(GuiGraphicsExtractor context) {
         if (backdrop != null) {
             backdrop.around(context, boxWidth, boxHeight);

@@ -12,15 +12,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.Locale;
 
-// Shows whilst the server has gone quiet. Handy before you step into a hole.
 public final class LagNotifierElement extends HudElement {
 
     private static final double MILLIS_PER_SECOND = 1000;
-    // The warning has turned the long lag colour this long after it shows.
     private static final float LONG_LAG_MILLIS = 10_000;
 
-    // How a stall of a few seconds reads. It stands in whilst the editor is open and the
-    // server is answering. Its colour has turned a quarter of the way.
     private static final long SAMPLE_MILLIS = 2500;
     private static final String SAMPLE_TPS = "15.0";
     private static final float SAMPLE_RAMP = 0.25f;

@@ -17,13 +17,10 @@ public final class MaceSmash {
 
     // A fall has to pass one and a half blocks to smash.
     private static final double LEAST_FALL = 2;
-    // A lift with no room above tries again a block lower.
     private static final double LIFT_STEP = 1;
 
-    // The hits that went into the plan and the ticks all the ones after the first needed.
     public record Smash(int hits, int followTicks) {
 
-        // True when the hurt window closed before every hit could land.
         public boolean outOfTime() {
             return followTicks >= HURT_WINDOW;
         }

@@ -13,8 +13,6 @@ import com.jellypudding.offlineclient.util.SearchRank;
 import java.util.ArrayList;
 import java.util.List;
 
-// Every key the client answers to in one place. Macros first and then
-// the modules that carry a bind.
 final class MacrosTab implements TabView.Source {
 
     private static final String NO_KEY = "no key";
@@ -61,7 +59,6 @@ final class MacrosTab implements TabView.Source {
         if (gap < 1) {
             return "no module or macro called " + query;
         }
-        // The row is one line wide. Enter puts the whole of a problem in chat.
         MacroStore.Typed typed = MacroStore.typed(query.substring(gap + 1));
         if (typed.problem() != null) {
             return "press enter to hear what is wrong";
@@ -118,7 +115,6 @@ final class MacrosTab implements TabView.Source {
         return hints;
     }
 
-    // A name on its own is a search. A name and its lines is a macro.
     @Override
     public void add(String text) {
         int gap = text.indexOf(' ');
@@ -136,7 +132,6 @@ final class MacrosTab implements TabView.Source {
             ? new MacroStore.Macro(name, Bind.NONE, typed) : existing.with(typed));
     }
 
-    // A click runs a macro. A click on one still running stops it.
     @Override
     public void activate(String name) {
         MacroStore.Macro macro = MacroStore.get().find(name);
@@ -207,8 +202,6 @@ final class MacrosTab implements TabView.Source {
         return key.isBound() ? key.name() : NO_KEY;
     }
 
-    // A row whose detail is a key. A key something else answers to as well is drawn as a warning
-    // and the tip names what else uses it.
     private static TabView.Entry keyRow(String name, Bind key, Object self, String tip) {
         String also = KeyUse.alsoUsedBy(key, self);
         return new TabView.Entry(name, keyName(key), tip + also, !also.isEmpty());

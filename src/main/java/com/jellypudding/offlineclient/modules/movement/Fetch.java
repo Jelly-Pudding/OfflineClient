@@ -49,7 +49,6 @@ public final class Fetch extends Module {
 
     // A fresher drop may not be ready to pick up. A thrown item waits two seconds.
     private static final int SETTLE_TICKS = 40;
-    // Ticks the server is given to hand an item over.
     private static final int PICKUP_WAIT = 10;
     // How far round the player's box the server picks items up.
     private static final double PICKUP_REACH = 1;
@@ -86,7 +85,6 @@ public final class Fetch extends Module {
     private final ChatWarning warning = new ChatWarning();
     private final WorldWatch world = new WorldWatch();
 
-    // Items the server would not hand over. They are left alone from then on.
     private final Set<Integer> tried = new HashSet<>();
     // What Trade up threw away. It is never fetched back.
     private final List<ItemStack> traded = new ArrayList<>();
@@ -94,6 +92,7 @@ public final class Fetch extends Module {
     private Vec3 home;
     private Entity fetching;
     private int waited;
+    private boolean found;
     private boolean sendingStart;
     // Counts the times Fetch was switched on. A trip from an earlier run reports to nobody.
     private int runs;
@@ -113,10 +112,10 @@ public final class Fetch extends Module {
     protected void onEnable() {
         runs++;
         warning.clear();
+        found = false;
         forget();
     }
 
-    // Starts afresh with nothing to come back to.
     private void forget() {
         tried.clear();
         traded.clear();
@@ -177,6 +176,7 @@ public final class Fetch extends Module {
             home = mover.position();
         }
         fetching = item;
+        found = true;
         stage = Stage.GOING;
         trip.go(thisRun(this::arrived));
     }
@@ -184,12 +184,11 @@ public final class Fetch extends Module {
     private void awaitPickup(Entity item) {
         makeRoom(item);
         fetching = item;
+        found = true;
         stage = Stage.WAITING;
         waited = 0;
     }
 
-    // The way to a spot where the pickup reach takes in the item. Null when the item has no
-    // room or there is no such spot or no way there.
     private Hop.Plan tripTo(Entity mover, Entity item) {
         Vec3 spot = Hop.nearestFit(mover, item.position());
         if (spot == null || !reaches(mover, spot, item) || !roomFor(item)) {
@@ -203,7 +202,6 @@ public final class Fetch extends Module {
         return trip;
     }
 
-    // A trip started before Fetch was last switched on reports to nobody.
     private Consumer<Hop.Result> thisRun(Consumer<Hop.Result> callback) {
         int run = runs;
         return result -> {
@@ -259,13 +257,16 @@ public final class Fetch extends Module {
     private void finish() {
         home = null;
         stage = Stage.IDLE;
-        if (!stayOn.isOn()) {
+        if (stayOn.isOn()) {
+            return;
+        }
+        if (found) {
             setEnabled(false);
+        } else {
+            disable("Fetch found nothing it could pick up within " + range.getInt() + " blocks.");
         }
     }
 
-    // The closest wanted item within range of where the trip began. A pull only reaches
-    // items lying level with the feet beyond the normal pickup reach.
     private Entity nearestWanted(Vec3 from, boolean level) {
         Vec3 start = home == null ? from : home;
         Entity best = null;
@@ -299,8 +300,6 @@ public final class Fetch extends Module {
             && traded.stream().noneMatch(stack -> ItemStack.matches(stack, item.getItem()));
     }
 
-    // True when the inventory takes the item or Trade up has a worse piece to throw for it.
-    // Nothing is thrown before the item is in reach. An orb takes no room.
     private boolean roomFor(Entity entity) {
         return !(entity instanceof ItemEntity item) || takes(item.getItem()) || worsePiece(item.getItem()) != -1;
     }
@@ -310,8 +309,6 @@ public final class Fetch extends Module {
         return inventory.getFreeSlot() != -1 || inventory.getSlotWithRemainingSpace(stack) != -1;
     }
 
-    // Trade up throws the worse piece once the item is in reach and still lies there with no
-    // room for it. A trip that ends after Fetch was switched off throws nothing.
     private void makeRoom(Entity entity) {
         if (!(entity instanceof ItemEntity item)) {
             return;
@@ -327,9 +324,6 @@ public final class Fetch extends Module {
         }
     }
 
-    // The lowest scoring piece of the same kind you carry when the one on the ground scores
-    // higher. Renamed pieces and Mending pieces and the ones NoInteract protects always stay.
-    // Minus one whilst Trade up is off or nothing worse is carried.
     private int worsePiece(ItemStack better) {
         GearKind kind = GearKind.of(better);
         if (!tradeUp.isOn() || kind == null) {
@@ -367,12 +361,10 @@ public final class Fetch extends Module {
         return !Modules.keepsFromThrow(stack);
     }
 
-    // True when the server's pickup reach round the mover at the spot takes in the item.
     private static boolean reaches(Entity mover, Vec3 spot, Entity item) {
         return Hop.boxAt(mover, spot).inflate(PICKUP_REACH, 0, PICKUP_REACH).intersects(item.getBoundingBox());
     }
 
-    // Aims the jumps at the nearest level item with a clear way to it.
     private void pullNext() {
         if (ServerInfo.runsPaper()) {
             disable("Paper only takes one push a quarter second. Hop mode works there.");

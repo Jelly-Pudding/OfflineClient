@@ -50,7 +50,6 @@ public final class TextLines {
         this(startOrder, countName, "", "Line", countDescription, lineDescription, defaults);
     }
 
-    // The prefix goes in front of the names of the pick order rows.
     private TextLines(Order startOrder, String countName, String prefix, String rowName, String countDescription,
                       String lineDescription, String[] defaults) {
         count = new NumberSetting(countName, countDescription,
@@ -91,13 +90,11 @@ public final class TextLines {
         return this;
     }
 
-    // Makes every row of the list a sub option of a switch.
     public TextLines under(BoolSetting parent) {
         count.under(parent);
         return this;
     }
 
-    // Makes every row of the list a sub option of a choice. The rows show whilst it holds one of the values.
     @SafeVarargs
     @SuppressWarnings("varargs")
     public final <E extends Enum<E>> TextLines under(EnumSetting<E> parent, E... values) {
@@ -105,7 +102,6 @@ public final class TextLines {
         return this;
     }
 
-    // A plain list leaves out the pick order rows. They would never show.
     public Setting<?>[] settings() {
         List<Setting<?>> all = new ArrayList<>(SLOTS + 3);
         all.add(count);
@@ -119,20 +115,17 @@ public final class TextLines {
         return all.toArray(new Setting<?>[0]);
     }
 
-    // Starts again from the top and forgets the last line handed out.
     public void restart() {
         next = 0;
         last = "";
     }
 
-    // True when every row in use is blank.
     public boolean isEmpty() {
         return filled().isEmpty();
     }
 
-    // The next line to send with its live words filled in and cut to the length of a chat line.
-    // Each word in braces is swapped for the value that follows it in the pairs such as player
-    // and then a name. Null when every row in use is blank.
+    // Each word in braces is swapped for the value that follows it in the pairs such as player and
+    // then a name. Null when every row in use is blank.
     public String pick(String... pairs) {
         String row = next();
         return row == null ? null : SentLine.of(row, pairs);
@@ -144,7 +137,6 @@ public final class TextLines {
         return row == null ? null : SentLine.filled(row);
     }
 
-    // The next row as it was typed.
     private String next() {
         List<String> filled = filled();
         if (filled.isEmpty()) {
@@ -166,19 +158,16 @@ public final class TextLines {
         return choice;
     }
 
-    // Every row in use that has text in it.
     public List<String> all() {
         return filled();
     }
 
-    // True when a row in use holds the text whatever its case.
     public boolean holds(String text) {
         String wanted = text.trim();
         return filled().stream().anyMatch(row -> row.equalsIgnoreCase(wanted));
     }
 
-    // Writes the text into the first blank row in use or opens one more row for it. False when
-    // a row holds it already or every row is taken.
+    // False when a row holds the text already or every row is taken.
     public boolean add(String text) {
         String wanted = text.trim();
         if (wanted.isEmpty() || holds(wanted)) {
@@ -199,8 +188,7 @@ public final class TextLines {
         return true;
     }
 
-    // Takes every row holding the text out whatever its case. The rows below move up and the
-    // count shrinks to match. False when no row held it.
+    // The rows below move up and the count shrinks to match. False when no row held the text.
     public boolean remove(String text) {
         String wanted = text.trim();
         int open = count.getInt();

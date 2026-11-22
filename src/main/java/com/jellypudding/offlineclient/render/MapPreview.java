@@ -28,15 +28,13 @@ public final class MapPreview implements ClientTooltipComponent {
         this.size = size;
     }
 
-    // The picture on a filled map ready to draw. Null for any other item and for a map the
-    // server has not sent yet.
+    // Null for any other item and for a map the server has not sent yet.
     public static MapRenderState stateOf(ItemStack stack) {
         MapId id = stack.get(DataComponents.MAP_ID);
         MapItemSavedData data = dataOf(id);
         return data == null ? null : stateOf(id, data);
     }
 
-    // What the server has sent of a map. Null for no map and for one it has not sent yet.
     public static MapItemSavedData dataOf(MapId id) {
         ClientLevel level = OfflineClient.MC.level;
         return level == null ? null : MapItem.getSavedData(id, level);
@@ -50,7 +48,6 @@ public final class MapPreview implements ClientTooltipComponent {
         return state;
     }
 
-    // Draws the map with its top left corner on the point and the given width and height.
     public static void draw(GuiGraphicsExtractor context, MapRenderState state, float x, float y, int size) {
         float scale = size / (float) NATIVE_SIZE;
         Matrix3x2fStack pose = context.pose();

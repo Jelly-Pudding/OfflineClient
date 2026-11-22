@@ -175,7 +175,6 @@ public final class HuntingSuite implements Suite {
         });
     }
 
-    // Switches the module on and waits for its first find. Hands back what it said in chat.
     private static List<String> firstFind(Rig rig, String module) {
         Module finder = rig.client().module(module);
         forget(rig, module);
@@ -190,7 +189,6 @@ public final class HuntingSuite implements Suite {
         return said.stream().anyMatch(line -> line.toLowerCase(Locale.ROOT).contains(words.toLowerCase(Locale.ROOT)));
     }
 
-    // Ten chests in one chunk.
     private void stashFinder(Rig rig) {
         rig.world().fill(home.offset(1, 0, -5), home.offset(5, 0, -4), "chest");
         List<String> said = firstFind(rig, "StashFinder");
@@ -293,7 +291,6 @@ public final class HuntingSuite implements Suite {
         }
     }
 
-    // A zombie spawner out of the stage with that many ticks left on its count.
     private static BlockPos farSpawner(Rig rig, BlockPos spawner, int delay) {
         rig.world().command("setblock " + Props.at(spawner) + " spawner{Delay:" + delay
             + "s,SpawnData:{entity:{id:\"minecraft:zombie\"}}}");
@@ -306,7 +303,6 @@ public final class HuntingSuite implements Suite {
         rig.note("PotFinder said " + said);
     }
 
-    // A block of stone with a passage one wide and two high through its middle.
     private void tunnelEsp(Rig rig) {
         World world = rig.world();
         world.fill(home.offset(-6, 0, -6), home.offset(6, 4, -2), "stone");
@@ -325,7 +321,6 @@ public final class HuntingSuite implements Suite {
         rig.note("CaveTracks said " + said);
     }
 
-    // A chest opens twelve blocks off and another three blocks off.
     private void earshot(Rig rig) {
         rig.client().enable("Earshot");
         rig.ticks(SEEN_TICKS);
@@ -343,10 +338,12 @@ public final class HuntingSuite implements Suite {
         rig.ticks(SEEN_TICKS);
     }
 
+    // A server takes the target off a tracked compass within a tick when no lodestone stands
+    // there. This one is not tracked and keeps it.
     private void itemCoords(Rig rig) {
         World world = rig.world();
         world.command("item replace entity " + world.player() + " hotbar.3 with compass[lodestone_tracker={target:"
-            + "{pos:[I;140,64,-220],dimension:\"minecraft:overworld\"}}]");
+            + "{pos:[I;140,64,-220],dimension:\"minecraft:overworld\"},tracked:false}]");
         List<String> said = firstFind(rig, "ItemCoords");
         rig.note("ItemCoords said " + said);
         rig.expect(says(said, "140") && says(said, "-220"), "Chat does not name where the compass leads");

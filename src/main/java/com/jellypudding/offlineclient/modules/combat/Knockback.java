@@ -15,11 +15,9 @@ import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.LivingEntity;
 
-// The server adds knockback to a full strength hit from anyone it believes is sprinting
-// and then stops that sprint. Every hit lands soft until word of the stop reaches the
-// client and it starts again. A sprint start sent just ahead of each hit earns the
-// knockback whether you run or not. The server pushes along the yaw it holds as a hit
-// lands. A look packet sent just ahead of the hit steers the push.
+// The server adds knockback to a full strength hit from anyone it believes is sprinting and then
+// stops that sprint. A sprint start sent just ahead of each hit earns it again. The server pushes
+// along the yaw it holds as a hit lands and a look packet sent just ahead steers the push.
 public final class Knockback extends Module {
 
     // Degrees clockwise from the line that runs from you through the target. Measured from

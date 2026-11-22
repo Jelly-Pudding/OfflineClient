@@ -41,27 +41,23 @@ public final class PlacedBox implements WorkedScreens.Worker {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks between two clicks that ask the container to open.
     private static final int REOPEN_TICKS = 10;
-    // Ticks the container gets to open before it is mined back unopened and to break before it is left standing.
     private static final int OPEN_LIMIT = 60;
     private static final int BREAK_LIMIT = 200;
     // Ticks an item lies before the game hands it to anyone with two more for the server's answer.
     private static final int PICKUP_DELAY = 12;
-    // Ticks the walk onto a container that fell out of reach gets.
     private static final int FETCH_LIMIT = 100;
     // A container that breaks lands within this many blocks of where it stood.
     private static final double DROP_RADIUS = 3;
 
-    // Where each container set down stands until it is mined back or given up. Read from the
-    // network thread.
+    // Read from the network thread.
     private static final Set<BlockPos> WORKING = ConcurrentHashMap.newKeySet();
 
     private final InventoryUtil.SlotSwap slots;
     private final Trip walk = new Trip();
     private Stage stage = Stage.NONE;
     private BlockPos pos;
-    // The level the container went down in. Held weakly to keep no level left behind alive.
+    // Held weakly to keep no level left behind alive.
     private WeakReference<ClientLevel> level = new WeakReference<>(null);
     private int ticks;
     private int sinceClick;
@@ -83,7 +79,6 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return spot(pos -> true);
     }
 
-    // The same with a test of the owner's own that the spot has to pass as well.
     public static BlockPos spot(Predicate<BlockPos> also) {
         BlockPos feet = MC.player.blockPosition();
         List<BlockPos> tries = new ArrayList<>();
@@ -103,7 +98,6 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return null;
     }
 
-    // True whilst a container set down here is worked. Its clicks open no container of yours.
     public static boolean working(BlockPos pos) {
         return WORKING.contains(pos);
     }
@@ -120,9 +114,8 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return !WORKING.isEmpty();
     }
 
-    // Puts the container held in the hotbar slot down against the floor of the spot. A shulker
-    // box then faces up and lifts its lid into the free block above. False when it did not go
-    // down.
+    // A shulker box set against the floor faces up and lifts its lid into the free block above.
+    // False when it did not go down.
     public boolean setDown(int hotbarSlot, BlockPos spot, boolean rotate) {
         slots.select(hotbarSlot);
         if (!BlockUtil.place(spot, Direction.DOWN, rotate, true)) {
@@ -144,18 +137,16 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return stage != Stage.NONE;
     }
 
-    // True once the container's own screen opened after it went down.
     public boolean opened() {
         return opened;
     }
 
-    // True when the container stood the whole wait without opening. It is mined back unopened.
     public boolean wouldNotOpen() {
         return wouldNotOpen;
     }
 
-    // One tick of the cycle. False once it is over. The clicks run every tick the container is
-    // open and the container is closed and mined back once they are done.
+    // False once the cycle is over. The clicks run every tick the container is open and the
+    // container is closed and mined back once they are done.
     public boolean tick(Clicks clicks, boolean rotatePlace, boolean rotateMine) {
         if (stage == Stage.NONE) {
             return false;
@@ -235,7 +226,6 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return true;
     }
 
-    // The container lying near where it broke. Null once it is picked up.
     private ItemEntity dropped() {
         List<ItemEntity> lying = MC.level.getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(DROP_RADIUS),
             item -> item.isAlive() && container(item.getItem()));
@@ -257,7 +247,6 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return live.containerId != menuBefore && ownKind(BlockUtil.state(pos), live);
     }
 
-    // The container's own screen once its items have come in.
     private AbstractContainerMenu openMenu(BlockState state) {
         AbstractContainerMenu menu = InventoryUtil.openedSince(menuBefore);
         return menu != null && ownKind(state, menu) ? menu : null;
@@ -287,7 +276,6 @@ public final class PlacedBox implements WorkedScreens.Worker {
         return true;
     }
 
-    // True whilst a shulker box or an ender chest stands at the position.
     static boolean standing(BlockPos pos) {
         return standing(BlockUtil.state(pos));
     }

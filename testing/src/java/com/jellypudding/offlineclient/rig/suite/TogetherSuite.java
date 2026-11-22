@@ -23,14 +23,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-// What happens once more than one module is on. Each module alone must leave the game as it
-// found it. Two modules that say they cannot run at once must switch each other off. A whole
-// category and then every module at once must run with no fault and leave nothing behind and
-// send the server no more than it puts up with. Crowds picked by a seed do the same. The
-// modules a player leans on most must go on working beside every other module in turn. See
-// Beside. The crowd is taken through a death and whatever else tears the state of a client
-// apart. See Lifecycle. Modules that share a hand or a slot or the same keys are played
-// together for what a player would expect of them. See TogetherPlays.
+// Each module alone must leave the game as it found it. Two modules that say they cannot run at
+// once must switch each other off. A whole category and then every module at once must run with no
+// fault and leave nothing behind and send the server no more than it puts up with. Crowds picked by
+// a seed do the same. Beside and Lifecycle and TogetherPlays hold the rest.
 public final class TogetherSuite implements Suite {
 
     private static final String NAME = "Together";
@@ -72,7 +68,6 @@ public final class TogetherSuite implements Suite {
     private static final int CROWD_MILLIS = 8;
     private static final int ALONE_MILLIS = 3;
 
-
     @Override
     public String name() {
         return NAME;
@@ -91,8 +86,7 @@ public final class TogetherSuite implements Suite {
         Grounds.play(rig, NAME, plays.plays(), stage -> plays.standOn(stage.home()));
     }
 
-    // The blanket cases in a flat world of the rig's own. Survival with the kit and two mobs
-    // gives a module something to work on.
+    // Survival with the kit and two mobs gives a module something to work on.
     private static void alone(Rig rig, List<Module> modules) {
         List<Case> cases = new ArrayList<>();
         for (Module module : modules) {
@@ -143,13 +137,13 @@ public final class TogetherSuite implements Suite {
         }
     }
 
-    // The crowds again where a real server reads every packet and may throw the player out.
     private static void served(Rig rig, List<Module> modules) {
         Duo[] server = new Duo[1];
         Stage[] standsOn = new Stage[1];
         List<Case> cases = new ArrayList<>();
         crowds(modules).forEach((name, crowd) -> cases.add(
             Case.of(name + SERVED, each -> runAtOnce(each, crowd, server[0]))));
+        cases.addAll(Beside.sampled(modules, () -> standsOn[0], SERVED));
         cases.addAll(Lifecycle.cases(modules, () -> standsOn[0], () -> server[0], true));
         cases.addAll(randomCrowds(modules, SERVED_CROWDS, server, SERVED));
         List<Module> drawn = modules.stream().filter(module -> module.getCategory() == Category.RENDER).toList();
@@ -184,8 +178,8 @@ public final class TogetherSuite implements Suite {
         }
     }
 
-    // Crowds picked by a seed. The same seed picks the same crowds on every run and a crowd
-    // that fails is named in full by its case.
+    // The same seed picks the same crowds on every run and a crowd that fails is named in full by
+    // its case.
     private static List<Case> randomCrowds(List<Module> modules, int crowds, Duo[] server, String where) {
         Random random = new Random(CROWD_SEED);
         List<Case> cases = new ArrayList<>();
@@ -227,7 +221,6 @@ public final class TogetherSuite implements Suite {
             busy - bare));
     }
 
-    // Each module by itself against the bare game. The dearest are named either way.
     private static void frameCostAlone(Rig rig, List<Module> crowd) {
         int limit = rig.ask(mc -> mc.options.framerateLimit().get());
         rig.act(mc -> mc.options.framerateLimit().set(NO_FRAME_LIMIT));
@@ -268,8 +261,6 @@ public final class TogetherSuite implements Suite {
         return MILLIS_A_SECOND / Math.max(1, lowest);
     }
 
-    // Switches on every module of the crowd that takes part in a blanket run and hands back the
-    // ones that went on.
     static List<Module> switchOn(Rig rig, List<Module> crowd, boolean served, Set<String> without) {
         List<Module> switched = new ArrayList<>();
         for (Module module : switchable(crowd, served, without)) {
@@ -283,13 +274,11 @@ public final class TogetherSuite implements Suite {
         return switched;
     }
 
-    // The modules of the crowd that take part in a blanket run.
     static List<Module> switchable(List<Module> crowd, boolean served, Set<String> without) {
         return crowd.stream().filter(module -> module.isTogglable() && !module.getName().equals(PANIC)
             && !without.contains(module.getName()) && SmokeSuite.leftOut(module.getName(), served) == null).toList();
     }
 
-    // Each category by itself and then all of them.
     private static Map<String, List<Module>> crowds(List<Module> modules) {
         Map<String, List<Module>> crowds = new LinkedHashMap<>();
         for (Category category : Category.values()) {
@@ -367,9 +356,8 @@ public final class TogetherSuite implements Suite {
         rig.expect(stayed.isEmpty(), "Stayed on " + stayed);
     }
 
-    // Switches the whole crowd on and walks a little and switches it off again. The player
-    // cannot be hurt meanwhile. A server that throws the player out fails the case with its own
-    // reason.
+    // The player cannot be hurt meanwhile. A server that throws the player out fails the case with
+    // its own reason.
     private static void runAtOnce(Rig rig, List<Module> crowd, Duo duo) {
         World world = rig.world();
         world.command("effect give " + world.player() + " resistance 600 4 true");

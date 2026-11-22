@@ -10,18 +10,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-// Reads a proxy out of the words a player types or a line of a proxy list.
 public final class ProxyText {
 
-    // A proxy as typed or read from a list. The name is null when none was given and the login is
-    // null when it carries none.
     public record Typed(String name, ProxyTunnel.Kind kind, String host, int port, ProxyTunnel.Login login) {
 
         public String address() {
             return ProxyText.address(host, port);
         }
 
-        // The name it is saved under. Without one given it is saved under its address.
         public String savedName() {
             return name == null ? address() : name;
         }
@@ -29,8 +25,7 @@ public final class ProxyText {
 
     public static final ProxyTunnel.Kind DEFAULT_KIND = ProxyTunnel.Kind.SOCKS_5;
 
-    // Words for each kind the way proxy lists and links write them. A list that says https means
-    // a web proxy that allows tunnels.
+    // A list that says https means a web proxy that allows tunnels.
     static final Map<String, ProxyTunnel.Kind> KIND_WORDS = Map.of(
         "socks5", ProxyTunnel.Kind.SOCKS_5, "socks5h", ProxyTunnel.Kind.SOCKS_5,
         "socks4", ProxyTunnel.Kind.SOCKS_4, "socks4a", ProxyTunnel.Kind.SOCKS_4,
@@ -41,7 +36,6 @@ public final class ProxyText {
     private static final int LONGEST_PORT = 5;
     // No host name is longer.
     private static final int LONGEST_HOST = 253;
-    // Room for any host and port with a number after them.
     private static final int LONGEST_NAME = 280;
     private static final String SCHEME = "://";
     private static final Pattern HOST_NAME = Pattern.compile("[A-Za-z0-9_.-]+");
@@ -49,9 +43,8 @@ public final class ProxyText {
     private ProxyText() {
     }
 
-    // A proxy in words. A name may come first and a kind word may stand before or after the one
-    // address. The address is a host and port in any of the forms proxy lists use with a login
-    // before the host or after the port and a kind in front. Null when the words hold no proxy.
+    // A name may come first and a kind word may stand before or after the address. A login may come
+    // before the host or after the port.
     public static Typed typed(String text, ProxyTunnel.Kind kind) {
         List<String> words = new ArrayList<>(List.of(WHITESPACE.split(text.strip())));
         for (int i = 0; i < words.size() && words.size() > 1; i++) {
@@ -123,7 +116,7 @@ public final class ProxyText {
         return new Typed(name, kind, host, port, login);
     }
 
-    // A name and password with a colon between. The password may hold colons of its own.
+    // The password may hold colons of its own.
     private static ProxyTunnel.Login login(String text) {
         int colon = text.indexOf(':');
         if (colon <= 0) {
@@ -138,7 +131,6 @@ public final class ProxyText {
         return text.getBytes(StandardCharsets.UTF_8).length <= ProxyTunnel.LONGEST_LOGIN;
     }
 
-    // Minus one for anything but a port number.
     private static int port(String text) {
         if (text.isEmpty() || text.length() > LONGEST_PORT || !text.chars().allMatch(Character::isDigit)) {
             return -1;

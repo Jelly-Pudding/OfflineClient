@@ -14,9 +14,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Map;
 
-// The picture the Chams picture fill shows through each model. The client comes with one and a PNG
-// of the player's own stands in for it whilst one is named. The picture is fixed to the screen and
-// the model only decides where it shows.
+// The picture is fixed to the screen and the model only decides where it shows.
 public final class ChamsPicture {
 
     private static final Identifier BUILT_IN = Identifier.parse("offlineclient:textures/chams_picture.png");
@@ -37,8 +35,7 @@ public final class ChamsPicture {
     private ChamsPicture() {
     }
 
-    // The type that paints a model with the picture. Null when the picture shader cannot be made and
-    // the model keeps its own fill.
+    // Null when the picture shader cannot be made and the model keeps its own fill.
     public static RenderType renderType(Identifier texture, boolean throughWalls) {
         if (ShaderPipelines.compiled(pipeline(throughWalls)) == null) {
             if (!warned) {
@@ -51,7 +48,7 @@ public final class ChamsPicture {
             ChamsPicture::create);
     }
 
-    // Shows the player's own picture in place of the one the client comes with. Null goes back to that one.
+    // Null goes back to the picture the client comes with.
     public static void show(NativeImage pixels) {
         if (pixels == null) {
             if (picture == OWN) {

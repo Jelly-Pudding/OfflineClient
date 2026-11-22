@@ -7,22 +7,19 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.util.Mth;
 
-// A grabbable bar beside the open chat. Vanilla draws a sliver you can only look at.
-// Everything is worked out in screen pixels from the chat's own scaled layout.
+// Vanilla draws a sliver you can only look at.
 public final class ChatScrollBar {
 
-    // Where the chat sits on screen. The same numbers ChatComponent lays itself out with.
+    // The same numbers ChatComponent lays itself out with.
     private static final int CHAT_LEFT = 4;
     private static final int VANILLA_BOTTOM = 40;
     // Vanilla puts its sliver four scaled pixels past the chat width.
     private static final int TRACK_GAP = 4;
 
     private static final int WIDTH = 3;
-    // Extra grab room either side of the track.
     private static final int GRAB = 3;
     private static final int MIN_THUMB = 8;
 
-    // The screen rectangle of the track and thumb plus what the thumb stands for.
     private record Geometry(int x, int top, int bottom, int thumbTop, int thumbBottom,
                             double scale, int lines, int page, int lineHeight) {
 
@@ -39,7 +36,6 @@ public final class ChatScrollBar {
         return OfflineClient.MC.gui.hud.getChat();
     }
 
-    // Null whilst everything fits on one page and there is nothing to scroll.
     private static Geometry geometry(int screenHeight) {
         ChatComponent chat = chat();
         int lines = chat.trimmedMessages.size();
@@ -87,14 +83,12 @@ public final class ChatScrollBar {
             && mouseY >= g.top() && mouseY < g.bottom();
     }
 
-    // True when the click landed on the bar. The thumb starts a drag and the track jumps.
     public boolean mouseClicked(double mouseX, double mouseY, int screenHeight) {
         Geometry g = geometry(screenHeight);
         if (g == null || !over(g, mouseX, mouseY)) {
             return false;
         }
         if (mouseY < g.thumbTop() || mouseY >= g.thumbBottom()) {
-            // The thumb lands centred under the pointer.
             double fromBottom = (g.bottom() - mouseY) / (g.bottom() - g.top());
             scrollTo((int) Math.round(fromBottom * g.lines() - g.page() / 2.0), g);
         }

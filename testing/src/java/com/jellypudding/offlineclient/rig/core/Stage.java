@@ -51,20 +51,17 @@ public final class Stage {
         return rig.ask(mc -> mc.player != null && mc.level != null);
     }
 
-    // Fails the running case when the player is dead or the world is gone.
     public static void expectAlive(Rig rig) {
         boolean left = rig.ask(mc -> mc.player == null || mc.level == null);
         rig.expect(!left, "The world was left");
         rig.expect(!dead(rig), "The player died");
     }
 
-    // True when a world stands and its player lies dead.
     public static boolean dead(Rig rig) {
         return rig.ask(mc -> mc.player != null && mc.level != null
             && (mc.player.isDeadOrDying() || mc.gui.screen() instanceof DeathScreen));
     }
 
-    // Brings a dead player back to life. A living one is left alone.
     public static void revive(Rig rig) {
         if (!dead(rig)) {
             return;

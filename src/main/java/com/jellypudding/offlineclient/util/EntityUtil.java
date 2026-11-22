@@ -63,7 +63,6 @@ import java.util.function.Predicate;
 
 public final class EntityUtil {
 
-    // Health points in one heart.
     public static final float HEART = 2;
 
     private static final Map<EntityType<?>, Class<?>> BUILT_AS = builtAs();
@@ -73,16 +72,13 @@ public final class EntityUtil {
     // The speed boost a zombified piglin carries whilst it is after someone.
     private static final Identifier PIGLIN_CHASE_BOOST = Identifier.withDefaultNamespace("attacking");
 
-    // Blocks at which a player reads as far away. Closer fades towards red.
     private static final float FADE_DISTANCE = 20;
 
-    // Stands in for a thrower the client never saw.
     public static final String UNKNOWN_THROWER = "Someone";
 
     // Hitbox reach is shorter than the centre distance. A reach scan runs this much wider.
     private static final double REACH_SCAN_MARGIN = 4;
 
-    // A dropped item is tiny. Its box is grown to be seen from afar.
     private static final double ITEM_GROW = 0.1;
 
     // The server counts entity ids up from one. Ours count down from the top
@@ -92,23 +88,19 @@ public final class EntityUtil {
     private EntityUtil() {
     }
 
-    // An id for an entity that exists on this client alone. A new entity has
-    // none and its hashCode and equals throw until it gets one.
+    // A new entity has no id and its hashCode and equals throw until it gets one.
     public static int nextLocalId() {
         return nextLocalId--;
     }
 
-    // Health plus the absorption hearts on top of it.
     public static float totalHealth(LivingEntity entity) {
         return entity.getHealth() + entity.getAbsorptionAmount();
     }
 
-    // The most the bar can hold with the absorption on top.
     public static float totalMaxHealth(LivingEntity entity) {
         return entity.getMaxHealth() + entity.getAbsorptionAmount();
     }
 
-    // How much of its health is left from nought to one. Nought when it has none to lose.
     public static float healthShare(LivingEntity entity) {
         float max = totalMaxHealth(entity);
         return max <= 0 ? 0 : Math.clamp(totalHealth(entity) / max, 0f, 1f);
@@ -123,7 +115,6 @@ public final class EntityUtil {
         return totalHealth(player) <= hearts * HEART;
     }
 
-    // Health in hearts for chat such as 3.5 hearts.
     public static String hearts(float health) {
         return String.format(Locale.ROOT, "%.1f", health / HEART) + " hearts";
     }
@@ -165,14 +156,12 @@ public final class EntityUtil {
         return classes;
     }
 
-    // True when the kind makes entities of that class or of one under it. False for a kind the
-    // game does not declare itself.
+    // False for a kind the game does not declare itself.
     public static boolean builds(EntityType<?> type, Class<?> wanted) {
         Class<?> built = BUILT_AS.get(type);
         return built != null && wanted.isAssignableFrom(built);
     }
 
-    // A mob somebody has tamed or saddled or won the trust of.
     public static boolean isPet(Mob mob) {
         return switch (mob) {
             case TamableAnimal tamable -> tamable.isTame();
@@ -189,8 +178,6 @@ public final class EntityUtil {
         + " kept a baby for good. Trusting foxes and ocelots and every snow golem and copper golem and"
         + " happy ghast count as well.";
 
-    // A mob somebody keeps. A pet or one that was built or let out of a bucket or kept a
-    // baby for good. Never a fair target.
     public static boolean isKept(Mob mob) {
         if (isPet(mob) || mob instanceof AgeableMob ageable && ageable.isAgeLocked()) {
             return true;
@@ -223,7 +210,6 @@ public final class EntityUtil {
         return mob instanceof Tadpole || mob instanceof AgeableMob ageable && ageable.isBaby();
     }
 
-    // Your own pets and the mounts you ride or have ridden.
     public static boolean isYours(Mob mob) {
         Player player = OfflineClient.MC.player;
         if (player == null) {
@@ -236,14 +222,13 @@ public final class EntityUtil {
             && pet.getOwnerReference().matches(player);
     }
 
-    // A mob of a kind that only fights once provoked. A golem a player built still joins
-    // fights and goes by the rule of its kind.
+    // A golem a player built still joins fights and goes by the rule of its kind.
     public static boolean isNeutral(Mob mob) {
         return EntityKind.of(mob.getType()) == EntityKind.NEUTRAL;
     }
 
-    // True whilst a neutral mob has no quarrel with anyone. The flag for a fight in progress
-    // covers them all and each species shows a rising temper in its own way.
+    // The flag for a fight in progress covers every neutral mob and each species shows a rising
+    // temper in its own way.
     public static boolean isCalm(Mob mob) {
         if (mob.isAggressive()) {
             return false;
@@ -267,13 +252,11 @@ public final class EntityUtil {
             && entity.isPickable() && entity.isAttackable();
     }
 
-    // True for whatever you ride and whoever rides along with you.
     public static boolean ridesWithYou(Entity entity) {
         Player player = OfflineClient.MC.player;
         return player != null && player.isPassenger() && entity.getRootVehicle() == player.getRootVehicle();
     }
 
-    // The account name of a player or null.
     public static String nameOf(Player player) {
         return player == null ? null : player.getGameProfile().name();
     }
@@ -283,19 +266,16 @@ public final class EntityUtil {
         return displayName(nameOf(player));
     }
 
-    // The name to show for any entity. A player goes through NameProtect.
     public static String displayNameOf(Entity entity) {
         return entity instanceof Player player ? displayNameOf(player) : entity.getName().getString();
     }
 
-    // True when the typed text is the name the entity goes by or the name of its kind. A
-    // villager goes by its trade and a tagged mob by its tag.
+    // A villager goes by its trade and a tagged mob by its tag.
     public static boolean isCalled(Entity entity, String typed) {
         return typed.equalsIgnoreCase(entity.getName().getString())
             || typed.equalsIgnoreCase(entity.getType().getDescription().getString());
     }
 
-    // The same for an account name remembered without the player.
     public static String displayName(String name) {
         NameProtect nameProtect = Modules.get(NameProtect.class);
         return nameProtect == null || name == null ? name : nameProtect.display(name);
@@ -339,7 +319,6 @@ public final class EntityUtil {
             && !Modules.isGhostBody(player);
     }
 
-    // A cart or boat that holds items under plain words such as chest minecart.
     public static String storageName(Entity entity) {
         return switch (entity) {
             case MinecartHopper _ -> "hopper minecart";
@@ -353,8 +332,6 @@ public final class EntityUtil {
         return entity instanceof Player && entity != OfflineClient.MC.player && !Modules.isLocalBody(entity);
     }
 
-    // Someone else in view whose account name matches whatever its case. Null when nobody does or
-    // there is no world.
     public static Player otherPlayerNamed(String name) {
         if (OfflineClient.MC.level == null) {
             return null;
@@ -367,19 +344,17 @@ public final class EntityUtil {
         return null;
     }
 
-    // Someone else in view whom AntiBot does not take for a fake player.
     public static boolean isRealPlayer(Entity entity) {
         return isOtherPlayer(entity) && !Modules.isBot(entity);
     }
 
-    // Who threw or shot a projectile. Someone stands in for a thrower nobody can name.
     public static String throwerName(Projectile projectile) {
         String name = knownThrower(projectile);
         return name == null ? UNKNOWN_THROWER : name;
     }
 
-    // The same or null. The client only fills the thrower in whilst they are in sight. A pearl
-    // can be named after that too.
+    // The client only fills the thrower in whilst they are in sight. A pearl can be named after
+    // that too.
     public static String knownThrower(Projectile projectile) {
         Entity owner = projectile.getOwner();
         if (owner != null) {
@@ -398,7 +373,6 @@ public final class EntityUtil {
         return OfflineClient.MC.player.getAttributeValue(Attributes.ENTITY_INTERACTION_RANGE);
     }
 
-    // Faster than a fiftieth of a block a tick along the ground. Slower is standing still.
     public static boolean isMoving(Vec3 velocity) {
         return velocity.horizontalDistanceSqr() > MOVING_SQR;
     }
@@ -417,19 +391,16 @@ public final class EntityUtil {
             : velocityOf(player).scale(SharedConstants.TICKS_PER_SECOND * Timer.current());
     }
 
-    // Your speed along the ground in blocks a second.
     public static double ownSpeed() {
         return ownVelocity().horizontalDistance();
     }
 
-    // Degrees between where you look and the middle of the target.
     public static double lookAngleTo(Entity target) {
         Player player = OfflineClient.MC.player;
         return player == null ? 180 : lookAngle(player, target);
     }
 
-    // Degrees between where the viewer looks and the middle of the target. Another player
-    // looks where their head turns.
+    // Another player looks where their head turns.
     public static double lookAngle(Entity viewer, Entity target) {
         return degreesBetween(viewer.getViewVector(1),
             target.getBoundingBox().getCenter().subtract(viewer.getEyePosition()));
@@ -465,7 +436,6 @@ public final class EntityUtil {
         return Math.toDegrees(Math.acos(Math.clamp(view.dot(toTarget) / length, -1, 1)));
     }
 
-    // A right click on the middle of the entity. The hand swings when the game takes it.
     public static boolean interact(Entity target, InteractionHand hand, boolean rotate) {
         Vec3 centre = target.getBoundingBox().getCenter();
         if (rotate) {
@@ -484,30 +454,25 @@ public final class EntityUtil {
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
     }
 
-    // The box a mark is drawn round. A dropped item gets a grown one.
     public static AABB markBox(Entity entity, float partialTicks) {
         AABB box = lerpedBox(entity, partialTicks);
         return entity instanceof ItemEntity ? box.inflate(ITEM_GROW) : box;
     }
 
-    // Red within arm's reach through yellow to green at twice the fade distance.
     public static int distanceColor(Entity entity) {
         Player self = OfflineClient.MC.player;
         float away = self == null ? FADE_DISTANCE : self.distanceTo(entity);
         return ColorUtil.hsv(Math.clamp(away / (2 * FADE_DISTANCE), 0f, 1f) * ColorUtil.GREEN_HUE, 1f, 1f);
     }
 
-    // The closest entity within the range that passes the test. Null when none does.
     public static Entity nearest(double range, Predicate<Entity> test) {
         return best(range, TargetPriority.NEAREST, test);
     }
 
-    // Friends and spectators never count. Null when nobody is close.
     public static Player nearestEnemy(double range) {
         return (Player) nearest(range, EntityUtil::isEnemy);
     }
 
-    // The entity in range the priority likes best or null.
     public static Entity best(double range, TargetPriority priority, Predicate<Entity> test) {
         Minecraft mc = OfflineClient.MC;
         if (mc.player == null || mc.level == null) {
@@ -529,8 +494,6 @@ public final class EntityUtil {
         return best;
     }
 
-    // Every entity in range that passes the test with the one the priority likes best first.
-    // For a module that deals with several at once.
     public static List<Entity> ranked(double range, TargetPriority priority, Predicate<Entity> test) {
         Minecraft mc = OfflineClient.MC;
         List<Entity> found = new ArrayList<>();
@@ -546,7 +509,6 @@ public final class EntityUtil {
         return found;
     }
 
-    // The entity within hitting reach the priority likes best or null.
     public static Entity bestInReach(double reach, TargetPriority priority, Predicate<Entity> test) {
         return best(reach + REACH_SCAN_MARGIN, priority,
             entity -> test.test(entity) && reachDistance(OfflineClient.MC.player, entity) <= reach);

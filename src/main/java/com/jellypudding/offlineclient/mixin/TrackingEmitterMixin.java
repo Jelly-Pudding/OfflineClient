@@ -23,7 +23,6 @@ public abstract class TrackingEmitterMixin {
     @Final
     private ParticleOptions particleType;
 
-    // Each tick sprays a handful of particles around the entity through the level.
     @Inject(method = "tick()V", at = @At("HEAD"))
     private void onTickStart(CallbackInfo ci) {
         Confetti confetti = Modules.active(Confetti.class);

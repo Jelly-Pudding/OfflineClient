@@ -21,8 +21,8 @@ import java.util.TreeSet;
 // every macro or loadout put on one. Two of them on the same bind both act at once.
 public final class KeyUse {
 
-    // One thing on the bind. The source tells a setting or a saved entry apart from the rest and
-    // the module is the one that has to be on for it to act. Null where nothing has to be.
+    // The source tells a setting or a saved entry apart from the rest. The module is the one that
+    // has to be on for it to act and null where nothing has to be.
     private record Holder(String name, Object source, Module module) {
 
         // A key inside a module only acts whilst the module is on unless its listener stays.
@@ -40,12 +40,10 @@ public final class KeyUse {
     private KeyUse() {
     }
 
-    // Empty for a bind nothing uses.
     public static List<String> holders(Bind bind) {
         return others(bind, null);
     }
 
-    // What else uses the bind besides the given setting or macro or loadout.
     public static List<String> others(Bind bind, Object self) {
         List<String> names = new ArrayList<>();
         for (Holder holder : all(bind)) {
@@ -56,28 +54,23 @@ public final class KeyUse {
         return names;
     }
 
-    // Every bind a module or key setting or macro or loadout sits on with the keys first.
     public static SortedSet<Bind> clientBinds() {
         SortedSet<Bind> binds = new TreeSet<>(Bind.ORDER);
         visitClient((bind, holder) -> binds.add(bind));
         return binds;
     }
 
-    // True when something of the client that is able to act sits on exactly this bind.
     public static boolean asksFor(Bind exact) {
         boolean[] asked = new boolean[1];
         visitClient((bind, holder) -> asked[0] |= bind.equals(exact) && holder.live());
         return asked[0];
     }
 
-    // A sentence for a tip such as Also used by Drop Selected Item. Empty whilst nothing else uses it.
     public static String alsoUsedBy(Bind bind, Object self) {
         List<String> others = others(bind, self);
         return others.isEmpty() ? "" : " Also used by " + String.join(" and ", others) + ".";
     }
 
-    // Every module key and every key row inside a module. A key row counts as a bind whichever
-    // module holds it.
     public static List<KeybindSetting> keySettings() {
         List<KeybindSetting> keys = new ArrayList<>();
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
@@ -91,7 +84,6 @@ public final class KeyUse {
         return keys;
     }
 
-    // Says in chat what else a bind that was just caught is on. Quiet for one nothing else uses.
     public static void warn(Bind bind, Object self) {
         List<String> others = others(bind, self);
         if (!others.isEmpty()) {

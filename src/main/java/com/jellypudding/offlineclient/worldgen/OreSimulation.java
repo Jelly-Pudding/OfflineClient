@@ -22,7 +22,6 @@ import java.util.function.Function;
 // features see them.
 public final class OreSimulation {
 
-    // The world as the ore features found it.
     public interface Ground {
 
         BlockState block(int x, int y, int z);
@@ -59,7 +58,6 @@ public final class OreSimulation {
         return table;
     }
 
-    // Every ore feature of the chunk in the order the server runs them.
     public void run(int chunkX, int chunkZ, Ground ground, Sink sink) {
         Replay replay = new Replay(chunkX, chunkZ, ground, sink);
         for (PlacedOre ore : table.ores()) {
@@ -67,7 +65,6 @@ public final class OreSimulation {
         }
     }
 
-    // One chunk being replayed.
     private final class Replay {
 
         private final int originX;
@@ -77,7 +74,6 @@ public final class OreSimulation {
         private final WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(0));
         private final long decorationSeed;
         private final BiomeManager biomes;
-        // What the replayed features wrote over the ground.
         private final Long2ObjectOpenHashMap<BlockState> written = new Long2ObjectOpenHashMap<>();
         private final Function<BlockPos, BlockState> reader = pos -> read(pos.getX(), pos.getY(), pos.getZ());
 

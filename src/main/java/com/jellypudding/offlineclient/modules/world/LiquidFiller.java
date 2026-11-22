@@ -51,7 +51,6 @@ public final class LiquidFiller extends AreaPlacer {
     private final BoolSetting mineBack = new BoolSetting("Mine back",
         "Breaks the blocks it put down again once no liquid is left beside them.", false);
 
-    // Where this module put a block down that is still standing. They belong to this world.
     private final Set<BlockPos> placed = new LinkedHashSet<>();
     private final WorldWatch world = new WorldWatch();
     private BlockPos mining;
@@ -109,8 +108,6 @@ public final class LiquidFiller extends AreaPlacer {
         }
     }
 
-    // A block it put down that can come out without letting liquid back in. The block you
-    // stand on stays.
     private boolean minesBack(BlockPos pos) {
         if (!BlockUtil.diggable(pos) || !inReach(pos) || BlockUtil.isStandingOn(pos)) {
             return false;

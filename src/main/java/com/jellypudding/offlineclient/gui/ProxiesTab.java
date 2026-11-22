@@ -11,28 +11,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// The proxies you join through quickest first once a check is over. A click joins through one
-// and a click on the one in use stops using a proxy. The field takes a proxy or one of the
-// words check prune and import.
 public final class ProxiesTab implements TabView.Source {
 
     private static final String PICKED = "picked";
-    // Words the proxy field takes in place of a proxy.
     private static final String CHECK = "check";
     private static final String PRUNE = "prune";
     private static final String IMPORT = "import";
     // An address kept for examples that belongs to nobody.
     private static final String PROXY_EXAMPLE = "203.0.113.5:1080";
-    // The same with the name and the password a proxy may ask for after the port.
     private static final String LOGIN_EXAMPLE = PROXY_EXAMPLE + ":name:password";
-    // How long the proxy footer says what the field did.
     private static final long SAID_MS = 6000;
-    // Shown whether or not the list holds proxies. A second list is imported the same way.
     private static final TabView.Hint IMPORT_HINT = new TabView.Hint("Import a list",
         "Put a text file in the offlineclient folder with one proxy on each line.",
         List.of(IMPORT + " " + ProxyStore.DEFAULT_FILE));
 
-    // What the field last did. The footer says it for a while.
     private String said = "";
     private long saidUntil;
 
@@ -148,7 +140,6 @@ public final class ProxiesTab implements TabView.Source {
         saidUntil = System.currentTimeMillis() + SAID_MS;
     }
 
-    // The one in use stops being used and any other is joined through.
     @Override
     public void activate(String name) {
         ProxyStore.Entry entry = ProxyStore.get().find(name);
@@ -185,7 +176,6 @@ public final class ProxiesTab implements TabView.Source {
             + (check.isEmpty() ? "" : check + " ") + click, ProxyCheck.isDead(entry));
     }
 
-    // A proxy saved without a name of its own goes by its address and reads as that alone.
     private static String named(String name, String address) {
         return name.equals(address) ? address : name + " at " + address;
     }

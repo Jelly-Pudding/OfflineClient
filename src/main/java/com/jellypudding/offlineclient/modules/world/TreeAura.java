@@ -69,7 +69,6 @@ public final class TreeAura extends Module {
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
-    // Meals given to each sapling. One that never grows is left alone.
     private final Map<BlockPos, Integer> meals = new BoundedMap<>(MAX_TRACKED);
     private BlockPos nextSpot;
     private int timer;
@@ -113,7 +112,6 @@ public final class TreeAura extends Module {
             slots.forget();
             return;
         }
-        // Borrowed bone meal makes way whilst something else has the hands.
         if (Hands.taken()) {
             loan.standAside();
             return;
@@ -163,7 +161,6 @@ public final class TreeAura extends Module {
         return placed;
     }
 
-    // True once a meal went out. The nearest sapling that can grow is fed first.
     private boolean feedOne() {
         BlockPos target = null;
         for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
@@ -204,7 +201,6 @@ public final class TreeAura extends Module {
         return false;
     }
 
-    // The sapling is one corner of a square of four of its kind.
     private static boolean inFullSquare(BlockPos pos, Block sapling) {
         for (int dx = -1; dx <= 0; dx++) {
             for (int dz = -1; dz <= 0; dz++) {
@@ -227,8 +223,7 @@ public final class TreeAura extends Module {
         return true;
     }
 
-    // The empty cell of the nearest footprint the sapling fits. A square already
-    // started is finished before a new one begins.
+    // A square already started is finished before a new one begins.
     private BlockPos findSpot(Block sapling) {
         int size = SQUARE_ONLY.contains(sapling) ? 2 : 1;
         BlockPos best = null;
@@ -280,7 +275,6 @@ public final class TreeAura extends Module {
         return true;
     }
 
-    // No sapling and no log within the spacing of the footprint. Its own cells may hold saplings.
     private boolean clearAround(BlockPos corner, int size) {
         int gap = spacing.getInt();
         for (int dx = -gap; dx < size + gap; dx++) {

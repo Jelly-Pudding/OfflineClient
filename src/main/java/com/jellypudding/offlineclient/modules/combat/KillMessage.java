@@ -17,8 +17,6 @@ import com.jellypudding.offlineclient.util.Strangers;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.world.entity.player.Player;
 
-// Kills come from the shared tracker. A player you hurt a moment ago who then dies is yours
-// and a totem that player pops in that time is yours as well.
 public final class KillMessage extends Module {
 
     public enum PopLines { CHAT, WHISPER }

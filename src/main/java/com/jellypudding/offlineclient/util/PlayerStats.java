@@ -24,7 +24,6 @@ public final class PlayerStats {
 
     public static final PlayerStats INSTANCE = new PlayerStats();
 
-    // Once nothing has shown the statistics for this long the asking stops.
     private static final int FORGET_TICKS = SharedConstants.TICKS_PER_SECOND;
 
     private static final long NEVER = Long.MIN_VALUE;
@@ -47,7 +46,6 @@ public final class PlayerStats {
         refreshTicks = (int) Math.round(refreshSeconds * SharedConstants.TICKS_PER_SECOND);
     }
 
-    // True once the server has answered on this visit.
     public boolean ready() {
         return visitStart != null && OfflineClient.MC.player != null
             && OfflineClient.MC.player.getStats() == counter;
@@ -58,14 +56,11 @@ public final class PlayerStats {
         return answeredAt == NEVER ? 0 : ticks - answeredAt;
     }
 
-    // A statistic of the custom kind such as play time. Over the visit it is only what
-    // changed since the visit began.
     public long custom(Identifier id, boolean visitOnly) {
         Stat<Identifier> stat = Stats.CUSTOM.get(id);
         return valueOf(stat, OfflineClient.MC.player.getStats().getValue(stat), visitOnly);
     }
 
-    // Every statistic of one kind the counter holds whose subject passes the test added up.
     // The counter only ever changes on the game thread and this runs there too.
     @SuppressWarnings("unchecked")
     public <T> long sum(StatType<T> type, Predicate<T> counted, boolean visitOnly) {

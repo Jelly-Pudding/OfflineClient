@@ -27,8 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-// How many containers of each kind stand in the chunks the server has sent you. It sizes up a
-// stash before you dig to it. The two halves of a double chest count as one.
+// The two halves of a double chest count as one.
 public final class ContainerCountElement extends RowsElement {
 
     private static final String TOTAL = "Total";
@@ -36,7 +35,6 @@ public final class ContainerCountElement extends RowsElement {
     // The count walks every loaded chunk. Containers come and go slowly.
     private static final long KEEP_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
-    // Stand in whilst the editor is open and no container is loaded.
     private static final List<Counted> SAMPLE = List.of(new Counted("Double chest", 12),
         new Counted("Shulker box", 5), new Counted("Barrel", 2));
 
@@ -57,12 +55,6 @@ public final class ContainerCountElement extends RowsElement {
         add(kinds, total, color);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !shown().isEmpty();
-    }
-
-    // The total goes last when it is written. It is added up here and its switch shows at once.
     private List<Counted> shown() {
         List<Counted> built = counts.get();
         List<Counted> rows = new ArrayList<>(built.isEmpty() && editing() ? SAMPLE : built);
@@ -86,8 +78,6 @@ public final class ContainerCountElement extends RowsElement {
         return CountRows.ranked(found);
     }
 
-    // What a counted container goes by. Null for one that is not counted and for the right
-    // half of a double chest whose left half stands for both.
     private String nameOf(BlockEntity container) {
         if (!kinds.contains(container.getType())) {
             return null;

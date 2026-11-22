@@ -16,7 +16,6 @@ import java.util.Set;
 public enum EntityKind {
     PLAYER, HOSTILE, NEUTRAL, PASSIVE, WATER, AMBIENT, ITEM, OTHER;
 
-    // Mobs that leave you alone until provoked.
     private static final Set<EntityType<?>> NEUTRAL_MOBS = Set.of(EntityTypes.BEE, EntityTypes.ENDERMAN,
         EntityTypes.GOAT, EntityTypes.IRON_GOLEM, EntityTypes.NAUTILUS, EntityTypes.PIGLIN,
         EntityTypes.POLAR_BEAR, EntityTypes.PUFFERFISH, EntityTypes.WOLF, EntityTypes.ZOMBIE_NAUTILUS,
@@ -30,8 +29,7 @@ public enum EntityKind {
     private static final Set<EntityType<?>> LAND_SPAWNED_SEA_LIFE = Set.of(EntityTypes.TURTLE,
         EntityTypes.TADPOLE);
 
-    // The family of the entity in front of you. A golem a player built and a tiny slime never
-    // hurt a player. The killer rabbit always does.
+    // A golem a player built and a tiny slime never hurt a player. The killer rabbit always does.
     public static EntityKind of(Entity entity) {
         return switch (entity) {
             case IronGolem golem when golem.isPlayerCreated() -> PASSIVE;
@@ -41,7 +39,7 @@ public enum EntityKind {
         };
     }
 
-    // The family a kind of entity belongs to as a rule. A mannequin stands in for a player.
+    // A mannequin stands in for a player.
     public static EntityKind of(EntityType<?> type) {
         if (type == EntityTypes.PLAYER || type == EntityTypes.MANNEQUIN) {
             return PLAYER;

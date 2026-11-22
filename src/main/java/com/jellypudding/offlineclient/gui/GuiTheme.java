@@ -10,11 +10,9 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 
-// Shared colours and metrics for the ClickGUI and HUD.
 public final class GuiTheme {
 
     public static final int PANEL_WIDTH = 112;
-    // How tall a panel grows before it scrolls. The bottom edge drags to change it.
     public static final int PANEL_VIEW_HEIGHT = 190;
     public static final int HEADER_HEIGHT = 18;
     public static final int ROW_HEIGHT = 16;
@@ -22,13 +20,12 @@ public final class GuiTheme {
     public static final int CORNER = 3;
     public static final int PAD = 6;
     public static final int SCROLLBAR = 4;
-    // Width a scrollbar takes out of the rows beside it.
     public static final int SCROLL_GUTTER = SCROLLBAR + 2;
     // Cap height of the default font.
     public static final int TEXT_HEIGHT = 7;
 
-    // The shades the interface ships with. The background and text settings move the
-    // whole family onto a colour of your own whilst keeping these relative weights.
+    // The background and text settings move the whole family onto a colour of your own whilst
+    // keeping these relative weights.
     private static final int DEFAULT_WINDOW = 0xF80D0D14;
     private static final int DEFAULT_PANEL = 0xF2131320;
     private static final int DEFAULT_HEADER = 0xF41B1B2A;
@@ -44,27 +41,20 @@ public final class GuiTheme {
     private static final int DEFAULT_THUMB = 0xFF454862;
 
     public static final int GREEN = 0xFF3FD07E;
-    // Anything that throws work away. The lighter one is for writing.
     public static final int RED = 0xFFE05050;
     public static final int RED_TEXT = 0xFFFF9090;
-    // Hairline between rows in a list.
     public static final int RULE = 0x40000000;
 
     public static final int STAR = 0xFFF2C744;
     // A multiplication sign. The closest thing to a cross the font has.
     public static final String CROSS = "×";
-    // How far outside an edge a press still grabs it for a resize.
     public static final int GRAB = 4;
-    // A faint light laid over a row the pointer is on.
     public static final int HOVER_WASH = 0x14FFFFFF;
-    // HUD elements draw in the untinted text colour over a dark bar track.
     public static final int HUD_TEXT = DEFAULT_TEXT;
     public static final int BAR_TRACK = 0xC0202020;
     public static final int SCROLL_TRACK = 0x50000000;
-    // A background brighter than this takes dark writing.
     private static final float LIGHT_BACKGROUND = 0.55f;
     private static final int DARK_TEXT = 0xFF10121A;
-    // The wash over the world behind a screen of the client.
     private static final int DIM_TOP = 0x70101018;
     private static final int DIM_BOTTOM = 0xA0060610;
 
@@ -75,12 +65,10 @@ public final class GuiTheme {
         return Modules.get(ClickGuiModule.class);
     }
 
-    // One shade moved onto the chosen background colour.
     private static int tinted(int shade) {
         return ColorUtil.retint(shade, DEFAULT_PANEL, gui().background());
     }
 
-    // One background shade moved onto the chosen colour and thinned by the opacity.
     private static int bg(int shade) {
         return ColorUtil.fade(tinted(shade), gui().opacity());
     }
@@ -113,8 +101,7 @@ public final class GuiTheme {
         return bg(DEFAULT_SETTING);
     }
 
-    // The panel shade with the opacity left out. Used where a surface has
-    // to hide whatever it covers.
+    // Used where a surface has to hide whatever it covers.
     public static int bgSolid() {
         return solid(DEFAULT_PANEL);
     }
@@ -139,7 +126,7 @@ public final class GuiTheme {
         return ink(DEFAULT_TEXT_FAINT);
     }
 
-    // The outline and the edge stay solid. A see through panel still has a border.
+    // A see through panel still has a border.
     public static int outline() {
         return tinted(DEFAULT_OUTLINE);
     }
@@ -168,8 +155,7 @@ public final class GuiTheme {
         return accentSetting().getColor(offset);
     }
 
-    // The accent lifted towards white. A saturated blue or red accent is too
-    // dark to read on the panel background.
+    // A saturated blue or red accent is too dark to read on the panel background.
     public static int accentText() {
         return ColorUtil.lerp(accent(), 0xFFFFFFFF, 0.3f);
     }
@@ -184,12 +170,10 @@ public final class GuiTheme {
         return contrastText(background, text());
     }
 
-    // Dark writing on a light background and the given light writing on anything darker.
     public static int contrastText(int background, int light) {
         return ColorUtil.luminance(background) > LIGHT_BACKGROUND ? DARK_TEXT : light;
     }
 
-    // The hover text can be switched off in the ClickGUI module.
     static boolean hoverHelp() {
         return gui().showsHoverHelp();
     }
@@ -207,7 +191,6 @@ public final class GuiTheme {
             ColorUtil.fade(DIM_TOP, share), ColorUtil.fade(DIM_BOTTOM, share));
     }
 
-    // A rounded button with its label in the middle. A button that is not live greys out.
     public static void button(GuiGraphicsExtractor context, Font font, int x, int y, int w, int h,
                               String label, boolean hovered, boolean live) {
         RenderUtil.roundedBorderedRect(context, x, y, x + w, y + h, CORNER,

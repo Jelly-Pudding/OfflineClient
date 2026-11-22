@@ -16,7 +16,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
 
-// Holes that keep a blast off the feet and the blocks round a body that a trap or a surround fills.
 public final class Holes {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -29,7 +28,6 @@ public final class Holes {
     private Holes() {
     }
 
-    // How well a block shields whoever stands beside it from a blast.
     public enum Wall {
         OPEN, WEAK, BLAST_PROOF, UNBREAKABLE;
 
@@ -52,7 +50,6 @@ public final class Holes {
         return inHole(MC.player.blockPosition());
     }
 
-    // True when feet at this block stand in a hole walled with blast proof blocks.
     // A two block hole counts when its second block is open and walled on its own.
     public static boolean inHole(BlockPos feet) {
         return !hole(feet, BlockUtil::isBlastProof, Predicate.not(BlockUtil::isSolid), true).isEmpty();
@@ -105,12 +102,11 @@ public final class Holes {
         return blocks;
     }
 
-    // The block the top of a body is in. Someone crawling has it at the level of the feet.
+    // Someone crawling has the head at the level of the feet.
     public static BlockPos headBlock(Entity entity) {
         return BlockPos.containing(entity.getX(), entity.getBoundingBox().maxY, entity.getZ());
     }
 
-    // The blocks beside the given ones on their own level. Four round a single block.
     public static List<BlockPos> ringAround(Collection<BlockPos> blocks) {
         List<BlockPos> ring = new ArrayList<>();
         for (BlockPos block : blocks) {
@@ -124,8 +120,8 @@ public final class Holes {
         return ring;
     }
 
-    // True for somebody standing inside a block that keeps a blast off their feet. Standing on
-    // top of a low block such as an ender chest is no burrow. The block has to reach above the feet.
+    // Standing on top of a low block such as an ender chest is no burrow. The block has to reach
+    // above the feet.
     public static boolean burrowed(Entity entity) {
         BlockPos feet = entity.blockPosition();
         BlockState state = BlockUtil.state(feet);
@@ -136,8 +132,6 @@ public final class Holes {
         return !shape.isEmpty() && feet.getY() + shape.max(Direction.Axis.Y) > entity.getY() + STANDING_GAP;
     }
 
-    // Any mix of the open spots over the head and round it at head height and underfoot for
-    // every block a body stands in.
     public static List<BlockPos> trapSpots(List<BlockPos> feet, boolean top, boolean sides, boolean bottom) {
         List<BlockPos> spots = new ArrayList<>();
         if (top) {
@@ -164,12 +158,10 @@ public final class Holes {
         }
     }
 
-    // The blast proof block beside the target's feet that is closest to the player.
     public static BlockPos cityBlock(Player target, double reach) {
         return cityBlock(target.blockPosition(), reach);
     }
 
-    // The same round any block such as the one over a head.
     public static BlockPos cityBlock(BlockPos centre, double reach) {
         BlockPos best = null;
         double bestDistance = reach;

@@ -50,7 +50,7 @@ public enum GearKind {
         return sample;
     }
 
-    // The kind a stack belongs to. Null for an empty stack or anything that is no gear.
+    // Null for an empty stack or anything that is no gear.
     public static GearKind of(ItemStack stack) {
         if (stack.isEmpty()) {
             return null;
@@ -63,7 +63,6 @@ public enum GearKind {
         return null;
     }
 
-    // True when both stacks are the same item or gear of the same kind.
     public static boolean alike(ItemStack one, ItemStack two) {
         if (one.isEmpty() || two.isEmpty()) {
             return false;

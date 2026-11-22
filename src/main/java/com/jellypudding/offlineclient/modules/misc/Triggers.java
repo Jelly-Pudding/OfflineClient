@@ -27,16 +27,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// Each rule acts once as its conditions start to hold. Switch back returns the modules it
-// changed to how they were once the conditions end. A rule that takes in something over in a
-// tick such as a death has no end to wait for and Lasts for times it instead. What held as you
-// left a server still holds when you are back and sets nothing off a second time.
+// Each rule acts once as its conditions start to hold. A rule that takes in something over in a
+// tick such as a death has no end to wait for and Lasts for times it instead. What held as you left
+// a server still holds when you are back and sets nothing off a second time.
 public final class Triggers extends Module {
 
-    // How many rules can be set up one by one.
     private static final int SLOTS = 8;
 
-    // A line the server would have counted as spam is tried again this much later.
     private static final int RETRY_TICKS = SharedConstants.TICKS_PER_SECOND;
 
     public enum Match { ALL, ANY }
@@ -45,7 +42,6 @@ public final class Triggers extends Module {
 
     public enum Action { SWITCH_ON, SWITCH_OFF, TOGGLE }
 
-    // The settings for one rule. The rule row folds the rest away.
     private final class Rule {
 
         final int slot;
@@ -62,12 +58,9 @@ public final class Triggers extends Module {
 
         // Each module the rule changed and whether it was on before.
         final Map<Module, Boolean> before = new LinkedHashMap<>();
-        // True once the rule has something to watch and something to do and has been armed.
         boolean live;
         boolean holds;
-        // Ticks until a rule with nothing to wait for puts its modules back. Nought whilst none run.
         int timeLeft;
-        // Ticks until a rule that still holds sends its line or runs its macros again.
         int againIn;
 
         Rule(int number) {
@@ -122,7 +115,6 @@ public final class Triggers extends Module {
             addSettings(match, deed, modules, action, switchBack, lastsFor, line, macros, againAfter);
         }
 
-        // False for a rule with nothing to watch or nothing to do.
         boolean inUse() {
             if (slot >= ruleCount.getInt() || when.size() == 0) {
                 return false;
@@ -134,7 +126,6 @@ public final class Triggers extends Module {
             };
         }
 
-        // As the module goes on. A rule that can never act as it is set up says why.
         void start() {
             before.clear();
             timeLeft = 0;
@@ -189,7 +180,6 @@ public final class Triggers extends Module {
             }
         }
 
-        // Every line the macros would send between them.
         private static List<String> linesOf(List<MacroStore.Macro> macros) {
             List<String> lines = new ArrayList<>();
             macros.forEach(macro -> lines.addAll(macro.lines()));
@@ -200,14 +190,11 @@ public final class Triggers extends Module {
             return match.is(Match.ALL) ? when.allHold() : when.anyHolds();
         }
 
-        // Ticks between two lines of a rule that goes on holding. Nought for one that acts once.
         private int repeatTicks() {
             return deed.is(Deed.SWITCH_MODULES) || when.hasMoment()
                 ? 0 : againAfter.getInt() * SharedConstants.TICKS_PER_SECOND;
         }
 
-        // Once a tick. A rule that comes into use whilst the module is on is armed first like
-        // any rule is as the module goes on. One that goes out of use counts as ended.
         void tick(boolean inWorld) {
             boolean use = inUse();
             if (use && !live) {
@@ -250,9 +237,8 @@ public final class Triggers extends Module {
             timeLeft = when.hasMoment() ? lastsFor.getInt() * SharedConstants.TICKS_PER_SECOND : 0;
         }
 
-        // Sends the line or runs the macros and sets the wait for the next time. Lines the
-        // server would count as spam are held back. A rule that still holds tries again in a
-        // second and a moment that has passed loses its line.
+        // A rule that still holds tries a held back line again in a second and a moment that has
+        // passed loses its line.
         private void act() {
             List<MacroStore.Macro> toRun = toRun();
             if (!ChatPace.RULE.affords(linesOf(toRun))) {
@@ -264,8 +250,6 @@ public final class Triggers extends Module {
             againIn = repeatTicks();
         }
 
-        // The typed line as a macro of its own or the picked macros that still exist. The lines go
-        // as typed. A macro fills in its live words once as each line is sent.
         private List<MacroStore.Macro> toRun() {
             if (deed.is(Deed.SEND_A_LINE)) {
                 List<String> lines = Arrays.stream(TextMarkup.LINE_BREAK.split(line.getValue()))
@@ -345,7 +329,6 @@ public final class Triggers extends Module {
         }
     }
 
-    // A pop is passed on to every rule and met on its next tick.
     @Subscribe
     private void onTotemPop(TotemPopEvent event) {
         for (Rule rule : rules) {

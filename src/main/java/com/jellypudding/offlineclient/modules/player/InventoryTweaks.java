@@ -46,7 +46,6 @@ public final class InventoryTweaks extends Module {
         EVERYTHING
     }
 
-    // The part of the screen a middle click asked to have sorted.
     private enum Part { NONE, YOURS, CONTAINER }
 
     private final BoolSetting sort = new BoolSetting("Sort",
@@ -96,12 +95,9 @@ public final class InventoryTweaks extends Module {
         "Scrolling over a bundle can reach every item inside it.", true);
 
     private int timer;
-    // The last slot a dump click was sent for and what it held.
     private int dumpSlot = -1;
     private int dumpCount = -1;
-    // True whilst a close packet for your own inventory has been held back.
     private boolean heldClose;
-    // What the last middle click asked to have sorted. It runs until that part is in order.
     private Part clicked = Part.NONE;
 
     public InventoryTweaks() {
@@ -130,8 +126,7 @@ public final class InventoryTweaks extends Module {
         return isEnabled() && bundleScrolling.isOn();
     }
 
-    // A middle click on a slot sorts the part of the screen it belongs to. False leaves the
-    // click to the game.
+    // False leaves the click to the game.
     public boolean middleClicked(MouseButtonEvent event, AbstractContainerMenu menu, Slot slot) {
         if (!isEnabled() || slot == null || !InputUtil.isMiddle(event.button()) || !sortWhen.is(SortWhen.MIDDLE_CLICK)
             || !sortsHere()) {
@@ -245,7 +240,6 @@ public final class InventoryTweaks extends Module {
         };
     }
 
-    // Sorting is on and creative mode is not holding it back.
     private boolean sortsHere() {
         return sort.isOn() && !(skipCreative.isOn() && mc.player.isCreative());
     }
@@ -272,7 +266,6 @@ public final class InventoryTweaks extends Module {
         return found;
     }
 
-    // True when the dump filter wants this stack moved out.
     public boolean dumps(ItemStack stack) {
         if (stack.isEmpty()) {
             return false;
@@ -286,8 +279,6 @@ public final class InventoryTweaks extends Module {
         };
     }
 
-    // True when the open container already holds the item. With no container open any item
-    // may match the next one.
     private boolean containerHolds(ItemStack stack) {
         AbstractContainerMenu menu = mc.player.containerMenu;
         return !InventoryUtil.isStorage(menu)

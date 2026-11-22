@@ -29,17 +29,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
-// The client's smooth font. The game's own TrueType loader reads the file and the game's own glyph
-// sheets hold the letters. A sheet is drawn without smoothing and a letter is only sharp whilst each
-// of its pixels lands on one pixel of the screen. A size is therefore made for every whole number of
-// screen pixels to a GUI pixel and kept whilst something draws with it. A letter the file lacks is
-// drawn by the game's own font.
+// The game's own TrueType loader reads the file and the game's own glyph sheets hold the letters. A
+// sheet is drawn without smoothing and a letter is only sharp whilst each of its pixels lands on
+// one pixel of the screen. A size is therefore made for every whole number of screen pixels to a
+// GUI pixel and kept whilst something draws with it.
 final class SmoothFont {
 
     // Letters stay well inside the game's glyph sheets of 256 pixels a side up to this. A denser
     // screen shows them a little enlarged.
     private static final int MOST_PIXELS = 16;
-    // A size nothing has drawn with for this many ticks is let go.
     private static final int IDLE_TICKS = 200;
     private static final String SHEETS = "smooth_font/";
 
@@ -48,7 +46,6 @@ final class SmoothFont {
     private final Int2ObjectMap<Size> sizes = new Int2ObjectOpenHashMap<>();
     // Let go of during a frame. Closed at the next tick once nothing draws with them.
     private final List<Size> retired = new ArrayList<>();
-    // The bytes the sizes were made from.
     private SmoothFontFile.Source madeFrom;
 
     private boolean listening;
@@ -59,8 +56,7 @@ final class SmoothFont {
         this.wanted = wanted;
     }
 
-    // The font for this many screen pixels to a GUI pixel. The game's own whilst the file is
-    // being read or no smooth font can be used.
+    // The game's own font whilst the file is being read or no smooth font can be used.
     Font at(int pixels) {
         listen();
         SmoothFontFile.Source source = follow();
@@ -132,7 +128,6 @@ final class SmoothFont {
         }
     }
 
-    // Both switches are off. The next use reads the files afresh and tries again what failed.
     private void release() {
         sizes.values().forEach(Size::close);
         sizes.clear();
@@ -142,14 +137,13 @@ final class SmoothFont {
         OfflineClient.INSTANCE.getEventBus().unregister(this);
     }
 
-    // The game's own glyphs and effects. Asked for each time and never kept. A resource reload
-    // replaces the glyphs behind them.
+    // Asked for each time and never kept. A resource reload replaces the glyphs behind them.
     private static Font.Provider game() {
         return OfflineClient.MC.font.provider;
     }
 
-    // The font made for one number of screen pixels to a GUI pixel. It answers for the game's default
-    // font and passes every other font a piece of text may name to the game.
+    // It answers for the game's default font and passes every other font a piece of text may name
+    // to the game.
     private final class Size implements Font.Provider, GlyphSource, UnbakedGlyph.Stitcher {
 
         private final SmoothFontFile.Source from;

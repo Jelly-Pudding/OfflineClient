@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Jumps and puts a five by five shell round you.
 public final class InstantBunker extends Module {
 
     // Every block of the shell as sideways then up then forward from your feet.
@@ -35,17 +34,15 @@ public final class InstantBunker extends Module {
         {-1, 2, 1}, {1, 2, -1}, {-1, 2, -1}, {0, 2, 1}, {1, 2, 0}, {-1, 2, 0}, {0, 2, -1},
         {0, 2, 0}};
 
-    // Ticks after the jump before the first block goes down.
     private static final int LIFT_OFF = 2;
 
-    // Clicks a block of the shell gets at most. The second makes up for one the server dropped.
+    // The second click makes up for one the server dropped.
     private static final int CLICKS = 2;
 
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards each block on the server side.", false);
 
     private final List<BlockPos> shell = new ArrayList<>();
-    // How often each block of the shell has been clicked this run.
     private final Map<BlockPos, Integer> clicks = new HashMap<>();
     private int timer;
 
@@ -91,9 +88,7 @@ public final class InstantBunker extends Module {
         mc.player.jumpFromGround();
     }
 
-    // Every open block of the shell gets up to two clicks from the main hand. Paper drops use
-    // packets past its limit and the rest wait for a later tick. Once you are back on the ground a
-    // tick that got round every open block still owed a click ends the build.
+    // Paper drops use packets past its limit and the rest wait for a later tick.
     @Subscribe
     private void onTick(TickEvent event) {
         if (timer-- > 0) {

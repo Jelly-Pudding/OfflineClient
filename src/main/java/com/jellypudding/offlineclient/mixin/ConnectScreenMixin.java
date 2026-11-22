@@ -21,7 +21,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ConnectScreen.class)
 public abstract class ConnectScreenMixin {
 
-    // The status line sits this far above the middle of the screen.
     @Unique
     private static final int STATUS_RISE = 50;
 
@@ -36,7 +35,6 @@ public abstract class ConnectScreenMixin {
         NameStore.get().clearChecked();
     }
 
-    // The log fills the space above the status line.
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V", at = @At("TAIL"))
     private void onExtractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta,
                                       CallbackInfo ci) {

@@ -48,17 +48,14 @@ public abstract class Command {
         usage(usage);
     }
 
-    // Shows the player how to type one form of the command.
     protected void usage(String form) {
         ChatUtil.error("Type " + OfflineClient.INSTANCE.getCommandManager().getPrefix() + form);
     }
 
-    // The arguments from this one on joined back into the text as it was typed.
     protected static String words(String[] args, int from) {
         return String.join(" ", Arrays.copyOfRange(args, from, args.length));
     }
 
-    // Empty after telling the player the text is not a number.
     protected static OptionalDouble number(String text) {
         double value;
         try {
@@ -73,7 +70,6 @@ public abstract class Command {
         return OptionalDouble.of(value);
     }
 
-    // Empty after telling the player the text is not a whole number.
     protected static OptionalInt wholeNumber(String text) {
         try {
             return OptionalInt.of(Integer.parseInt(text));
@@ -83,7 +79,6 @@ public abstract class Command {
         }
     }
 
-    // A tilde means where you already are on that axis.
     protected static OptionalDouble coordinate(String text, double here) {
         if (!text.startsWith("~")) {
             return number(text);
@@ -95,7 +90,6 @@ public abstract class Command {
         return offset.isPresent() ? OptionalDouble.of(here + offset.getAsDouble()) : offset;
     }
 
-    // Three coordinates from the given index. Null after telling the player what was wrong.
     protected static Vec3 coordinates(String[] args, int from, Vec3 here) {
         OptionalDouble x = coordinate(args[from], here.x);
         OptionalDouble y = x.isPresent() ? coordinate(args[from + 1], here.y) : OptionalDouble.empty();
@@ -103,21 +97,16 @@ public abstract class Command {
         return z.isPresent() ? new Vec3(x.getAsDouble(), y.getAsDouble(), z.getAsDouble()) : null;
     }
 
-    // Two coordinates across the ground from the given index. Null after telling the player what
-    // was wrong.
     protected static Vec3 flatCoordinates(String[] args, int from, Vec3 here) {
         OptionalDouble x = coordinate(args[from], here.x);
         OptionalDouble z = x.isPresent() ? coordinate(args[from + 1], here.z) : OptionalDouble.empty();
         return z.isPresent() ? new Vec3(x.getAsDouble(), here.y, z.getAsDouble()) : null;
     }
 
-    // Hops the player there and says how it went once the trip is over.
     protected static void hopTo(Vec3 spot, String done) {
         Hop.travel(spot, Hop.telling(done));
     }
 
-    // Runs an action named in a command. One that throws work away wants the command a
-    // second time. What it did goes in chat unless it wrote a line of its own.
     protected static void press(ActionSetting action) {
         int before = ChatUtil.written();
         if (!action.press()) {
@@ -131,7 +120,6 @@ public abstract class Command {
         }
     }
 
-    // Puts back every changed setting of one module or HUD piece. The reply carries a link that takes it back.
     protected static void resetAll(String name, Collection<? extends Setting<?>> settings) {
         Defaults.Change change = Defaults.reset(name, settings);
         if (change == null) {
@@ -150,7 +138,6 @@ public abstract class Command {
             .removeIf(line -> line.startsWith(prefix) && line.contains(secret)));
     }
 
-    // Takes what a store keeps for one server or host out of it and says whether there was one.
     protected static void forget(ServerStore<?> store, String key, String noun) {
         if (store.remove(key)) {
             ChatUtil.message("§7Forgot the " + noun + " for §b" + key + "§7.");
@@ -159,7 +146,6 @@ public abstract class Command {
         }
     }
 
-    // Null after telling the player there is no module with that name.
     protected Module module(String name) {
         Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
         if (module == null) {
@@ -182,8 +168,6 @@ public abstract class Command {
 
     public abstract void execute(String[] args);
 
-    // Suggestions for the token being typed. Token nought is the command name itself
-    // and the first argument is index one.
     public List<String> complete(String[] tokens, int index, String current) {
         return List.of();
     }

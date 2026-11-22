@@ -85,7 +85,6 @@ public final class BlockMiner {
         lastFirstTick = MC.player.tickCount;
     }
 
-    // True whilst another block goes first.
     public static boolean standsBy(BlockPos pos) {
         return lately(lastFirstTick) && !pos.equals(first);
     }
@@ -146,7 +145,6 @@ public final class BlockMiner {
         return lately(lastDriveTick);
     }
 
-    // True whilst the player's own held click mines a block. A module that mines is not the hand.
     public static boolean handMines() {
         return MC.gameMode != null && MC.gameMode.isDestroying() && !isActive();
     }
@@ -159,23 +157,20 @@ public final class BlockMiner {
         return since >= 0 && since <= 1;
     }
 
-    // True whilst the game is inside a mining call made from here.
     public static boolean isSelfCall() {
         return selfCall;
     }
 
-    // True whilst a module that picked its own tool is mining.
     public static boolean isOwnTool() {
         return ownTool;
     }
 
-    // The block a module mined this tick or the one before. Null whilst none did.
     public static BlockPos getTarget() {
         return lately(lastMineTick) ? target : null;
     }
 
-    // True whilst a module mines a block other than this one. A module outside the mining group
-    // waits its turn because two blocks mined at once restart each other every tick.
+    // A module outside the mining group waits its turn because two blocks mined at once restart
+    // each other every tick.
     public static boolean minesOther(BlockPos pos) {
         BlockPos mined = getTarget();
         return mined != null && !mined.equals(pos);

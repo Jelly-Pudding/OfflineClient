@@ -36,12 +36,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
-// The checks run one name at a time on a worker thread and read the public page of each site
-// with no key. A name told live is told again only after a check finds it off the air. On a
-// server that does not check accounts anyone can take a streamer's name.
+// The checks run one name at a time on a worker thread and read the public page of each site with
+// no key. On a server that does not check accounts anyone can take a streamer's name.
 public final class Streamers extends Module {
 
-    // A streaming site with the address that answers whether a name is live and the one to watch it.
     private enum Site {
         TWITCH("Twitch", "https://www.twitch.tv/%s", "https://www.twitch.tv/%s",
             body -> body.contains("\"isLiveBroadcast\":true")),
@@ -79,7 +77,6 @@ public final class Streamers extends Module {
     // The tab list fills over the first moments of a join.
     private static final int JOIN_SETTLE_TICKS = 3 * SharedConstants.TICKS_PER_SECOND;
 
-    // How often the tab list is read for players who just joined.
     private static final int LOOK_TICKS = SharedConstants.TICKS_PER_SECOND;
 
     private static final int NOT_FOUND = 404;
@@ -103,10 +100,10 @@ public final class Streamers extends Module {
     private final ActionSetting checkNow = new ActionSetting("Check now",
         "Checks everyone online straight away.", this::checkNow);
 
-    // Names waiting for a check in the order they came. Guarded by itself together with working.
+    // Guarded by itself together with working.
     private final Set<String> waiting = new LinkedHashSet<>();
     private boolean working;
-    // Each name and site told live. Written by the worker and cleared on the game thread.
+    // Written by the worker and cleared on the game thread.
     private final Set<String> told = ConcurrentHashMap.newKeySet();
     // Set by Check now. The run that empties the queue then says when it found nobody.
     private volatile boolean asked;
@@ -127,7 +124,6 @@ public final class Streamers extends Module {
         searchTags("livestream", "live", "streamer", "twitch", "youtube", "kick", "tiktok");
     }
 
-    // Switching on counts as a join and checks everyone the same way.
     @Override
     protected void onEnable() {
         joins = new JoinWatch();
@@ -200,8 +196,6 @@ public final class Streamers extends Module {
         return everyone(true);
     }
 
-    // Queues everyone online unless there are too many. Hands back a few words about it and
-    // says them in chat when the player should hear why nothing happens.
     private String everyone(boolean sayWhenSkipped) {
         List<String> names = ServerInfo.othersOnline();
         if (names.size() > skipAbove.getInt()) {
@@ -316,7 +310,6 @@ public final class Streamers extends Module {
             .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to watch"))));
     }
 
-    // Follows the keys into nested objects. Null when one is missing.
     private static JsonElement at(JsonElement root, String... keys) {
         JsonElement at = root;
         for (String key : keys) {

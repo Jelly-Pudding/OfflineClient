@@ -29,13 +29,10 @@ import java.util.List;
 
 // A pop starts an emitter that sprays totem particles around the entity for a second and a half.
 // TrackingEmitterMixin marks each of its ticks and ParticleEngineMixin hands every particle here.
-// A kill puts a lightning bolt or a burst of particles where the body fell. Nothing of it reaches
-// the server.
 public final class Confetti extends Module {
 
     public enum KillMark { LIGHTNING, PARTICLES }
 
-    // How fast the particles of a kill burst fly out in blocks a tick.
     private static final double BURST_SPEED = 0.25;
 
     private final BoolSetting others = new BoolSetting("Others",
@@ -62,7 +59,6 @@ public final class Confetti extends Module {
     private final AlertSound alarm = new AlertSound("Kill", "Plays a sound when something you killed dies.",
         SoundEvents.EXPERIENCE_ORB_PICKUP).under(kills);
 
-    // True whilst an emitter chosen for confetti is making its particles.
     private boolean painting;
 
     public Confetti() {
@@ -118,7 +114,6 @@ public final class Confetti extends Module {
         mc.level.addEntity(bolt);
     }
 
-    // Totem particles in the burst are painted like a pop and every other kind keeps its colours.
     private void burst(Vec3 centre) {
         RandomSource random = mc.level.getRandom();
         try {

@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.ServerInfo;
 import java.util.List;
 import java.util.Locale;
 
-// The bare name toggles the module like any other. This keeps the passwords it answers with.
 public final class AutoLoginCommand extends Command {
 
     public AutoLoginCommand() {
@@ -59,7 +58,6 @@ public final class AutoLoginCommand extends Command {
         }
     }
 
-    // The link on the line that offers to keep a password typed by hand runs this.
     private static void save() {
         AutoLogin autoLogin = Modules.get(AutoLogin.class);
         String key = autoLogin == null ? null : autoLogin.saveTyped();

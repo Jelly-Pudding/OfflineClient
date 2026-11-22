@@ -13,8 +13,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// A switch per kind of held item that counts as a weapon. Each sits under the
-// setting that asks for a weapon at all.
 public final class WeaponKinds {
 
     private enum Kind {

@@ -2,8 +2,7 @@ package com.jellypudding.offlineclient.condition;
 
 import java.util.function.Supplier;
 
-// A condition with nothing to set such as standing in a hole or dying. Its test hands back
-// what was met as a sentence and null on a tick it is not met.
+// Its test hands back what was met as a sentence and null on a tick it is not met.
 final class Plain extends Condition {
 
     private final boolean moment;
@@ -20,14 +19,11 @@ final class Plain extends Condition {
         ticked(description);
     }
 
-    // Something that stays true for a while.
     static Plain state(Frame frame, String name, String description, Supplier<String> test) {
         return new Plain(frame, name, description, false, test, () -> {
         });
     }
 
-    // Something over in a tick. The test says once that it happened and forget throws away
-    // whatever happened before anyone was watching.
     static Plain moment(Frame frame, String name, String description, Supplier<String> test, Runnable forget) {
         return new Plain(frame, name, description, true, test, forget);
     }

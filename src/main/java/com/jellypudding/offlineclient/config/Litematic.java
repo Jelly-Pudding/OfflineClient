@@ -8,10 +8,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayList;
 import java.util.List;
 
-// A build in the litematic format. It is gzipped NBT holding one or more regions. A region has a
-// corner and a size that may run backwards along any axis and a palette of block states. Its
-// blocks are palette indices packed end to end into longs with the low bits first. An index may
-// start in one long and end in the next. X runs fastest then Z then Y from the lowest corner.
+// Gzipped NBT holding one or more regions. The size of a region may run backwards along any axis.
+// Its blocks are palette indices packed end to end into longs with the low bits first and an index
+// may start in one long and end in the next. X runs fastest then Z then Y.
 final class Litematic {
 
     static final String EXTENSION = ".litematic";
@@ -26,7 +25,6 @@ final class Litematic {
     // A palette of one or two kinds still takes this many bits a block.
     private static final int MIN_BITS = 2;
 
-    // One region with its lowest corner counted from the spot the build is put down at.
     private record Region(Vec3i corner, Vec3i size, ListTag palette, long[] packed) {
 
         private int volume() {

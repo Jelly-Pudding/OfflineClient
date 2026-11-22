@@ -12,18 +12,15 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import java.util.HashMap;
 import java.util.Map;
 
-// The chunks the server ticked for you in each world of the server you play on. Blocks tick one
-// ring past the simulation distance and a flow or a spreading plant there reaches one ring
-// further. Each chunk keeps the last time it lay in that reach or stayed loaded on your client
-// after. Plants there may have grown for you and blocks may have changed for you. It runs
-// whatever module is on.
+// Blocks tick one ring past the simulation distance and a flow or a spreading plant there reaches
+// one ring further. Each chunk keeps the last time it lay in that reach or stayed loaded on your
+// client after. It runs whatever module is on.
 public final class OwnSimulation {
 
     public static final OwnSimulation INSTANCE = new OwnSimulation();
 
     private static final int TICKING_MARGIN = 1;
     private static final int SPILL_RINGS = 1;
-    // Once a second is quick enough for the edge of the reach to follow you.
     private static final int NOTE_TICKS = 20;
     // Far more chunks than a long journey passes through. A full world forgets the chunk it
     // reached longest ago.
@@ -37,25 +34,20 @@ public final class OwnSimulation {
     private OwnSimulation() {
     }
 
-    // How many rings of chunks round your own the server ticks for you.
     public static int tickingRings() {
         return OfflineClient.MC.player.connection.serverSimulationDistance + TICKING_MARGIN;
     }
 
-    // The same with the ring a flow or a spreading plant reaches from there.
     public static int reachRings() {
         return tickingRings() + SPILL_RINGS;
     }
 
-    // True when the chunk of the world you are in lies within your reach or did since you came to
-    // this server.
     public static boolean reached(long chunk) {
         Map<Long, Long> here = INSTANCE.byWorld.get(ServerInfo.worldKey());
         return inReach(chunk) || here != null && here.containsKey(chunk);
     }
 
-    // True when the last look that found the chunk in your reach or still loaded on your client
-    // after came within that many milliseconds. A look comes once a second.
+    // A look comes once a second.
     public static boolean reachedWithin(long chunk, long ms) {
         Map<Long, Long> here = INSTANCE.byWorld.get(ServerInfo.worldKey());
         Long last = here == null ? null : here.get(chunk);
@@ -78,8 +70,8 @@ public final class OwnSimulation {
         }
     }
 
-    // Notes the chunks in your reach whether your client holds them yet or not since the server
-    // may tick a chunk before it sends it. A chunk reached before keeps its time fresh whilst your
+    // The server may tick a chunk before it sends it and the chunks in your reach count whether
+    // your client holds them yet or not. A chunk reached before keeps its time fresh whilst your
     // client still holds it.
     private void note() {
         LocalPlayer player = OfflineClient.MC.player;

@@ -7,20 +7,13 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-// A titled box that drags by its header and resizes by any edge. It holds
-// rows of its own inside.
-// Each starts at the same width and height and a right click on an edge
-// puts that side back.
 public abstract class PanelFrame {
 
     private static final int MIN_VIEW = 16;
     private static final int MIN_WIDTH = 60;
     private static final int MAX_WIDTH = 320;
 
-    // The title stops short of the chevron by this much.
     private static final int MARKER_ZONE = 14;
-    // The chevron sits this far in from the right edge. A click on it or close
-    // round its outline folds the panel. The rest of the header drags it.
     private static final int MARKER_INSET = 11;
     private static final double MARKER_REACH = 1.5;
 
@@ -33,7 +26,7 @@ public abstract class PanelFrame {
     private int width;
     private boolean collapsed;
 
-    // The lowest y the box may be put at. Whatever is above owns that band.
+    // Whatever is above owns that band.
     private int topLimit;
     private boolean placed;
     private boolean dragging;
@@ -56,19 +49,16 @@ public abstract class PanelFrame {
         this.width = width;
     }
 
-    // Everything the rows need whether or not it fits.
     protected abstract int contentHeight();
 
     protected abstract void renderContent(GuiGraphicsExtractor context, int viewTop, int view,
                                           int rowWidth, int mouseX, int mouseY);
 
-    // True when the click belonged to a row.
     protected abstract boolean clickContent(double mx, double my, int button, int viewTop,
                                             int view, int rowWidth);
 
     protected abstract void releaseContent();
 
-    // A strip along the bottom the rows never scroll over. It runs the full width of the box.
     protected int footerHeight() {
         return 0;
     }
@@ -100,8 +90,7 @@ public abstract class PanelFrame {
         return scrollBar.getOffset();
     }
 
-    // True once the user has put this box somewhere themselves. Until then a
-    // resize of the window lays it out again.
+    // Until the user has put the box somewhere a resize of the window lays it out again.
     public boolean isPlaced() {
         return placed;
     }
@@ -132,7 +121,6 @@ public abstract class PanelFrame {
         this.placed = placed;
     }
 
-    // The place and size and fold of the box. Each owner adds what else it keeps.
     public void writeFrame(JsonObject state) {
         state.addProperty("x", x);
         state.addProperty("y", y);
@@ -164,7 +152,6 @@ public abstract class PanelFrame {
         }
     }
 
-    // Never taller than the rows or the space left below the box.
     protected final int viewportHeight() {
         int full = contentHeight();
         int limit = viewHeight > 0 ? viewHeight : full;
@@ -185,7 +172,6 @@ public abstract class PanelFrame {
         return GuiTheme.HEADER_HEIGHT + viewportHeight() + 2 + footerHeight();
     }
 
-    // The full rectangle including the grab margin around it.
     public final boolean isOver(double mx, double my) {
         return mx >= x - GuiTheme.GRAB && mx < x + width + GuiTheme.GRAB
             && my >= y - GuiTheme.GRAB && my < y + getTotalHeight() + GuiTheme.GRAB;
@@ -195,7 +181,6 @@ public abstract class PanelFrame {
         return mx >= x && mx < x + width && my >= y && my < y + getTotalHeight();
     }
 
-    // The rectangle the box covers including its outline.
     public final int[] bounds() {
         return new int[] {x - 1, y - 1, x + width + 1, y + getTotalHeight() + 1};
     }
@@ -206,7 +191,6 @@ public abstract class PanelFrame {
         scrollBar.scroll(ScrollBar.wheelDelta(scrollY, full, view), full, view);
     }
 
-    // The grab bands sit on the border and just outside it.
     private boolean nearLeft(double mx, double my) {
         return mx >= x - GuiTheme.GRAB && mx <= x + 1
             && my >= y - GuiTheme.GRAB && my < y + getTotalHeight() + GuiTheme.GRAB;
@@ -288,7 +272,6 @@ public abstract class PanelFrame {
         RenderUtil.roundedRect(context, x, y, x + width, y + h, GuiTheme.CORNER,
             GuiTheme.bgHeader(), true, collapsed);
         context.guiRenderState.up();
-        // A collapsed box keeps the underline clear of the rounded corners.
         int underlineTop = y + h - (collapsed ? 4 : 2);
         int inset = collapsed ? 1 : 0;
         context.fill(x + inset, underlineTop, x + width - inset, underlineTop + 2,
@@ -369,7 +352,6 @@ public abstract class PanelFrame {
     }
 
     public final boolean mouseClicked(double rawMx, double rawMy, int button) {
-        // Whole pixels to match the hover highlight.
         int mx = (int) rawMx;
         int my = (int) rawMy;
 
@@ -447,8 +429,7 @@ public abstract class PanelFrame {
         releaseContent();
     }
 
-    // Leaves the drag and resize state alone. A press still held is dropped
-    // rather than finished because the screen is going away.
+    // A press still held is dropped rather than finished because the screen is going away.
     public final void releaseDrags() {
         cancelContent();
     }

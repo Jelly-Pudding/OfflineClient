@@ -44,16 +44,13 @@ public final class AttributeSwap extends Module {
 
     public enum Against { ANYONE, PLAYERS, MOBS }
 
-    // How far a spear swing is looked along for something to reach.
     private static final double SPEAR_LOOK = 7;
 
     // A spear hits a little outside the hitbox.
     private static final double SPEAR_MARGIN = 0.15;
 
-    // Blocks past the normal reach before a spear is worth swapping to.
     private static final double REACH_SLACK = 0.5;
 
-    // A mob under this much health is about to drop its loot.
     private static final float NEARLY_DEAD = 20;
 
     // The share of its damage a hit lands with right after the charge starts again.
@@ -229,7 +226,6 @@ public final class AttributeSwap extends Module {
             return;
         }
         if (mode.is(Mode.SIMPLE)) {
-            // The miss swap already handled this click.
             if (!swapOnMiss.isOn()) {
                 swapTo(targetSlot.getInt() - 1);
             }
@@ -283,7 +279,6 @@ public final class AttributeSwap extends Module {
         timer = swapBackDelay.getInt();
     }
 
-    // The first spear in the hotbar that fits. A lunge spear is asked for or avoided.
     private int spearSlot(boolean wantLunge) {
         for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
@@ -298,7 +293,6 @@ public final class AttributeSwap extends Module {
         return -1;
     }
 
-    // The nearest entity a spear thrust along the crosshair would touch.
     private Entity spearTarget() {
         Vec3 start = mc.player.getEyePosition();
         Vec3 look = mc.player.getViewVector(1);
@@ -324,7 +318,6 @@ public final class AttributeSwap extends Module {
         return antiBreak.isOn() && ItemUtil.nearlyBroken(stack);
     }
 
-    // The hotbar slot scoring best against the target or minus one to stay put.
     private int bestSlot(LivingEntity target) {
         ItemStack held = mc.player.getMainHandItem();
         if (shieldBreaker.isOn() && target.isBlocking() && !held.is(ItemTags.AXES)) {
@@ -351,11 +344,9 @@ public final class AttributeSwap extends Module {
         return best;
     }
 
-    // Points for a hit with one item whilst another is held. Real damage counts one point a heart
-    // and the rest are bonuses. A swap at the moment of the hit never brings the whole item along.
-    // A plain server still strikes with the damage of the item you held and only the enchantments
-    // change hands. Paper takes the new item whole but starts the charge again. That leaves a
-    // fifth of its damage and nothing of the enchantments that add damage.
+    // A swap at the moment of the hit never brings the whole item along. A plain server still
+    // strikes with the damage of the item you held and only the enchantments change hands. Paper
+    // takes the new item whole but starts the charge again.
     private double score(ItemStack stack, ItemStack held, LivingEntity target, boolean restarts) {
         double damage = mc.player.getAttributeBaseValue(Attributes.ATTACK_DAMAGE)
             + ItemUtil.attributeValue(restarts ? stack : held, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND);
@@ -379,7 +370,6 @@ public final class AttributeSwap extends Module {
         return score;
     }
 
-    // An item that cannot wear out is a free hit. Unbreaking is a small nudge.
     private double durabilityScore(ItemStack stack) {
         if (!stack.isDamageableItem()) {
             return 1.5;

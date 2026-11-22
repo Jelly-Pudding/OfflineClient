@@ -31,7 +31,6 @@ public final class Blur extends Module {
     private final BoolSetting others = new BoolSetting("Other screens",
         "Blurs behind every other kind of screen such as the pause menu.", true);
 
-    // How far the blur has faded in from nought to one.
     private float level;
     private long lastFrame;
     // The game takes one blur a frame and throws on a second.
@@ -48,7 +47,7 @@ public final class Blur extends Module {
         level = 0;
     }
 
-    // The radius the blur shader gets this frame. Runs once a frame before the GUI draws.
+    // Runs once a frame before the GUI draws.
     public int radius(int vanilla) {
         asked = false;
         if (!isEnabled()) {
@@ -65,7 +64,6 @@ public final class Blur extends Module {
         return Math.max(1, Math.round(level * strength.getInt()));
     }
 
-    // Whether the given screen sits on a blurred world.
     public boolean wants(Screen screen) {
         if (!isEnabled() || screen == null) {
             return false;
@@ -86,7 +84,6 @@ public final class Blur extends Module {
         return isEnabled() && level > 0 && mc.gui.screen() == null;
     }
 
-    // Asks for the blur pass before whatever the screen draws next.
     public void blurHere(GuiGraphicsExtractor context) {
         if (isEnabled() && level > 0 && !asked) {
             asked = true;

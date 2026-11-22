@@ -20,16 +20,13 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.IntFunction;
 
-// The kinds of piece the overlay can hold more than one of such as custom text. The first of a
-// kind is always there and carries the row that adds another. Every other one carries the row
-// that removes it. All but the first are saved whole in one setting. The pieces come and go
-// whilst the client runs and the config never has to know how many there are.
+// The first of a kind is always there. All but the first are saved whole in one setting and the
+// config never has to know how many there are.
 public final class Families {
 
     // Most pieces of one kind. A save is never trusted to ask for more.
     private static final int MOST = 64;
 
-    // How many removed pieces an undo can still bring back.
     private static final int REMEMBERED = 32;
 
     private static final String SAVED_NUMBER = "number";
@@ -39,20 +36,16 @@ public final class Families {
     // An undo of an add takes the piece away again. Chat then says it brought back what the overlay had.
     private static final String UNDONE = "the overlay";
 
-    // Told what an add or a remove the player asked for came to.
     public interface Teller {
 
-        // The verb is Added or Removed and the change takes it back.
         void done(String verb, String name, Defaults.Change change);
 
-        // Why nothing was added.
         void refused(String why);
     }
 
     private static final class Family {
 
         private final String name;
-        // How many of the kind a fresh install has.
         private final int usual;
         private final IntFunction<HudElement> maker;
         private final NavigableMap<Integer, Member> members = new TreeMap<>();
@@ -67,7 +60,7 @@ public final class Families {
             return name.toLowerCase(Locale.ROOT);
         }
 
-        // The lowest number no piece has. Nought when the kind is full.
+        // Nought when the kind is full.
         private int freeNumber() {
             for (int number = 1; number <= MOST; number++) {
                 if (!members.containsKey(number)) {
@@ -78,7 +71,7 @@ public final class Families {
         }
     }
 
-    // One piece of a kind. The serial tells it from any other piece that ever had its number.
+    // The serial tells it from any other piece that ever had its number.
     private record Member(Family family, int number, int serial, HudElement piece) {
 
         private boolean added() {
@@ -89,12 +82,11 @@ public final class Families {
     private final HudManager manager;
     private final Teller teller;
     private final List<Family> families = new ArrayList<>();
-    // The pieces the player removed by serial. An undo puts the very same piece back.
+    // An undo puts the very same piece back.
     private final Map<Integer, Member> removed = new BoundedMap<>(REMEMBERED);
     private int nextSerial = 1;
 
-    // What the config saves. Each kind lists its pieces after the first with everything they
-    // hold. A save without a kind leaves that kind as it stands.
+    // A save without a kind leaves that kind as it stands.
     private final Setting<Void> store = new Setting<Void>("Added pieces",
         "The pieces added to the overlay and what each holds.", null) {
 
@@ -144,8 +136,7 @@ public final class Families {
         }
     }.internal();
 
-    // Never saved and never listed. It holds which added pieces are on the overlay by serial
-    // and an undo of an add or a removal goes through it.
+    // Never saved and never listed. An undo of an add or a removal goes through it.
     private final Setting<Void> present = new Setting<Void>("HUD pieces",
         "Which added pieces are on the overlay.", null) {
 
@@ -181,9 +172,7 @@ public final class Families {
         this.teller = teller;
     }
 
-    // A kind of piece and how many of it a fresh install has. The maker is handed the number of
-    // the piece to build. Hands back the pieces a fresh install has for the HUD to file in their
-    // place.
+    // The maker is handed the number of the piece to build.
     public List<HudElement> kind(String name, int usual, IntFunction<HudElement> maker) {
         Family family = new Family(name, usual, maker);
         families.add(family);
@@ -200,13 +189,10 @@ public final class Families {
         return store;
     }
 
-    // What a player types for each kind such as custom text.
     public List<String> nouns() {
         return families.stream().map(Family::noun).toList();
     }
 
-    // Adds another piece of the kind with that noun. The teller says how it went. False when no
-    // kind goes by the noun. Spaces and case are ignored.
     public boolean add(String noun) {
         String wanted = Setting.idFor(noun);
         for (Family family : families) {
@@ -218,7 +204,6 @@ public final class Families {
         return false;
     }
 
-    // False for a piece that is the first of its kind or of no kind at all. It stays.
     public boolean remove(HudElement piece) {
         for (Member member : added()) {
             if (member.piece() == piece) {
@@ -229,7 +214,6 @@ public final class Families {
         return false;
     }
 
-    // Every piece that can be removed.
     public List<HudElement> removable() {
         return added().stream().map(Member::piece).toList();
     }
@@ -264,7 +248,6 @@ public final class Families {
         teller.done("Removed", member.piece().getName(), Defaults.record(UNDONE, present, () -> take(member)));
     }
 
-    // Off the overlay and kept for an undo.
     private void take(Member member) {
         removed.put(member.serial(), member);
         detach(member);
@@ -292,7 +275,6 @@ public final class Families {
             () -> remove(member));
     }
 
-    // Straight after the piece of its kind with the next lower number.
     private void attach(Member member) {
         NavigableMap<Integer, Member> members = member.family().members;
         manager.addAfter(members.lowerEntry(member.number()).getValue().piece(), member.piece());
@@ -305,8 +287,6 @@ public final class Families {
         member.piece().discard();
     }
 
-    // Makes the pieces of the kind after the first the ones the save lists and gives each what
-    // the save holds for it.
     private void match(Family family, JsonArray pieces) {
         Map<Integer, JsonObject> wanted = new TreeMap<>();
         for (JsonElement entry : pieces) {
@@ -330,7 +310,6 @@ public final class Families {
         });
     }
 
-    // Nought for an entry that names no piece.
     private static int numberOf(JsonElement entry) {
         JsonElement number = entry.isJsonObject() ? entry.getAsJsonObject().get(SAVED_NUMBER) : null;
         try {
@@ -358,7 +337,6 @@ public final class Families {
         return saved;
     }
 
-    // One bad value only loses the piece it belongs to.
     private static void read(HudElement piece, JsonObject saved) {
         try {
             JsonObject settings = objectIn(saved, SAVED_SETTINGS);
@@ -378,7 +356,6 @@ public final class Families {
         }
     }
 
-    // Empty when the save holds no such object.
     private static JsonObject objectIn(JsonObject saved, String key) {
         JsonElement found = saved.get(key);
         return found != null && found.isJsonObject() ? found.getAsJsonObject() : new JsonObject();

@@ -6,7 +6,6 @@ import java.util.concurrent.TimeUnit;
 // that throws work away asks twice this way. Arming another thing stands the first one down.
 public final class Armed<T> {
 
-    // How long a first press waits for the second. Chat and tooltips name it in seconds.
     public static final int CONFIRM_SECONDS = 3;
     public static final long CONFIRM_MS = TimeUnit.SECONDS.toMillis(CONFIRM_SECONDS);
 

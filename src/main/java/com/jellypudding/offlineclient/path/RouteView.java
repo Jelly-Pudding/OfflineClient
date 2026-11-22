@@ -17,30 +17,24 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Draws routes as lines through the world. The one a walk is on whilst the Pathfinder
-// row asks for it and the one the path command worked out for the player to walk
-// themselves. It only listens whilst it has one of them to draw.
+// It only listens whilst it has a route to draw.
 public final class RouteView {
 
     private static final RouteView INSTANCE = new RouteView();
 
-    // How far the line floats above the floor of each block.
     private static final double LIFT = 0.15;
 
     // A walk that has not ticked for this long is over.
     private static final int FRESH_TICKS = 2;
 
-    // Nodes ahead in which the player is looked for to drop the part already walked.
     private static final int LOOK_AHEAD = 8;
 
     private final PathFinder finder = new PathFinder();
     private final WorldWatch world = new WorldWatch();
 
-    // What is left of the route a walk follows and the tick that walk last ran on.
     private List<BlockPos> walked = List.of();
     private int walkedAt;
 
-    // The route the command asked for and where it leads.
     private List<BlockPos> shown = List.of();
     private PathGoal goal;
     private boolean listening;
@@ -57,8 +51,7 @@ public final class RouteView {
         }
     }
 
-    // Works out the way to a goal and draws it once found. A route already shown gives
-    // way. False when no search could start.
+    // A route already shown gives way. False when no search could start.
     public static boolean show(PathGoal goal) {
         LocalPlayer player = OfflineClient.MC.player;
         RouteView view = INSTANCE;
@@ -74,7 +67,6 @@ public final class RouteView {
         return true;
     }
 
-    // Takes the route the command drew away. False when there was none.
     public static boolean clear() {
         RouteView view = INSTANCE;
         boolean had = view.goal != null;
@@ -128,7 +120,6 @@ public final class RouteView {
         ClientLines.inChat(() -> ChatUtil.tell("Path", words));
     }
 
-    // The part of the shown route the player has walked past is drawn no more.
     private void trim() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null || shown.size() < 2) {

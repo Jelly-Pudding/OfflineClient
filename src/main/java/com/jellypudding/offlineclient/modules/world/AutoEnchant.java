@@ -15,13 +15,11 @@ import net.minecraft.world.item.Items;
 import java.util.List;
 import java.util.Locale;
 
-// Enchants the chosen items one at a time at an open enchanting table. The table only
-// shows offers once the server has worked them out for the item in the slot.
+// The table only shows offers once the server has worked them out for the item in the slot.
 public final class AutoEnchant extends StationModule<EnchantmentMenu> {
 
     public enum Offer { TOP, MIDDLE, BOTTOM, BEST }
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
     private static final int ITEM_SLOT = 0;
@@ -40,7 +38,6 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
     private final ThrowOut throwOut = new ThrowOut(
         "Throws each item the module enchanted on the ground instead of into your inventory.");
 
-    // The item in the table is one the module put in.
     private boolean placedByUs;
     private int enchanted;
 
@@ -124,7 +121,6 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
         placedByUs = false;
     }
 
-    // The row to press or minus one once the module has said why it stopped.
     private int pickRow(EnchantmentMenu menu) {
         if (offer.is(Offer.BEST)) {
             String reason = null;
@@ -168,8 +164,7 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
         return false;
     }
 
-    // Null when the row can be paid for and otherwise what is missing. A row asks for its
-    // cost in levels but only spends one to three levels and as much lapis.
+    // A row asks for its cost in levels but only spends one to three levels and as much lapis.
     private String shortfall(EnchantmentMenu menu, int row) {
         if (mc.player.hasInfiniteMaterials()) {
             return null;

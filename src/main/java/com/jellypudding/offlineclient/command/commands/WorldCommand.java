@@ -35,8 +35,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-// What the server told the client about the world you are in. The same lines can go into a file
-// kept for each server.
 public final class WorldCommand extends Command {
 
     private static final String SAVE = "save";
@@ -62,7 +60,6 @@ public final class WorldCommand extends Command {
     private static final Pattern PLAYER_NAME = Pattern.compile("\\.?\\w{2,16}");
     private static final String BEDROCK_PREFIX = ".";
 
-    // One line of the report. The link after the value stays out of the saved file.
     private record Row(String label, String value, Component link) {
         private Row(String label, String value) {
             this(label, value, null);
@@ -118,7 +115,6 @@ public final class WorldCommand extends Command {
         return rows;
     }
 
-    // A moving border also says where it is going and how long it has left.
     private static void addBorder(List<Row> rows, WorldBorder border) {
         rows.add(new Row("Border", "x " + ChatUtil.decimal(border.getMinX(), BORDER_PLACES) + " to "
             + ChatUtil.decimal(border.getMaxX(), BORDER_PLACES) + " and z "
@@ -146,8 +142,8 @@ public final class WorldCommand extends Command {
         return Weather.real(level::getOverworldClockTime) / SharedConstants.TICKS_PER_GAME_DAY;
     }
 
-    // Names the scoreboard knows that the tab list does not show. The server sends the scores of
-    // shown objectives only and teams list their offline members too.
+    // The server sends the scores of shown objectives only and teams list their offline members
+    // too.
     private static void addOfflineNames(List<Row> rows, LocalPlayer player, Scoreboard scoreboard) {
         Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for (ScoreHolder holder : scoreboard.getTrackedPlayers()) {
@@ -175,13 +171,11 @@ public final class WorldCommand extends Command {
             ChatUtil.copyOnClick(Component.literal("§8[§7copy§8]"), all));
     }
 
-    // A value too long for chat is left to the copy link after it. The saved file keeps it whole.
     private static void print(Row row) {
         String value = row.value().length() > ChatUtil.LONGEST_SHOWN ? "too many to show" : row.value();
         ChatUtil.row(row.label(), value, row.link());
     }
 
-    // Coordinates and the dimension they are in.
     private static String place(GlobalPos pos) {
         String dimension = ServerInfo.dimensionName(pos.dimension().identifier().toString());
         return BlockUtil.text(pos.pos()) + " in the " + dimension;
@@ -208,7 +202,6 @@ public final class WorldCommand extends Command {
         ChatUtil.component(Component.literal("§7Saved the report to ").append(ChatUtil.fileLink(file)));
     }
 
-    // Each waypoint goes into the dimension of its spot whichever one you stand in.
     private static void mark(LocalPlayer player, ClientLevel level, String what) {
         boolean spawn = what.equals(SPAWN);
         GlobalPos spot = spawn ? level.getLevelData().getRespawnData().globalPos()

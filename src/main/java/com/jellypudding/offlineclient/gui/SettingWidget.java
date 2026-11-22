@@ -24,23 +24,18 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-// Draws one setting row and turns clicks on it into changes.
 public final class SettingWidget {
 
     private static final int PAD = GuiTheme.PAD;
 
     private static final int VALUE_BAND = GuiTheme.SETTING_HEIGHT - 5;
-    // Where the block starts right of the row. The strip of reset marks fills the gap.
     static final int INDENT = 10;
     private static final int BOX = 9;
 
-    // Each level of sub option steps in by this much with a guide line beside it.
     private static final int SUB_INDENT = 8;
 
-    // The chevron gutter on a row that has sub options beneath it.
     private static final int FOLD_ZONE = 8;
 
-    // A colour row carries a hue bar then a saturation bar then a brightness bar.
     private static final int COLOR_BARS = 3;
     private static final int BAR_HEIGHT = 3;
     private static final int BAR_PITCH = 5;
@@ -48,30 +43,22 @@ public final class SettingWidget {
     private static final int SATURATION_CHANNEL = 1;
     private static final int BRIGHTNESS_CHANNEL = 2;
 
-    // A ranked list gives each choice a row tall enough for its item.
     private static final int ENTRY_HEIGHT = 18;
     private static final int ICON = 16;
     private static final int GRIP_WIDTH = 3;
     private static final int GRIP_HEIGHT = 5;
-    // How far a press on a choice travels before it counts as a drag.
     private static final int DRAG_SLOP = 3;
-    // Laid over the item of a choice that is switched off.
     private static final int OFF_VEIL = 0xB0;
 
-    // A painted grid keeps within this span. Small sizes get roomier cells up to the cap.
     private static final int GRID_SPAN = 72;
     private static final int MAX_CELL_PITCH = 12;
     private static final int CELL_GAP = 1;
     private static final int GRID_MARGIN = 3;
-    // The dot that marks the middle cell.
     private static final int MIDDLE_DOT = 2;
 
-    // Ends an action row. It runs something rather than holding a value.
     private static final String PRESS_MARK = "»";
-    // The tick in front of what an action did and the gap after it.
     private static final int TICK_ROOM = 9;
 
-    // The way chip of a module's key and the gap between it and the key.
     private static final String SWITCH_LABEL = "toggle";
     private static final String HOLD_LABEL = "hold";
     private static final String SWITCH_HELP =
@@ -112,7 +99,6 @@ public final class SettingWidget {
     }
 
     // A slider or colour bar keeps following the mouse even when it leaves the row.
-    // A choice in a ranked list follows it up and down. A press on a grid paints a stroke.
     public static final class Drag {
 
         private NumberSetting slider;
@@ -122,7 +108,6 @@ public final class SettingWidget {
         private RankSetting<?> rank;
         private int rankIndex;
         private double pressY;
-        // The top of the held list's first choice on screen.
         private double firstTop;
         // A press that never travels is a click.
         private boolean travelled;
@@ -133,7 +118,6 @@ public final class SettingWidget {
         // Null whilst the pointer is off the grid.
         private GridSetting.Cell lastCell;
 
-        // How far the row being dragged sits in from the block edge.
         private int indent;
 
         private boolean isActive() {
@@ -155,7 +139,6 @@ public final class SettingWidget {
             lastCell = cell;
         }
 
-        // Called every frame with the geometry of the settings block.
         public void follow(int x, int width, int mouseX, int mouseY) {
             if (slider != null) {
                 slider.setFromSlider(fraction(x + indent, width - indent, mouseX));
@@ -189,7 +172,6 @@ public final class SettingWidget {
             lastCell = cell;
         }
 
-        // The held choice moves into whichever row the pointer is over.
         private void followRank(int mouseY) {
             travelled |= Math.abs(mouseY - pressY) > DRAG_SLOP;
             if (!travelled) {
@@ -202,7 +184,7 @@ public final class SettingWidget {
             }
         }
 
-        // Ends a hold without acting on the press. A screen closing mid press does this.
+        // A screen closing mid press does this.
         public void cancel() {
             rank = null;
             release();
@@ -227,8 +209,6 @@ public final class SettingWidget {
         }
     }
 
-    // A colour row needs room under the hue bar for the two extra bars. A ranked list
-    // needs a row for each choice under its name and a grid its cells.
     private static int rowHeight(Setting<?> setting) {
         return switch (setting) {
             case ColorSetting ignored -> GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
@@ -238,7 +218,6 @@ public final class SettingWidget {
         };
     }
 
-    // The rows below the name light up one part at a time.
     private static boolean litInParts(Setting<?> setting) {
         return setting instanceof RankSetting || setting instanceof GridSetting;
     }
@@ -247,7 +226,6 @@ public final class SettingWidget {
         return Math.min(MAX_CELL_PITCH, GRID_SPAN / size);
     }
 
-    // Where the cells of a grid sit on screen. A narrow panel shrinks the cells to fit.
     private record GridBox(int left, int top, int pitch, int size) {
 
         private static GridBox of(GridSetting grid, int x, int y, int w) {
@@ -259,7 +237,6 @@ public final class SettingWidget {
                 pitch, size);
         }
 
-        // Null off the grid.
         private GridSetting.Cell cellAt(double mx, double my) {
             int column = (int) Math.floor((mx - left) / pitch);
             int row = (int) Math.floor((my - top) / pitch);
@@ -278,9 +255,6 @@ public final class SettingWidget {
         return index >= 0 && index < rank.size() ? index : -1;
     }
 
-    // A bind row wants the help text and not the description of the key. It also names whatever
-    // else answers to the key and its way chip says what the two ways are. The choices of a
-    // ranked list explain how to move them and the cells of a grid how to paint.
     private static String tooltipOf(Setting<?> setting, boolean overWay, double my, int y) {
         return switch (setting) {
             case KeybindSetting bind when overWay -> bind.isHold() ? HOLD_HELP : SWITCH_HELP;
@@ -300,7 +274,6 @@ public final class SettingWidget {
         return Math.clamp((mx - (x + PAD)) / span, 0, 1);
     }
 
-    // The typed value box on a number row. Shared by render and click.
     private static boolean overNumberValue(Font font, double mx, double my, NumberSetting n,
                                            int x, int y, int w) {
         int right = x + w - PAD;
@@ -308,7 +281,6 @@ public final class SettingWidget {
         return mx >= left && mx <= right + 1 && my >= y && my < y + VALUE_BAND;
     }
 
-    // Rows with a bar at the bottom centre their name in the band above it.
     private static int textTop(Setting<?> setting, int y) {
         boolean banded = setting instanceof NumberSetting || setting instanceof ColorSetting;
         return GuiTheme.textY(y, banded ? VALUE_BAND : GuiTheme.SETTING_HEIGHT);
@@ -362,7 +334,6 @@ public final class SettingWidget {
                 context.text(font, value, x + w - PAD - font.width(value), ty,
                     GuiTheme.accentText(), false);
             }
-            // The hex code takes the place of the name whilst it is typed.
             case ColorSetting c -> {
                 int room = w - 2 * PAD - BOX - rainbowChipWidth(font) - 8;
                 boolean editing = host.isEditing(c);
@@ -401,8 +372,6 @@ public final class SettingWidget {
         }
     }
 
-    // Painted cells take the accent and the rest the row shade. The cell under the pointer
-    // lights up and a dot marks the middle one.
     private static void renderGrid(GuiGraphicsExtractor context, GridSetting grid, int x, int y, int w,
                                    int mouseX, int mouseY, boolean hoverAllowed) {
         GridBox box = GridBox.of(grid, x, y, w);
@@ -427,8 +396,6 @@ public final class SettingWidget {
             grid.isOn(middle, middle) ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textFaint());
     }
 
-    // The name with a mark that says the row can be pressed. An armed row asks for the
-    // second click in red and afterwards the row shows what the action did for a moment.
     private static void renderAction(GuiGraphicsExtractor context, Font font, ActionSetting action,
                                      int x, int w, int ty, int nameColor, boolean hovered) {
         boolean armed = action.isArmed();
@@ -448,8 +415,6 @@ public final class SettingWidget {
         context.text(font, PRESS_MARK, x + w - PAD - font.width(PRESS_MARK), ty, markColor, false);
     }
 
-    // Each choice reads grip then item then name with its box on the right. A choice
-    // that is switched off fades back.
     private static void renderRank(GuiGraphicsExtractor context, Font font, RankSetting<?> rank,
                                    int x, int y, int w, int mouseX, int mouseY, boolean hoverAllowed) {
         int boxX = x + w - PAD - BOX;
@@ -482,7 +447,6 @@ public final class SettingWidget {
         }
     }
 
-    // Two columns of three dots that say a row can be picked up.
     private static void grip(GuiGraphicsExtractor context, int x, int y, int color) {
         for (int row = 0; row < GRIP_HEIGHT; row += 2) {
             for (int column = 0; column < GRIP_WIDTH; column += 2) {
@@ -502,7 +466,6 @@ public final class SettingWidget {
         int valueX;
         int underlineX;
         if (editing) {
-            // The typed number gets the value area the name has left free.
             int room = Math.max(12, w - 2 * PAD - 6 - font.width(n.getName()));
             // A number being typed grows to the left. The caret stays put.
             int shown = Math.min(room, font.width(host.getEditField().get()));
@@ -549,17 +512,15 @@ public final class SettingWidget {
         return isOver(mx, my, rainbowChipX(font, x, w), y + 1, rainbowChipWidth(font), BOX);
     }
 
-    // The square at the end of a colour row that shows the colour.
     private static boolean overSwatch(double mx, double my, int x, int y, int w) {
         return isOver(mx, my, x + w - PAD - BOX, y + 1, BOX, BOX);
     }
 
-    // Top of the hue bar at index zero and of the two bars stacked below it.
     private static int barTop(int y, int index) {
         return y + GuiTheme.SETTING_HEIGHT - 4 + index * BAR_PITCH;
     }
 
-    // Which bar the pointer sits on. Each bar owns the gap beneath it.
+    // Each bar owns the gap beneath it.
     private static int barIndex(double my, int y) {
         double offset = (my - barTop(y, HUE_CHANNEL)) / BAR_PITCH;
         return (int) Math.clamp(offset, 0, COLOR_BARS - 1);
@@ -589,11 +550,9 @@ public final class SettingWidget {
         int barX = x + PAD;
         int barW = w - 2 * PAD;
         RenderUtil.hueBar(context, barX, barTop(y, HUE_CHANNEL), barW, BAR_HEIGHT);
-        // Saturation runs from the grey of the current brightness to the pure hue.
         ramp(context, barX, barTop(y, SATURATION_CHANNEL), barW,
             ColorUtil.hsv(0f, 0f, c.getBrightness()),
             ColorUtil.hsv(c.getHue(), 1f, c.getBrightness()));
-        // Brightness runs from black up to the hue at the current saturation.
         ramp(context, barX, barTop(y, BRIGHTNESS_CHANNEL), barW, 0xFF000000,
             ColorUtil.hsv(c.getHue(), c.getSaturation(), 1f));
         context.guiRenderState.up();
@@ -606,7 +565,7 @@ public final class SettingWidget {
         barCursor(context, barX, barTop(y, BRIGHTNESS_CHANNEL), barW, c.getBrightness(), marker);
     }
 
-    // Horizontal blend between two colours. The vanilla gradient fill only runs top to bottom.
+    // The vanilla gradient fill only runs top to bottom.
     private static void ramp(GuiGraphicsExtractor context, int x, int y, int width,
                              int from, int to) {
         int band = 2;
@@ -618,7 +577,6 @@ public final class SettingWidget {
         }
     }
 
-    // A white notch with the chosen colour in the middle of it.
     private static void barCursor(GuiGraphicsExtractor context, int x, int y, int width,
                                   float fraction, int color) {
         int at = Math.clamp(x + (int) (width * fraction), x, x + width - 1);
@@ -648,7 +606,6 @@ public final class SettingWidget {
             t.isBlank() ? GuiTheme.textFaint() : GuiTheme.text(), false);
     }
 
-    // The rows a block shows with the reset row under them whilst it is there.
     public static int blockHeight(SettingBlock block) {
         return rowsHeight(block, layout(block)) + (ResetFoot.shows(block) ? GuiTheme.SETTING_HEIGHT : 0);
     }
@@ -663,9 +620,8 @@ public final class SettingWidget {
         return height;
     }
 
-    // Where each row of a block sits. A row is shown whilst it is visible and no
-    // setting above it in its family is folded. A parent row carries the chevron.
-    // A module's bind comes last and always shows.
+    // A row is shown whilst it is visible and no setting above it in its family is folded. A
+    // module's bind comes last and always shows.
     private record Layout(int[] indent, boolean[] shown, boolean[] parent) {
     }
 
@@ -674,7 +630,6 @@ public final class SettingWidget {
     private static Layout layout(SettingBlock block) {
         int count = block.rows();
         Layout layout = new Layout(new int[count], new boolean[count], new boolean[count]);
-        // The previous row and its ancestors from the top down with their indexes.
         List<Setting<?>> open = new ArrayList<>();
         List<Integer> openAt = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -702,7 +657,6 @@ public final class SettingWidget {
         return layout;
     }
 
-    // The chevron that folds a family away. Lit whilst the pointer is on it.
     private static void foldMarker(GuiGraphicsExtractor context, Setting<?> setting, int x, int y,
                                    int w, int h, int mouseX, int mouseY, boolean hoverAllowed) {
         boolean rowHovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
@@ -715,7 +669,6 @@ public final class SettingWidget {
             setting.isFolded(), hovered ? GuiTheme.text() : GuiTheme.textFaint());
     }
 
-    // A hairline down the side of a sub option that ties it to its parent.
     private static void subGuide(GuiGraphicsExtractor context, int x, int y, int indent, int h) {
         int guideX = x + PAD + indent - SUB_INDENT + 1;
         context.fill(guideX, y, guideX + 1, y + h, GuiTheme.accentOn(GuiTheme.bgSetting(), 0.45f));
@@ -730,9 +683,7 @@ public final class SettingWidget {
         return rowW - INDENT - 5;
     }
 
-    // The strip left of the block carries a mark beside every row that differs from its
-    // default. The reset row closes the block whilst anything in it is changed. The rows are
-    // drawn in the font a click measures them with.
+    // The rows are drawn in the font a click measures them with.
     public static void renderBlock(GuiGraphicsExtractor context, SettingBlock block,
                                    int rowX, int rowY, int rowW, int mouseX, int mouseY,
                                    boolean hoverAllowed, Host host) {
@@ -777,8 +728,8 @@ public final class SettingWidget {
         }
     }
 
-    // A middle press puts a row back. It waits whilst a drag holds a value because the drag
-    // would write over the reset on the next frame.
+    // A middle press waits whilst a drag holds a value because the drag would write over the reset
+    // on the next frame.
     public static boolean clickBlock(SettingBlock block, double mx, double my, int rowX, int rowY,
                                      int rowW, int button, Host host, Drag drag) {
         int cx = blockContentX(rowX);
@@ -839,7 +790,6 @@ public final class SettingWidget {
         return font.width(label) + 8;
     }
 
-    // The way chip sits left of the key chip.
     private static int wayChipRight(Font font, String keyLabel, int x, int w) {
         return x + w - PAD - chipWidth(font, keyLabel) - CHIP_GAP;
     }
@@ -849,8 +799,6 @@ public final class SettingWidget {
         return mx >= right - chipWidth(font, wayLabel(bind)) && mx < right;
     }
 
-    // The chip ends at the given right edge. A lit one stands out from the row and a listening
-    // one takes the accent.
     private static void chip(GuiGraphicsExtractor context, Font font, int right, int y,
                              String label, boolean listening, boolean lit) {
         int h = GuiTheme.SETTING_HEIGHT - 4;
@@ -866,7 +814,6 @@ public final class SettingWidget {
     // The hit test has already been done by the caller.
     private static void click(Setting<?> setting, boolean holdable, double mx, double my, int x, int y,
                               int width, int button, Host host, Drag drag) {
-        // Only the left and the right button act on a setting.
         if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
             return;
         }
@@ -901,7 +848,6 @@ public final class SettingWidget {
                     drag.channel = barIndex(my, y);
                     setChannel(c, drag.channel, (float) fraction(x, width, mx));
                 } else {
-                    // The name band holds the preview and the chip. Neither is a bar.
                     return;
                 }
             }
@@ -922,8 +868,8 @@ public final class SettingWidget {
                 }
                 r.toggle(index);
             }
-            // The name row cycles the size like a choice. A left press on a cell paints the
-            // opposite of what it lands on and a right press rubs out. Release saves the stroke.
+            // A left press on a cell paints the opposite of what it lands on and a right press rubs
+            // out. Release saves the stroke.
             case GridSetting g -> {
                 if (my < y + GuiTheme.SETTING_HEIGHT) {
                     g.cycleSize(InputUtil.isLeft(button));

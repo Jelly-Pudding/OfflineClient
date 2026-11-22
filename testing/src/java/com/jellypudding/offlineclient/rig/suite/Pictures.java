@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-// Holds pictures of the game against each other.
 final class Pictures {
 
     // A colour channel must move this far before a pixel counts as changed.
@@ -35,8 +34,6 @@ final class Pictures {
         return changed(before, after, List.of(still));
     }
 
-    // The same with several shots of the scene at rest. A pixel that moved in any of them is
-    // left out.
     static double changed(Path before, Path after, List<Path> stills) {
         Picture first = read(before);
         Picture second = read(after);
@@ -92,7 +89,6 @@ final class Pictures {
         return step(one, two) > CLEARLY;
     }
 
-    // The furthest any colour channel of two pixels lies apart.
     private static int step(int one, int two) {
         int step = 0;
         for (int channel = 0; channel < CHANNELS; channel++) {
@@ -102,7 +98,6 @@ final class Pictures {
         return step;
     }
 
-    // Every marked pixel marks the square of pixels round it as well.
     private static boolean[] spread(boolean[] marked, int width) {
         int height = marked.length / width;
         boolean[] wide = new boolean[marked.length];

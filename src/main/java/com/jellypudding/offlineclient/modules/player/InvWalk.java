@@ -54,13 +54,13 @@ public final class InvWalk extends Module {
         letGo();
     }
 
-    // Puts up every key it holds. GuiMixin calls this before a screen opens or closes. The game
-    // then sorts out its toggle keys from the keyboard alone.
+    // GuiMixin calls this before a screen opens or closes. The game then sorts out its toggle keys
+    // from the keyboard alone.
     public void letGo() {
         feed(List.of());
     }
 
-    // Read by Sprint. True whilst the sprint key still works in a screen.
+    // Read by Sprint.
     public boolean allowsSprint() {
         return sprint.isOn();
     }
@@ -81,8 +81,7 @@ public final class InvWalk extends Module {
         feed(allows(screen) ? keys() : List.of());
     }
 
-    // Copies the keyboard into the given mappings. A mapping fed on the last tick and not
-    // on this one goes up once and is then left alone.
+    // A mapping fed on the last tick and not on this one goes up once and is then left alone.
     private void feed(List<KeyMapping> keys) {
         for (KeyMapping mapping : fed) {
             if (!keys.contains(mapping)) {
@@ -95,7 +94,6 @@ public final class InvWalk extends Module {
         fed = keys;
     }
 
-    // True whilst the screen is one the setting covers and nothing on it is typing.
     public boolean allows(Screen screen) {
         if (!walkable(screen)) {
             return false;

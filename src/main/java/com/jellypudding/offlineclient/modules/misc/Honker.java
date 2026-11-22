@@ -29,7 +29,6 @@ public final class Honker extends Module {
 
     private final SlotSwap slots = new SlotSwap();
 
-    // Players honked at who have stayed in range since.
     private final Set<UUID> greeted = new HashSet<>();
 
     public Honker() {
@@ -70,7 +69,6 @@ public final class Honker extends Module {
             && !(ignoreFriends.isOn() && EntityUtil.isFriend(player));
     }
 
-    // A horn in the offhand is blown where it is. False whilst every horn is cooling down.
     private boolean honk() {
         if (ready(mc.player.getOffhandItem())) {
             return blow(InteractionHand.OFF_HAND);

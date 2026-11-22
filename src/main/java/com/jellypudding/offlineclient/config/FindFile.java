@@ -22,30 +22,25 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-// How the finds of a log sit in a file and how two copies of them come back together. The
-// finds are held by dimension and then by the key of their spot. Each dimension runs oldest
-// first. One of these follows the file of one log on one server and remembers what the file
-// held when this game last read or wrote it. Only the shared file thread touches it and that
-// thread takes its work in order. A write therefore sees what the write before it did.
+// Only the shared file thread touches it and that thread takes its work in order. A write therefore
+// sees what the write before it did.
 final class FindFile {
 
-    // What the file held after a read or a write. News is false when it held nothing the game
-    // had not taken in already. The finds are null for a file that could not be read.
+    // News is false when the file held nothing the game had not taken in already. The finds are
+    // null for a file that could not be read.
     record Reading(Map<String, Map<Long, Find>> finds, boolean news) {
     }
 
-    // The key of the exact text a find carries. Finds without any leave it out.
     private static final String CONTENT = "content";
     // Spreadsheets read the file as UTF 8 when it starts with this mark.
     private static final String BYTE_ORDER_MARK = "\uFEFF";
 
     private final Path file;
     private final boolean byChunk;
-    // What the file held at the last read or write and its stamp then. No stamp and no finds
-    // stands for a missing file. Null finds stand for a file that could not be read.
+    // No stamp and no finds stands for a missing file. Null finds stand for a file that could not
+    // be read.
     private Map<String, Map<Long, Find>> held = Map.of();
     private SharedFiles.Stamp stamp;
-    // The number of the last write of this game that reached the file and the finds it carried.
     private int lastWrite;
     private Map<String, Map<Long, Find>> lastWritten = Map.of();
 
@@ -54,7 +49,6 @@ final class FindFile {
         this.byChunk = byChunk;
     }
 
-    // One find per chunk or one per block.
     static long key(BlockPos pos, boolean byChunk) {
         return byChunk ? ChunkPos.pack(pos) : pos.asLong();
     }
@@ -66,7 +60,6 @@ final class FindFile {
         return new Reading(held, true);
     }
 
-    // Reads the file only when it changed since this game last read or wrote it.
     Reading look() throws IOException {
         SharedFiles.Stamp now = SharedFiles.stamp(file);
         if (Objects.equals(now, stamp)) {
@@ -77,11 +70,8 @@ final class FindFile {
         return new Reading(held, true);
     }
 
-    // Takes in whatever another game wrote and writes the lot. The base is what the game had
-    // taken in from the file when it handed its finds over. Heard is the number of its last
-    // write it had an answer for. The finds of a later write that reached the file stand in
-    // for the base because the game's finds grew from them. Only call it whilst the shared
-    // lock is held.
+    // The finds of a later write that reached the file stand in for the base because the game's
+    // finds grew from them. Only call it whilst the shared lock is held.
     Reading write(Map<String, Map<Long, Find>> base, Map<String, Map<Long, Find>> mine, int number, int heard)
         throws IOException {
         Map<String, Map<Long, Find>> from = lastWrite > heard ? lastWritten : base;
@@ -151,8 +141,7 @@ final class FindFile {
         return copy;
     }
 
-    // Empty for a missing file and null for one that cannot be read. A second find at a spot
-    // another game already wrote is left out.
+    // Empty for a missing file and null for one that cannot be read.
     private Map<String, Map<Long, Find>> read() {
         if (!Files.exists(file)) {
             return new HashMap<>();
@@ -213,7 +202,6 @@ final class FindFile {
         return root;
     }
 
-    // One find a line with the time as a spreadsheet reads it.
     static boolean writeCsv(Path file, List<Find> rows) {
         StringBuilder text = new StringBuilder(BYTE_ORDER_MARK).append("dimension,x,y,z,kind,detail,found\n");
         for (Find find : rows) {
@@ -226,8 +214,6 @@ final class FindFile {
         return DataFiles.writeSafely(file, temp -> Files.writeString(temp, text));
     }
 
-    // Text holding a comma or a quote or a line break goes inside quotes with its own quotes
-    // doubled.
     private static String cell(String text) {
         if (text.chars().noneMatch(c -> c == ',' || c == '"' || c == '\n' || c == '\r')) {
             return text;

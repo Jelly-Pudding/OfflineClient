@@ -34,7 +34,6 @@ import net.minecraft.world.item.equipment.Equippable;
 import java.util.List;
 import java.util.Set;
 
-// Clips the picked animals and mobs as they wander past.
 public final class AutoShearer extends Module {
 
     // Every kind the server lets shears take something from.
@@ -86,7 +85,6 @@ public final class AutoShearer extends Module {
         if (mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        // The shears make way whilst something else has the hands.
         if (Hands.taken()) {
             loan.standAside();
             return;
@@ -141,7 +139,6 @@ public final class AutoShearer extends Module {
         return false;
     }
 
-    // Puts shears that will last in the main hand. True once they are there.
     private boolean holdShears() {
         if (usable(mc.player.getMainHandItem())) {
             return true;
@@ -149,7 +146,6 @@ public final class AutoShearer extends Module {
         return loan.select(InventoryUtil.findSlot(this::usable, takeFrom.getValue().limit()));
     }
 
-    // Borrowed shears go home. The slot you held only comes back whilst you have not picked another.
     private void release() {
         loan.release(loan.stillMine());
     }

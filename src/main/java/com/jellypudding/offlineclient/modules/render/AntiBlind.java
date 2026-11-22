@@ -51,8 +51,7 @@ public final class AntiBlind extends Module {
         return portal.isOn();
     }
 
-    // The walking pace the game widens the view by with the share of Speed and Slowness taken
-    // out again. A Slowness strong enough to stop the player leaves nothing to divide by.
+    // A Slowness strong enough to stop the player leaves nothing to divide by.
     public double paceForView(AbstractClientPlayer player, double pace) {
         AttributeInstance walking = player.getAttribute(Attributes.MOVEMENT_SPEED);
         if (!zoom.isOn() || walking == null) {

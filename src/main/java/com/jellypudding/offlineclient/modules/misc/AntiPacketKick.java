@@ -33,7 +33,6 @@ import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Paces outgoing packets. Anything the connection depends on is let straight through.
 public final class AntiPacketKick extends Module {
 
     private static final long WINDOW_MILLIS = 1000;

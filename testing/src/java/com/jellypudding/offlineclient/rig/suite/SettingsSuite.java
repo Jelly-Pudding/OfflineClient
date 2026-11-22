@@ -132,8 +132,6 @@ public final class SettingsSuite implements Suite {
         }
     }
 
-    // The module goes on and each setting takes each of its values for a moment and goes back
-    // to its default. On a server only the switches and the choices go round.
     private static void sweep(Rig rig, Module module, Duo duo) {
         int mark = duo == null ? 0 : duo.server().logMark();
         boolean wasOn = rig.ask(mc -> module.isEnabled());
@@ -178,7 +176,6 @@ public final class SettingsSuite implements Suite {
         return rig.ask(mc -> mc.player == null || mc.level == null);
     }
 
-    // The world was lost half way through. The value that was on at that moment is named.
     private static void leftWith(Rig rig, Module module, Duo duo, int mark, String label) {
         rig.client().restoreDefaults();
         if (LEAVERS.contains(module.getName())) {
@@ -189,8 +186,6 @@ public final class SettingsSuite implements Suite {
         throw new RigFailure("The world was lost with " + label + "." + kicks);
     }
 
-    // Every setting that is written to disk gets a value other than its default. The file is
-    // written and everything is put back to its default and the file is read again.
     private static void roundTrip(Rig rig, List<Module> modules) {
         ConfigManager config = rig.ask(mc -> OfflineClient.INSTANCE.getConfigManager());
         Map<String, String> saved = rig.ask(mc -> {

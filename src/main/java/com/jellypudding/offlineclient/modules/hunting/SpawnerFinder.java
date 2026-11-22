@@ -78,15 +78,14 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// Finds the spawners players have been near and the rooms whose spawner they mined. A spawner
-// only counts down whilst a player stands within its reach and the server sends the count with
-// its chunk. Every count is kept with how long you stood near it since and a change your own
-// time there cannot explain is someone else's. Dungeons and spider corridors are cave air
-// inside and a block a player breaks there leaves plain air. A room you dug in or came near
-// may hold your own work and is never told as someone else's.
+// A spawner only counts down whilst a player stands within its reach and the server sends the count
+// with its chunk. Every count is kept with how long you stood near it since and a change your own
+// time there cannot explain is someone else's. Dungeons and spider corridors are cave air inside
+// and a block a player breaks there leaves plain air. A room you dug in or came near may hold your
+// own work and is never told as someone else's.
 public final class SpawnerFinder extends Module implements FindSource {
 
-    // What a find shows. A find of higher rank takes the spot of a lower one.
+    // A find of higher rank takes the spot of a lower one.
     private enum Evidence {
         ROOM(0),
         SPAWNER(1),
@@ -127,7 +126,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             return BY_NAME.get(name);
         }
 
-        // Such as mined dungeon with chest or spider corridor without spawner.
         String name() {
             String label = place.label().toLowerCase(Locale.ROOT);
             String what = switch (evidence) {
@@ -150,10 +148,10 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // A spawner as its reading arrived and what happened to it since. The reading is the count
-    // or the trial state the server sent. Own ticks is how long you stood within its reach before
-    // it came or less than nought until your spot here is known. Ticks near is how long you
-    // stood within its reach after. Live is a change sent whilst its chunk stayed loaded.
+    // The reading is the count or the trial state the server sent. Own ticks is how long you stood
+    // within its reach before it came or less than nought until your spot here is known. Ticks near
+    // is how long you stood within its reach after. Live is a change sent whilst its chunk stayed
+    // loaded.
     private static final class Arrival {
 
         private final boolean trial;
@@ -219,7 +217,6 @@ public final class SpawnerFinder extends Module implements FindSource {
     private static final int STALL_PART = 4;
     // Your spot here and on the server differ by a little.
     private static final double REACH_SLACK = 2;
-    // How long a spawner a player stands at keeps quiet before it is told again.
     private static final int LIVE_QUIET_TICKS = 6000;
     // Entities follow their chunk within a tick or two.
     private static final int SETTLE_TICKS = 20;
@@ -289,17 +286,14 @@ public final class SpawnerFinder extends Module implements FindSource {
     private final Watch watch = new Watch();
     private final ChunkScanner<Room> rooms = new ChunkScanner<Room>(2).borderReach(ROOM_BORDER);
     private final List<Survey> surveys = new ArrayList<>();
-    // Finds kept at once whose message waits until their room has been read.
     private final Set<Long> untold = new HashSet<>();
-    // What each room already told about showed.
     private final Map<Long, Evidence> toldRooms = new HashMap<>();
-    // Live signs of a player at a spawner. Filled from the network thread.
+    // Filled from the network thread.
     private final Queue<BlockPos> liveSigns = new ConcurrentLinkedQueue<>();
     private final Cooldowns<Long> liveQuiet = new Cooldowns<>();
     private final WorldWatch world = new WorldWatch();
     private int ticks;
 
-    // The rooms the scanner holds by their key. A room find is drawn whole whilst it is loaded.
     private List<Room> roomsSeen = List.of();
     private final Long2ObjectMap<Room> roomsByKey = new Long2ObjectOpenHashMap<>();
 
@@ -394,7 +388,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // Every reading that came in since the last look. The watch keeps them whilst this is off.
     private void judgeArrivals() {
         for (Map.Entry<Long, Arrival> entry : watch.loaded.entrySet()) {
             Arrival arrival = entry.getValue();
@@ -429,7 +422,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // True when a spawner a player stands at may be told again. It then keeps quiet a while.
     private boolean tellLive(long key) {
         if (liveQuiet.contains(key)) {
             return false;
@@ -497,7 +489,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             && (ominous(reading) || FOUGHT.contains(TRIAL_STATES[state]));
     }
 
-    // A spawn cycle or a detected player at a spawner whose reach you are outside of.
     private void liveSign(BlockPos pos) {
         Arrival arrival = watch.arrivalAt(pos);
         if (arrival == null || watch.ticksWithin(pos, arrival.reach + REACH_SLACK, LIVE_TICKS) > 0
@@ -508,7 +499,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         survey(survey, watch.complete(survey));
     }
 
-    // Reads the room of each waiting find once its neighbours and their entities are in.
     private void surveyWaiting() {
         for (Survey survey : List.copyOf(surveys)) {
             if (!watch.complete(survey)) {
@@ -531,7 +521,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // Works out what a find shows and says about its room and then keeps it.
     private void survey(Survey survey, boolean complete) {
         surveys.remove(survey);
         Arrival arrival = survey.arrival;
@@ -568,9 +557,8 @@ public final class SpawnerFinder extends Module implements FindSource {
             survey.live);
     }
 
-    // True for a room that may hold your own work. You broke a block inside it this session or
-    // the ledger holds a spot inside it you came near. For a room with its spawner gone only a
-    // visit since that spawner's last reading counts. A dig this session is kept for good.
+    // For a room with its spawner gone only a visit since that spawner's last reading counts. A dig
+    // this session is kept for good.
     private boolean yourWork(Room room, boolean sinceReading) {
         if (OwnDigs.anyIn(room.box())) {
             ledger.cameNear(room.key().asLong());
@@ -585,7 +573,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         return false;
     }
 
-    // What a spawner showed before its room is read such as an activated zombie spawner in a dungeon.
     private static String plainDetail(Arrival arrival) {
         String name = spawnerName(arrival);
         if (arrival.trial) {
@@ -594,7 +581,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         return "an activated " + name;
     }
 
-    // Such as zombie spawner in a dungeon or trial spawner.
     private static String spawnerName(Arrival arrival) {
         if (arrival.trial) {
             return "trial spawner";
@@ -603,7 +589,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         return (mob.isEmpty() ? "mob" : mob) + " spawner " + arrival.place.where();
     }
 
-    // The lights in a spawner's room that no cave or structure there makes such as 3 torches.
     private static Tally playerLights(ChunkWindow world, BlockPos pos, Arrival arrival) {
         Tally lights = new Tally();
         int reach = arrival.spawnRange;
@@ -621,7 +606,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         return lights;
     }
 
-    // The containers within reach of a spawner that no structure there would make.
     private Tally storageNear(BlockPos pos, Arrival arrival) {
         Tally stored = new Tally();
         int reach = arrival.reach;
@@ -656,8 +640,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         return stored;
     }
 
-    // Tells each room the scanner turned up once for what it shows. The spawner you mined or
-    // the webs you cut leave a room that looks mined and it stays quiet.
+    // The spawner you mined or the webs you cut leave a room that looks mined and it stays quiet.
     private void tellRooms() {
         for (Room room : rooms.results()) {
             Evidence evidence = room.mined() ? Evidence.MINED : Evidence.ROOM;
@@ -681,8 +664,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // Keeps a find and tells you about it when it is new or shows something new. A live sign
-    // is told whenever it comes. A find you took away by hand stays away.
     private void found(BlockPos pos, Kind kind, String detail, String message, boolean live) {
         FindLog.Find old = finds.at(pos);
         Kind before = old == null ? null : Kind.parse(old.kind());
@@ -698,8 +679,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // Keeps a find without a word. False when a find of higher rank holds the spot or you took
-    // the find away by hand.
     private boolean keep(BlockPos pos, Kind kind, String detail) {
         FindLog.Find old = finds.at(pos);
         if (outranked(old == null ? null : Kind.parse(old.kind()), kind)) {
@@ -725,7 +704,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         return !onlyChests.isOn() || kind.place() != SpawnerPlace.DUNGEON || kind.marked();
     }
 
-    // The finds in this dimension the filters let through.
     private List<FindLog.Find> visible() {
         if (mc.level == null) {
             return List.of();
@@ -782,7 +760,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
     }
 
-    // The reach of a loaded spawner as a wire ball. The server sends each spawner's own reach.
+    // The server sends each spawner's own reach.
     private void drawRange(DrawBatch batch, BlockPos pos) {
         Arrival arrival = watch.arrivalAt(pos);
         if (arrival != null) {
@@ -795,7 +773,7 @@ public final class SpawnerFinder extends Module implements FindSource {
     private final class Watch {
 
         private final Map<Long, Arrival> loaded = new HashMap<>();
-        // Spawners the server sent new data for. Filled from the network thread.
+        // Filled from the network thread.
         private final Queue<BlockPos> changed = new ConcurrentLinkedQueue<>();
         // Changes seen last tick. The game applies a packet after the watch sees it.
         private List<BlockPos> due = new ArrayList<>();
@@ -870,7 +848,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             }
         }
 
-        // Null for a block entity that is no spawner.
         private Arrival arrivalOf(BlockEntity blockEntity, boolean live) {
             BlockPos pos = blockEntity.getBlockPos();
             Arrival arrival;
@@ -891,8 +868,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             return arrival;
         }
 
-        // The arrival of a loaded spawner or one read now for a spawner never seen. Null when
-        // no spawner stands there.
         private Arrival arrivalAt(BlockPos pos) {
             Arrival arrival = loaded.get(pos.asLong());
             if (arrival != null) {
@@ -902,8 +877,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             return blockEntity == null ? null : arrivalOf(blockEntity, true);
         }
 
-        // Drops spawners gone with their chunk or broken. Each tick you stand within reach of one
-        // counts for it and goes in the ledger.
         private void sweep() {
             Vec3 you = mc.player.position();
             for (Iterator<Map.Entry<Long, Arrival>> it = loaded.entrySet().iterator(); it.hasNext(); ) {
@@ -928,19 +901,15 @@ public final class SpawnerFinder extends Module implements FindSource {
             }
         }
 
-        // True once your spot in this world is known.
         private boolean settled() {
             return trailSize >= SPOT_KNOWN_TICKS;
         }
 
-        // How long you stood within reach of a spawner lately. A spell near it gains the ticks the
-        // server counted before your spot reached this side.
         private int ownTicks(BlockPos pos, int reach, int back) {
             int within = ticksWithin(pos, reach + REACH_SLACK, back);
             return within == 0 ? 0 : within + SLACK_TICKS + ServerInfo.pingTicks();
         }
 
-        // How many of the last ticks you stood within reach of a block.
         private int ticksWithin(BlockPos pos, double reach, int back) {
             Vec3 centre = Vec3.atCenterOf(pos);
             int count = 0;
@@ -952,7 +921,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             return count;
         }
 
-        // True once every chunk a find's room and storage reach into has arrived.
         private boolean complete(Survey survey) {
             int reach = Math.max(survey.arrival.reach, ROOM_REACH);
             return ChunkWindow.capture(survey.pos, (reach + 15) >> 4).complete();

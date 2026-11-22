@@ -18,7 +18,7 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
 
-// What the radar shows and how. The Radar element of the HUD draws it whilst this is on.
+// The Radar element of the HUD draws it whilst this is on.
 public final class Radar extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -74,7 +74,6 @@ public final class Radar extends Module {
         Modules.tellHudOff(this);
     }
 
-    // True for an entity that gets a dot.
     public boolean shows(Entity entity) {
         if (entity == mc.player) {
             return false;
@@ -122,7 +121,6 @@ public final class Radar extends Module {
         return names.isOn();
     }
 
-    // The colour of its dot. Height tint fades it the further above or below you it is.
     public int colorOf(Entity entity) {
         int color = EntityColors.kindColor(entity);
         if (!height.isOn() || mc.player == null) {

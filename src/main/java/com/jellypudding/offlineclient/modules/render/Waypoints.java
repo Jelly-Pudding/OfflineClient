@@ -46,19 +46,15 @@ import java.util.regex.Pattern;
 
 public final class Waypoints extends Module {
 
-    // Death markers are named Death followed by the time of day.
     private static final String DEATH_PREFIX = "Death";
     private static final DateTimeFormatter DEATH_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final WaypointStore.Colour DEATH_COLOUR = WaypointStore.Colour.ofHue(0);
-    // Another player's death marker is named Grave and the player and the time of day such as
-    // GraveSteve14:03:22. A waypoint of your own named Graveyard never matches.
+    // A waypoint of your own named Graveyard never matches.
     private static final String GRAVE_PREFIX = "Grave";
     private static final Pattern GRAVE = Pattern.compile(GRAVE_PREFIX + ".+\\d{2}:\\d{2}:\\d{2}");
-    // Portal markers are named Portal and a number in the purple of a lit portal.
     private static final String PORTAL_PREFIX = "Portal";
     private static final Pattern PORTAL = Pattern.compile(PORTAL_PREFIX + "\\d+");
     private static final WaypointStore.Colour PORTAL_COLOUR = WaypointStore.Colour.ofHue(275);
-    // A portal marker this close already marks the portal.
     private static final double SAME_PORTAL = 8;
     // A death marker goes once you stand this close to it. A find lies somewhere about the spot
     // the server gave away and goes from further off.
@@ -128,20 +124,16 @@ public final class Waypoints extends Module {
     private final ActionSetting openList = new ActionSetting("Open waypoints",
         "Opens the list of the waypoints on this server where each one can be edited.", WaypointsScreen::open);
 
-    // Rebuilt once a tick.
     private List<WaypointStore.Waypoint> shown = List.of();
 
-    // The body whose death was last marked. A respawn hands over a fresh one.
     private final LifeWatch marked = new LifeWatch();
     // Waypoints you have been outside the near distance of in this world since they last changed.
     // Only these act when you come near. One made or edited where you stand waits until you have left.
     private final Set<WaypointStore.Waypoint> armed = new HashSet<>();
     private final WorldWatch world = new WorldWatch();
-    // The nether portal block you last stood in and the dimension it is in.
     private BlockPos lastPortal;
     private String lastPortalDimension;
     private int sincePortal;
-    // Ticks left to find the portal a trip came out of.
     private int arrivalWait;
 
     public Waypoints() {
@@ -190,7 +182,6 @@ public final class Waypoints extends Module {
         followPortals(newWorld);
     }
 
-    // The waypoints the markers show. The compass strip shows the same.
     public List<WaypointStore.Waypoint> visible() {
         List<WaypointStore.Waypoint> all = new ArrayList<>(WaypointStore.get().here());
         for (WaypointStore.Waypoint far : WaypointStore.get().mirrored()) {
@@ -209,7 +200,6 @@ public final class Waypoints extends Module {
             acrossDimensions.isOn(), usualRule(waypoint));
     }
 
-    // The options a waypoint is drawn and judged with.
     public WaypointStore.Options resolved(WaypointStore.Waypoint waypoint) {
         return waypoint.options().over(defaults(waypoint));
     }
@@ -219,12 +209,10 @@ public final class Waypoints extends Module {
         return new NumberSetting("Scale", description, value, 0.5, 3, 0.1).min(WaypointStore.Options.SMALLEST_SCALE);
     }
 
-    // The same for the Range row.
     public static NumberSetting rangeRow(String description, double value) {
         return new NumberSetting("Range", description, value, 0, 2000, 100, " blocks");
     }
 
-    // Death markers and finds go when reached whilst their switch is on. Anything else stays.
     private WaypointStore.Near usualRule(WaypointStore.Waypoint waypoint) {
         String name = waypoint.name();
         if (markDeaths.isOn() && forgetReached.isOn() && (isDeathMarker(name) || isGrave(name))) {
@@ -233,8 +221,7 @@ public final class Waypoints extends Module {
         return waypoint.found() && forgetFinds.isOn() ? FIND_REACHED : WaypointStore.Near.NOTHING;
     }
 
-    // Saves a marker on the spot of a death. AutoRespawn calls this before it
-    // respawns and the tick above catches a death without it. Once per death.
+    // AutoRespawn calls this before it respawns and the tick above catches a death without it.
     public void markDeath(Vec3 position) {
         if (!markDeaths.isOn() || !inGame() || !marked.changed()) {
             return;
@@ -281,8 +268,6 @@ public final class Waypoints extends Module {
         dropOld(Waypoints::isGrave);
     }
 
-    // Hides or removes each waypoint of this world whose rule says to once you are within its
-    // distance. A hidden waypoint has nothing left to do.
     private void actNear() {
         Vec3 feet = mc.player.position();
         List<WaypointStore.Waypoint> here = WaypointStore.get().here();
@@ -309,8 +294,6 @@ public final class Waypoints extends Module {
         return waypoint.found() ? Math.hypot(middle.x - feet.x, middle.z - feet.z) : middle.distanceTo(feet);
     }
 
-    // A new world reached within a second of standing in a nether portal is the other side of it.
-    // The portal block you come out of is marked once you stand in it.
     private void followPortals(boolean newWorld) {
         if (!markPortals.isOn()) {
             forgetPortal();
@@ -340,7 +323,6 @@ public final class Waypoints extends Module {
         sincePortal = 0;
     }
 
-    // The portal block at your feet or at your head. Null whilst you stand in neither.
     private BlockPos portalAt(BlockPos feet) {
         if (mc.level.getBlockState(feet).is(Blocks.NETHER_PORTAL)) {
             return feet;
@@ -359,7 +341,6 @@ public final class Waypoints extends Module {
         WaypointStore.get().markFresh(PORTAL_PREFIX, pos, dimension, PORTAL_COLOUR);
     }
 
-    // The colour the next added waypoint gets. Automatic colours leave it to the name.
     public WaypointStore.Colour nextColour() {
         return autoColor.isOn() ? WaypointStore.Colour.AUTO : WaypointStore.Colour.of(nextColor);
     }
@@ -398,7 +379,6 @@ public final class Waypoints extends Module {
         }
     }
 
-    // The icon sits on the marker and the label under it. Without an icon the label takes the spot.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         List<WaypointStore.Waypoint> waypoints = shown;

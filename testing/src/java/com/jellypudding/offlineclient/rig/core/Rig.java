@@ -18,7 +18,6 @@ import java.util.function.Predicate;
 public final class Rig {
 
     private static final String LOG_FILE = "logs/latest.log";
-    // How many faults of one case are spelled out in its message.
     private static final int MOST_FAULTS_TOLD = 3;
     private static final int MOST_LINES_TOLD = 6;
     private static final String JOIN = " | ";
@@ -39,7 +38,6 @@ public final class Rig {
     private World world;
     private LocalWorld local;
 
-    // The notes and pictures of the case that is running.
     private final List<String> notes = new ArrayList<>();
     private final List<String> shots = new ArrayList<>();
     private String caseId = "";
@@ -63,7 +61,6 @@ public final class Rig {
         return context;
     }
 
-    // True in a control run. Every module stays off there.
     public boolean control() {
         return control;
     }
@@ -120,7 +117,6 @@ public final class Rig {
         return world != null;
     }
 
-    // Makes a fresh flat world and waits until the player stands in it.
     public LocalWorld openWorld(WorldCreationUiState.SelectedGameMode mode) {
         return open(mode, null);
     }
@@ -171,7 +167,6 @@ public final class Rig {
         closing.close();
     }
 
-    // The world went away without the rig closing it.
     void forgetWorld() {
         world = null;
         local = null;
@@ -190,11 +185,21 @@ public final class Rig {
     }
 
     public <T> T ask(Function<Minecraft, T> question) {
+        hear();
         return context.computeOnClient(question::apply);
     }
 
     public void act(Consumer<Minecraft> action) {
+        hear();
         context.runOnClient(action::accept);
+    }
+
+    // A case never looks at the client or acts through it before the client has heard what the
+    // case told the server.
+    void hear() {
+        if (world != null) {
+            world.hear();
+        }
     }
 
     // Waits until the condition holds and says how many ticks it took. Fails after the limit.
@@ -233,7 +238,6 @@ public final class Rig {
         return caseId;
     }
 
-    // Writes down a case that was left out and why.
     public void skip(String suite, String name, String why) {
         results.end(new Outcome(suite, name, Verdict.SKIPPED, why, 0, List.of()));
     }
@@ -332,7 +336,6 @@ public final class Rig {
         return first + JOIN + second;
     }
 
-    // What the log and the uncaught exception trap hold against the client since the case began.
     private List<String> faultsSince() {
         List<String> told = new ArrayList<>();
         List<LogRules.Fault> faults = rules.faults(log.readNew());
@@ -348,7 +351,6 @@ public final class Rig {
         return told;
     }
 
-    // The exception with the first frames that tell where it came from.
     public static String describe(Throwable thrown) {
         if (thrown instanceof RigFailure) {
             return thrown.getCause() == null ? thrown.getMessage()

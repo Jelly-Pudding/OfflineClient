@@ -15,13 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// Changes the game mode on the client alone and sends nothing. The server ignores a creative
-// inventory click and an abilities packet from a survival player but drops one who hangs in the
-// air. Every ability is left as the server granted it apart from the one the creative inventory
-// opens on. Modules that read that one such as AutoEat take a creative mode put on here for real.
+// Changes the mode on the client alone and sends nothing. The server ignores a creative inventory
+// click and an abilities packet from a survival player but drops one who hangs in the air.
 public final class GameModeCommand extends Command {
 
-    // The mode the server has the player in.
     private static final String REAL = "real";
 
     public GameModeCommand() {

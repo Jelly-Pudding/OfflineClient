@@ -20,19 +20,14 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Predicate;
 
-// Stops you dead over a hole and drops you in. Meant for getting into a hole under fire.
-// A hole is one or two blocks wide with a floor and walls all round.
 public final class HoleSnap extends Module {
 
     public enum HoleKind { BLAST_PROOF, ANY }
 
-    // How hard one tick may pull towards the middle of the hole.
     private static final double CENTRE_PULL = 0.05;
 
-    // A walk to a hole that takes longer than this has gone wrong.
     private static final int SEEK_TICKS = 60;
 
-    // How far apart the floor is looked at along a walk to a hole.
     private static final double FLOOR_STEP = 0.25;
 
     private final EnumSetting<HoleKind> holes = new EnumSetting<>("Holes",
@@ -61,7 +56,6 @@ public final class HoleSnap extends Module {
 
     private boolean overHole;
     private BlockPos holeStoodIn;
-    // The column of the hole being walked to. Null whilst none is.
     private BlockPos sought;
     private int seekTicks;
 
@@ -93,8 +87,7 @@ public final class HoleSnap extends Module {
         sought = null;
     }
 
-    // True whilst HoleSnap is on and has the player over a hole or walks them to one. Nothing else
-    // may push or stop the player then.
+    // Nothing else may push or stop the player whilst this is true.
     public static boolean holds() {
         HoleSnap holeSnap = Modules.active(HoleSnap.class);
         return holeSnap != null && (holeSnap.overHole || holeSnap.sought != null);
@@ -149,8 +142,6 @@ public final class HoleSnap extends Module {
         WholeMove.set(dx, dz);
     }
 
-    // Walks towards the sought hole at a sprint. False whilst there is no walk to make. The
-    // snap takes the player once they stand over the hole.
     private boolean seeks(BlockPos feet) {
         if (sought == null || sameColumn(sought, feet)) {
             return false;
@@ -165,8 +156,6 @@ public final class HoleSnap extends Module {
         return true;
     }
 
-    // The nearest column in range the player can be walked to for the hole under it. Null
-    // when there is none.
     private BlockPos nearestHole() {
         BlockPos feet = mc.player.blockPosition();
         int range = seekRange.getInt();
@@ -182,8 +171,6 @@ public final class HoleSnap extends Module {
         return nearest;
     }
 
-    // True when the column has a hole under it that is no drop to get hurt by and the walk
-    // to it is clear with a floor all the way.
     private boolean seekable(BlockPos column) {
         BlockPos hole = holeBelow(column);
         return hole != null && column.getY() - hole.getY() <= DamageUtil.safeFall(mc.player) && walkable(column);
@@ -197,8 +184,6 @@ public final class HoleSnap extends Module {
         return new Vec3(column.getX() + 0.5 - mc.player.getX(), 0, column.getZ() + 0.5 - mc.player.getZ());
     }
 
-    // The floor is looked at under the middle of the player all along the straight line
-    // there. The column of the hole itself is the one place with none.
     private boolean walkable(BlockPos column) {
         Vec3 way = wayTo(column);
         if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().expandTowards(way))) {
@@ -219,7 +204,6 @@ public final class HoleSnap extends Module {
         return BlockUtil.blocksMotion(state) && !BlockUtil.harmful(state);
     }
 
-    // The first hole straight down through open air or null.
     private BlockPos holeBelow(BlockPos feet) {
         BlockPos pos = feet;
         for (int depth = 1; depth <= maxHeight.getInt(); depth++) {
@@ -234,7 +218,6 @@ public final class HoleSnap extends Module {
         return null;
     }
 
-    // An open block in a hole one or two blocks wide.
     private boolean isHole(BlockPos pos) {
         return !BlockUtil.isSolid(pos)
             && !Holes.hole(pos, this::wall, Predicate.not(BlockUtil::isSolid), true).isEmpty();

@@ -72,7 +72,6 @@ public final class TypedSuite implements Suite {
     private static final String MANY_WORDS = "zzqx zzqx zzqx zzqx zzqx zzqx";
     private static final List<String> NONSENSE = List.of(WORD, "-1", PAST_ANY_NUMBER, "1.5.3", "NaN", "1/0", "((((",
         "§k", MANY_WORDS, WORD.repeat(80));
-    // What follows each of a command's own words.
     private static final List<String> TAILS = List.of("", WORD, "-1", PAST_ANY_NUMBER, MANY_WORDS);
     private static final List<String> SETTING_NONSENSE = List.of(WORD, "NaN", "Infinity", "-Infinity", "1e309",
         "-" + PAST_ANY_NUMBER, "§k", "0x10", "1.5.3");
@@ -89,7 +88,6 @@ public final class TypedSuite implements Suite {
     private static final long HELD_MILLIS = 45;
     private static final int DRAWN_TICKS = 3;
     private static final String GUI_CODE = "com.jellypudding.offlineclient.gui.";
-    // How a value that is no number shows in a row.
     private static final Pattern NO_NUMBER = Pattern.compile("\\bNaN\\b|Infinity");
     // A number that follows a key in the save as the game writes it.
     private static final String SAVED_NUMBER = "(?<=\":\\s{0,2})-?\\d+(\\.\\d+)?([eE][-+]?\\d+)?";
@@ -205,7 +203,6 @@ public final class TypedSuite implements Suite {
                 if (reply.isEmpty() && opened == null) {
                     unanswered.add(line);
                 }
-                // What the tab key offers in the middle of the last word and after it.
                 rig.act(mc -> {
                     CommandManager manager = OfflineClient.INSTANCE.getCommandManager();
                     manager.complete(manager.getPrefix() + typed);
@@ -222,7 +219,6 @@ public final class TypedSuite implements Suite {
         Stage.expectAlive(rig);
     }
 
-    // The nonsense by itself and then behind each word the usage line of the command names.
     private static List<String> lines(Command command) {
         List<String> lines = new ArrayList<>(NONSENSE);
         Set<String> own = new LinkedHashSet<>();
@@ -239,8 +235,7 @@ public final class TypedSuite implements Suite {
         return lines;
     }
 
-    // The set command with nonsense for every setting of every module. A number may take a
-    // number however far out. It may never end up as no number at all.
+    // A number may take a number however far out. It may never end up as no number at all.
     private static void settingsNonsense(Rig rig, List<Module> modules) {
         List<String> broken = new ArrayList<>();
         int typed = 0;
@@ -301,7 +296,6 @@ public final class TypedSuite implements Suite {
         return value.isBoolean() ? new JsonPrimitive(12345) : new JsonPrimitive(false);
     }
 
-    // The save with every value that is no list and no object swapped for another.
     private static String everyValue(String text, Function<JsonPrimitive, JsonElement> swap) {
         return swapped(JsonParser.parseString(text), swap).toString();
     }
@@ -320,7 +314,6 @@ public final class TypedSuite implements Suite {
         return element.isJsonPrimitive() ? swap.apply(element.getAsJsonPrimitive()) : element;
     }
 
-    // Up to three letters of the save changed for others. The seed picks which.
     private static String flipped(String text, long seed) {
         Random random = new Random(seed);
         StringBuilder flipped = new StringBuilder(text);
@@ -330,8 +323,7 @@ public final class TypedSuite implements Suite {
         return flipped.toString();
     }
 
-    // Writes each spoilt save where the good one lay and loads it. The good one goes back at
-    // the end. What a spoilt save logs is its own doing and no fault of the client.
+    // What a spoilt save logs is its own doing and no fault of the client.
     private static void spoiltSave(Rig rig, List<UnaryOperator<String>> spoils) {
         ConfigManager config = rig.ask(mc -> OfflineClient.INSTANCE.getConfigManager());
         Path file = rig.ask(mc -> DataFiles.path(SAVE));
@@ -416,7 +408,6 @@ public final class TypedSuite implements Suite {
         rig.expect(saved && holds.equals("second"), "The save did not land. The file holds " + holds);
     }
 
-    // Settings that hold nothing or a number that is none or one past its own limits.
     private static List<String> unsound(List<Module> modules) {
         List<String> unsound = new ArrayList<>();
         for (Module module : modules) {
@@ -451,9 +442,8 @@ public final class TypedSuite implements Suite {
         }
     }
 
-    // Opens a screen of the client with its own command and lets the seed loose on it. A screen
-    // the hand closed is opened again and one that is not the client's own is shut. The last
-    // things it did go with a failure and the seed plays the same hand every run.
+    // A screen the hand closed is opened again and one that is not the client's own is shut. The
+    // seed plays the same hand every run.
     private static void blindHand(Rig rig, String opens, String style) {
         World world = rig.world();
         world.command("effect give " + world.player() + " resistance 600 4 true");
@@ -544,7 +534,6 @@ public final class TypedSuite implements Suite {
         rig.expect(touched[0] > 0, "The hand changed nothing at all. That proves nothing");
     }
 
-    // Modules that are not as they start and settings that are not at their defaults.
     private static int touched(List<Module> modules) {
         int touched = 0;
         for (Module module : modules) {
@@ -556,10 +545,8 @@ public final class TypedSuite implements Suite {
         return touched;
     }
 
-    // Every number of the module at ten times the top of its slider and then at the least it
-    // takes. The player cannot be hurt meanwhile. A single player world takes every move its
-    // host sends. A module that counts on a move being refused can leave the player far from
-    // home and each go ends with the way back.
+    // A single player world takes every move its host sends. A module that counts on a move being
+    // refused can leave the player far from home and each go ends with the way back.
     private static void pastTheSlider(Rig rig, Module module, Stage stage) {
         World world = rig.world();
         BlockPos home = stage.home();

@@ -16,21 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-// One visit to a block of a station such as a chest or a cartography table. The player walks up
-// to it and clicks it. A block that opens a menu hands the open menu to the caller a tick at a
-// time until the caller is done. The menu stays open until the server has answered the last
-// click and is closed then. Every wait has a time limit and a visit that cannot go on says why
-// in a whole sentence. A visit whose moves the server all threw back is one of those.
+// The player walks up to the block and clicks it. A block that opens a menu hands the open menu to
+// the caller a tick at a time until the caller is done. The menu stays open until the server has
+// answered the last click. Every wait has a time limit and a visit that cannot go on says why in a
+// whole sentence.
 public final class StationVisit implements WorkedScreens.Worker {
 
     public enum State { WALKING, OPENING, OPEN, DONE, FAILED }
 
-    // What the caller made of a tick with the menu open.
     public enum Step { MORE, DONE }
 
     @FunctionalInterface
     public interface Work {
-        // One tick with the menu open. The menu given is the live one.
         Step work(AbstractContainerMenu menu);
     }
 
@@ -38,14 +35,11 @@ public final class StationVisit implements WorkedScreens.Worker {
 
     // A walk ends this close to the block. The eyes reach it from anywhere that near.
     private static final double BESIDE = 2;
-    // Ticks a click gets to open the block on top of the round trip.
     private static final int OPEN_TICKS = 20;
-    // Clicks on a block that does not open before the visit gives up.
     private static final int TRIES = 3;
     // Ticks one visit may keep a menu open. Each caller keeps time for its own work and this
     // only ends a visit whose caller never says it is done.
     private static final int MOST_OPEN_TICKS = 3600;
-    // Ticks a container ChestLink keeps open may hold up a visit.
     private static final int KEPT_TICKS = 200;
 
     private final Trip trip;
@@ -58,37 +52,31 @@ public final class StationVisit implements WorkedScreens.Worker {
     private Work work;
     private State state = State.DONE;
     private int clickedMenu;
-    // The level the click went out in. The menu it opens never shows in another. Held weakly to
-    // keep no level left behind alive.
+    // The menu a click opens never shows in another level. Held weakly to keep no level left behind
+    // alive.
     private WeakReference<ClientLevel> clickedIn = new WeakReference<>(null);
     private int openedMenu;
-    // What the inventory held as the menu opened and whether a click of the caller moved anything.
     private List<ItemStack> opened = List.of();
     private boolean moved;
-    // Ticks waited for the server's answer once the caller was done. Minus one whilst it works.
     private int settled = -1;
     // Whether the click of this try has gone out. A container ChestLink keeps can hold it back.
     private boolean clicked;
-    // Ticks a menu clicked open before the visit stopped may still come in and is closed.
     private int lateTicks;
     private int waited;
     private int tries;
     private String failure;
 
-    // The walk to the block goes through the trip given.
     public StationVisit(Trip trip, String owner) {
         this.trip = trip;
         this.owner = owner;
         WorkedScreens.add(this);
     }
 
-    // Walks to the block and opens it and works the menu. The name reads like the dump chest
-    // and the test says what the block has to be.
+    // The name reads like the dump chest and the test says what the block has to be.
     public void open(BlockPos pos, String name, Predicate<BlockState> fits, Work work) {
         begin(pos, name, fits, work);
     }
 
-    // Walks to the block and clicks it once such as a button or a lever.
     public void press(BlockPos pos, String name, Predicate<BlockState> fits) {
         begin(pos, name, fits, null);
     }
@@ -105,17 +93,14 @@ public final class StationVisit implements WorkedScreens.Worker {
         failure = null;
     }
 
-    // True whilst the visit is under way.
     public boolean busy() {
         return state == State.WALKING || state == State.OPENING || state == State.OPEN;
     }
 
-    // Why the visit failed as a whole sentence. Null whilst it has not.
     public String failure() {
         return failure;
     }
 
-    // Once a tick whilst busy.
     public State tick(FaceMode face) {
         switch (state) {
             case WALKING -> walk(face);
@@ -241,7 +226,6 @@ public final class StationVisit implements WorkedScreens.Worker {
         }
     }
 
-    // A copy of every stack of the backpack and the hotbar.
     private static List<ItemStack> inventory() {
         List<ItemStack> stacks = new ArrayList<>(InventoryUtil.WHOLE_INVENTORY);
         for (int slot = 0; slot < InventoryUtil.WHOLE_INVENTORY; slot++) {
@@ -256,8 +240,7 @@ public final class StationVisit implements WorkedScreens.Worker {
         state = State.FAILED;
     }
 
-    // Lets go of the walk and closes the menu the visit opened. A menu still on its way is
-    // closed when it comes.
+    // A menu still on its way is closed when it comes.
     public void stop() {
         trip.stop();
         close();
@@ -282,14 +265,11 @@ public final class StationVisit implements WorkedScreens.Worker {
         }
     }
 
-    // True whilst a menu clicked open before the visit stopped may still come in.
     public boolean waitsLate() {
         ClientLevel here = MC.level;
         return lateTicks > 0 && !busy() && here != null && here == clickedIn.get();
     }
 
-    // True whilst the screen up shows the menu this visit clicked open. One that comes in after the
-    // visit stopped counts until closeLate shuts it.
     @Override
     public boolean ownsScreen() {
         return MC.player != null && InventoryUtil.containerOpen() && (menuOurs() || lateMenu());
@@ -301,14 +281,12 @@ public final class StationVisit implements WorkedScreens.Worker {
         }
     }
 
-    // True whilst the menu this visit clicked open is live. Its items may still be on their way.
     private boolean menuOurs() {
         int live = MC.player.containerMenu.containerId;
         return state == State.OPEN ? live == openedMenu
             : state == State.OPENING && clicked && live != clickedMenu && InventoryUtil.containerOpen();
     }
 
-    // True whilst the live menu may be one this visit clicked open before it stopped.
     private boolean lateMenu() {
         return waitsLate() && MC.player.containerMenu.containerId != clickedMenu;
     }

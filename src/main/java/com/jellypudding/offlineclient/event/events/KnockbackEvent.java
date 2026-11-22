@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.event.events;
 
 import com.jellypudding.offlineclient.event.UncancellableEvent;
 
-// Fired when the server pushes new velocity onto the player.
 public final class KnockbackEvent extends UncancellableEvent {
 
     private double x;

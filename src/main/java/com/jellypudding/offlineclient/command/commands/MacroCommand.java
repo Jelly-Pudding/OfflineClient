@@ -14,11 +14,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// Lines are split on a semicolon. Several can go under one name. A line can wait or repeat
-// another and the word cycle in front makes a macro that runs one line a press.
 public final class MacroCommand extends KeyedCommand<Macro> {
 
-    // Where a macro runs on joining. Here is the server you are on.
     private static final String HERE = "here";
     private static final String EVERYWHERE = "everywhere";
     private static final String OFF = "off";
@@ -57,7 +54,6 @@ public final class MacroCommand extends KeyedCommand<Macro> {
         return "§b" + macro.name() + " §7runs on §b" + keyName;
     }
 
-    // Saving over a macro keeps its key and its join.
     private void add(String[] args) {
         if (args.length < 3) {
             usage("macro add <name> <lines>");
@@ -89,7 +85,6 @@ public final class MacroCommand extends KeyedCommand<Macro> {
         }
     }
 
-    // Without a name every macro still running ends.
     private void stop(String[] args) {
         if (args.length > 2) {
             usage("macro stop [name]");

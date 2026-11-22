@@ -27,12 +27,10 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
 
-// A bodyguard. Sticks to one player or mob and hits whatever comes close.
 public final class Protect extends Module implements Targeting {
 
     public enum Ward { NEAREST_PLAYER, NEAREST_MOB, NAME }
 
-    // How far off the ward may get before the bot leaves a fight to catch up.
     private static final double STRAY = 24;
     private static final double KEEP_FROM_WARD = 2;
     private static final double KEEP_FROM_ENEMY = 3;
@@ -83,7 +81,6 @@ public final class Protect extends Module implements Targeting {
         return ward == null ? null : "guarding " + EntityUtil.displayNameOf(ward);
     }
 
-    // What it fights off near the ward. Null between fights and whilst it holds off.
     @Override
     public Entity getFought() {
         return enemy;
@@ -116,7 +113,6 @@ public final class Protect extends Module implements Targeting {
         return found instanceof LivingEntity living ? living : null;
     }
 
-    // Anything alive that the server really sent and that you do not sit on.
     private static boolean guardable(Entity entity) {
         return entity instanceof LivingEntity living && living.isAlive() && !(entity instanceof ArmorStand)
             && !Modules.isBot(entity) && !Modules.isLocalBody(entity) && !EntityUtil.ridesWithYou(entity);

@@ -29,7 +29,6 @@ import java.util.List;
 // one tick.
 public final class SkyDrop extends Module {
 
-    // The feet stop this far over the target's head.
     private static final double HEAD_GAP = 0.05;
 
     // A shorter drop adds too little to be worth the trip. A vehicle takes no more than
@@ -63,7 +62,6 @@ public final class SkyDrop extends Module {
     private final ChatWarning warning = new ChatWarning();
     private final HeldShot.Carrier carrier = new HeldShot.Carrier(warning);
 
-    // Where the drop starts and where it lands over the head.
     private record Drop(Vec3 top, Vec3 strike) {
     }
 
@@ -103,9 +101,6 @@ public final class SkyDrop extends Module {
         return targets.attackable(entity, filter);
     }
 
-    // Up to the top of the drop and down onto the head with the shot and back home. A
-    // target on the move is met where it will be once the drop lands. Null after saying
-    // why there is no way.
     private Hop.Plan plan(HeldShot shot, Entity target) {
         Hop.Result trouble = Hop.plan().problem();
         if (trouble != null) {
@@ -138,8 +133,6 @@ public final class SkyDrop extends Module {
         return new Vec3(box.getCenter().x, box.maxY, box.getCenter().z);
     }
 
-    // Ticks the trip takes to reach the drop. A burst that fits one tick counts as one.
-    // Nothing when the way there cannot be counted.
     private static int ticksToDrop(Drop drop) {
         Hop.Plan probe = Hop.plan();
         boolean planned = probe.attempt(steps -> steps.to(drop.top()).hopTo(drop.strike()));
@@ -147,7 +140,6 @@ public final class SkyDrop extends Module {
         return ticks == Integer.MAX_VALUE ? 0 : ticks;
     }
 
-    // The highest drop onto the head that has room at both ends. Null when none does.
     private Drop drop(HeldShot shot, Entity mover, Vec3 head) {
         double highest = Math.min(height.getValue(), Hop.plan().longestDrop());
         for (double fall = highest; fall >= LEAST_DROP; fall -= DROP_STEP) {

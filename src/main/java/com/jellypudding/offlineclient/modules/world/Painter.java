@@ -72,7 +72,6 @@ public final class Painter extends AreaPlacer {
         return BlockUtil.place(pos, side, rotate.isOn(), true);
     }
 
-    // The side of the spot a covered block sits on with a face that is wanted. Null when none does.
     private Direction coveredSide(BlockPos pos) {
         for (Direction side : Direction.values()) {
             if (faceWanted(side) && covers(pos.relative(side))) {

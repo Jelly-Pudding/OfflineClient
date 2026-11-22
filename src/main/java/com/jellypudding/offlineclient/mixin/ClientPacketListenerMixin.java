@@ -63,9 +63,8 @@ public abstract class ClientPacketListenerMixin {
         }
     }
 
-    // A button in a window the server opens runs its command through here and nothing asks
-    // about it before. A click in chat or in a book was already asked about in ScreenMixin. A
-    // command the player typed never comes through here.
+    // A button in a window the server opens runs its command through here and nothing asks about it
+    // before. A click in chat or in a book was already asked about in ScreenMixin.
     @Inject(method = "sendUnattendedCommand(Ljava/lang/String;Lnet/minecraft/client/gui/screens/Screen;)V",
         at = @At("HEAD"), cancellable = true)
     private void onUnattendedCommand(String command, Screen screen, CallbackInfo ci) {

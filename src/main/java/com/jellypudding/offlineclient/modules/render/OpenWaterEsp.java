@@ -15,8 +15,8 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-// Open water is a five by five column of water with two air blocks above the bobber.
-// Only open water gives treasure. The scan runs once a tick rather than every frame.
+// Open water is a five by five column of water with two air blocks above the bobber. Only open
+// water gives treasure.
 public final class OpenWaterEsp extends Module {
 
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
@@ -27,7 +27,6 @@ public final class OpenWaterEsp extends Module {
     private final BoolSetting cross = new BoolSetting("Cross",
         "Draws a cross over every face whilst the water is too shallow.", true);
 
-    // Null whilst no bobber is out.
     private AABB box;
     private boolean open;
 
@@ -63,7 +62,7 @@ public final class OpenWaterEsp extends Module {
         box = new AABB(-2, -1, -2, 3, 3, 3).move(surface);
     }
 
-    // The water block the bobber floats in. A bobber riding high sits in the air block above it.
+    // A bobber riding high sits in the air block above its water.
     private BlockPos surfaceOf(FishingHook bobber) {
         BlockPos pos = bobber.blockPosition();
         if (mc.level.getFluidState(pos).is(FluidTags.WATER)) {
@@ -86,7 +85,6 @@ public final class OpenWaterEsp extends Module {
         }
     }
 
-    // Both diagonals of all six faces. The shallow box reads as barred off.
     private void drawCross(DrawBatch batch, int color) {
         for (int axis = 0; axis < 3; axis++) {
             for (int side = 0; side < 2; side++) {
@@ -97,7 +95,6 @@ public final class OpenWaterEsp extends Module {
         }
     }
 
-    // The four corners of one face in order around it.
     private Vec3[] face(int axis, int side) {
         double x = side == 0 ? box.minX : box.maxX;
         double y = side == 0 ? box.minY : box.maxY;

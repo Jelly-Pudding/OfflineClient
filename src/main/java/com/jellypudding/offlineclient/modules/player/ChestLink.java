@@ -39,8 +39,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
 
-// Keeps a container open after its screen goes. The inventory key brings the screen back from
-// anywhere the server still lets you reach it. Your best items can go in when you are about to die.
 public final class ChestLink extends Module {
 
     public enum Kind { ENDER_CHEST, ANY }
@@ -50,9 +48,7 @@ public final class ChestLink extends Module {
     // The link lets go this far inside the server's limit. A click the server gets after it closed
     // the menu is ignored and the screen would show items that never moved.
     private static final double LET_GO = 1;
-    // The warning comes this many blocks before the link lets go.
     private static final int WARN_BLOCKS = 2;
-    // A screen that opens this soon after a right click belongs to the block clicked.
     private static final int OPEN_WINDOW = 20;
 
     private final EnumSetting<Kind> kind = new EnumSetting<>("Containers",
@@ -87,19 +83,15 @@ public final class ChestLink extends Module {
         "Saves the items at once.", KeybindSetting.UNBOUND)
         .under(save);
 
-    // The screen of the container kept open. Null whilst none is.
     private AbstractContainerScreen<?> kept;
     private int keptId;
     // Where the kept container stands. Null for one opened without a block such as by a command.
     private BlockPos keptAt;
-    // True whilst the kept screen was up at the last tick.
     private boolean showing;
     private boolean told;
     private boolean warned;
-    // Set once a save has run. It waits for the danger to pass before another.
     private boolean saved;
 
-    // The block right clicked last and the tick it happened. A screen that opens soon after is its own.
     private BlockPos clicked;
     private int clickedTick;
     private int openedId = -1;
@@ -115,7 +107,6 @@ public final class ChestLink extends Module {
         searchTags("echest", "ender chest", "portable chest");
     }
 
-    // Netherite gear and the elytra and totems and golden apples and every shulker box.
     private static List<Item> savedFirst() {
         List<Item> first = new ArrayList<>(List.of(Items.NETHERITE_HELMET, Items.NETHERITE_CHESTPLATE,
             Items.NETHERITE_LEGGINGS, Items.NETHERITE_BOOTS, Items.NETHERITE_SWORD, Items.NETHERITE_AXE,
@@ -139,13 +130,11 @@ public final class ChestLink extends Module {
         world.accept();
     }
 
-    // The kept container closes on both sides.
     @Override
     protected void onDisable() {
         release();
     }
 
-    // The menu of the ender chest kept open whether its screen shows or not. Null whilst none is.
     public AbstractContainerMenu keptEnderChest() {
         AbstractContainerScreen<?> shown = kept;
         if (shown == null || !InventoryUtil.isEnderChest(shown) || !inGame()
@@ -155,8 +144,8 @@ public final class ChestLink extends Module {
         return shown.getMenu();
     }
 
-    // Shows the kept ender chest. False whilst none is kept. A command runs inside the chat
-    // screen which shuts itself straight after and the screen has to wait for that.
+    // A command runs inside the chat screen which shuts itself straight after and the screen has to
+    // wait for that.
     public boolean showEnderChest() {
         AbstractContainerScreen<?> shown = kept;
         if (shown == null || !InventoryUtil.isEnderChest(shown) || !inGame()) {
@@ -196,7 +185,6 @@ public final class ChestLink extends Module {
         showing = kept != null && mc.gui.screen() == kept;
     }
 
-    // Remembers which block the newest container screen came from.
     private void noteOpened() {
         if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) {
             return;
@@ -208,7 +196,6 @@ public final class ChestLink extends Module {
         }
     }
 
-    // The server closed it or another container took its place. A close you watched needs no word.
     private void watchLink() {
         if (mc.player.containerMenu.containerId != keptId) {
             if (!showing) {
@@ -232,8 +219,8 @@ public final class ChestLink extends Module {
         }
     }
 
-    // How much further you may walk before the link lets go. The server measures from the eyes to
-    // the nearest point of the block. A double chest closes once either half is out of reach.
+    // The server measures from the eyes to the nearest point of the block. A double chest closes
+    // once either half is out of reach.
     private double blocksLeft() {
         double reach = BlockUtil.serverBlockReach() + CONTAINER_SLACK - LET_GO;
         double far = BlockUtil.reachTo(keptAt);
@@ -325,9 +312,8 @@ public final class ChestLink extends Module {
         }
     }
 
-    // The listed items go in first and with Everything on the rest after them. Each stack goes by one
-    // shift click and only whilst the container has room for it. A hopper or dropper would pass
-    // your gear on and gets none.
+    // Each stack goes by one shift click and only whilst the container has room for it. A hopper or
+    // dropper would pass your gear on and gets none.
     private void saveItems() {
         AbstractContainerMenu menu = mc.player.containerMenu;
         if (menu.containerId != keptId || !menu.getCarried().isEmpty() || !InventoryUtil.keeps(menu)) {
@@ -368,7 +354,6 @@ public final class ChestLink extends Module {
         }
     }
 
-    // Closes the kept container on both sides. A screen of something else stays open.
     private void release() {
         if (kept != null && inGame() && mc.player.containerMenu.containerId == keptId) {
             if (mc.gui.screen() == kept) {

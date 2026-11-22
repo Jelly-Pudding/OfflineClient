@@ -5,8 +5,7 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.multiplayer.ServerData;
 
-// The address of the server you joined last saved to offlineclient/lastserver.json. A restart
-// still knows where you were. A realm and a world on your own network are never saved.
+// A realm and a world on your own network are never saved.
 public final class LastServer {
 
     private static final String ADDRESS = "address";
@@ -16,8 +15,6 @@ public final class LastServer {
     private LastServer() {
     }
 
-    // The saved server with its address for a name. Null when none was saved and whilst the game
-    // is still building itself.
     public static ServerData read() {
         if (OfflineClient.MC == null) {
             return null;

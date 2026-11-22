@@ -21,16 +21,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// The text of a file that AutoSign runs on from sign to sign four lines at a time. It owns the
-// rows that name the file and step back through it and keeps how far the signs have got.
+// It owns the rows that name the file and step back through it and keeps how far the signs have
+// got.
 public final class SignStory {
 
-    // The largest story file that is read.
     private static final long MAX_STORY_BYTES = 1 << 20;
     // Characters looked at for the four lines of one sign. Far more than any sign holds.
     private static final int STORY_WINDOW = 512;
 
-    // The lines one sign takes from the story and where the next sign carries on.
     public record Chunk(List<String> lines, int end) {
     }
 
@@ -47,13 +45,11 @@ public final class SignStory {
     private final TextSetting placeFile = new TextSetting("Story of",
         "The file the story place counts in.", "").internal();
 
-    // The text of the file. Null whilst none could be read. Read on the network thread.
+    // Null whilst no file could be read. Read on the network thread.
     private volatile String text;
-    // The file name the last read was for whether it worked or not.
     private String readName;
     // Where each sign of the story written this session began. Redo steps back through them.
     private final Deque<Integer> signStarts = new ArrayDeque<>();
-    // The four lines at the story place for each sign width asked about.
     private final Map<Integer, Chunk> chunks = new HashMap<>();
     private int chunksFrom = -1;
     private boolean toldEnd;
@@ -63,18 +59,15 @@ public final class SignStory {
         return new Setting<?>[] {file, redo, startOver, place, placeFile};
     }
 
-    // Shows the rows the player uses only whilst the parent holds the value.
     public <E extends Enum<E>> SignStory under(EnumSetting<E> parent, E value) {
         Setting.under(new Setting<?>[] {file, redo, startOver}, parent, value);
         return this;
     }
 
-    // The next read takes the file afresh even under the same name.
     public void readAgain() {
         readName = null;
     }
 
-    // Once a tick whilst the story is in use. Chat says when the signs have taken all of it.
     public void read() {
         readFile();
         if (text != null && !toldEnd && start() == -1) {
@@ -83,13 +76,13 @@ public final class SignStory {
         }
     }
 
-    // True whilst some of the story is still to be written. Safe on any thread.
+    // Safe on any thread.
     public boolean left() {
         String story = text;
         return story != null && place.getInt() < story.length();
     }
 
-    // The next four lines of the story at the width of a sign. Null once the story is told.
+    // Null once the story is told.
     public Chunk chunk(int width) {
         String story = text;
         int from = start();
@@ -103,14 +96,13 @@ public final class SignStory {
         return chunks.computeIfAbsent(width, key -> cut(story, from, key));
     }
 
-    // The front of a sign took its lines. The next sign carries on after them.
     public void took(Chunk chunk) {
         signStarts.push(place.getInt());
         place.setValue((double) chunk.end());
     }
 
-    // Where the next sign of the story begins. Blank lines ahead of it are passed over and a
-    // sign never comes out empty. Minus one once the story is told or whilst none is read.
+    // Blank lines ahead are passed over and a sign never comes out empty. Minus one once the story
+    // is told or whilst none is read.
     private int start() {
         String story = text;
         if (story == null) {
@@ -123,7 +115,6 @@ public final class SignStory {
         return from < story.length() ? from : -1;
     }
 
-    // Reads the story file once for each name typed. A file that cannot be used is named in chat.
     private void readFile() {
         String name = file.getValue().strip();
         if (name.equals(readName)) {
@@ -147,9 +138,8 @@ public final class SignStory {
         text = story.replace("\r", "").replace('\t', ' ');
     }
 
-    // The text of the named file in the offlineclient folder. Null when there is none to use and
-    // chat says why. A name that leads out of the folder is refused. A file there could hold
-    // anything and the signs would show it to everyone.
+    // A name that leads out of the folder is refused. A file there could hold anything and the
+    // signs would show it to everyone.
     private String storyText(String name) {
         if (name.isEmpty()) {
             noStory.say("AutoSign needs the name of a story file.");

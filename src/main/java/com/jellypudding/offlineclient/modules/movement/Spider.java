@@ -19,20 +19,15 @@ public final class Spider extends Module {
 
     public enum SneakAction { CLIMB_DOWN, LET_GO }
 
-    // How far past the box a ceiling or a wall is felt for.
     private static final double PROBE = 0.05;
 
-    // Pace along a ceiling in blocks a tick. About walking speed.
     private static final double CEILING_PACE = 0.2;
 
-    // How far past the box a ceiling edge can still be held.
     private static final double GRIP_REACH = 0.3;
 
-    // How hard a held edge pulls the player in against it.
     private static final double GRIP_PULL = 0.1;
 
-    // The most upward speed kept once nothing is held. It lifts you over the top of a
-    // wall and no further.
+    // It lifts you over the top of a wall and no further.
     private static final double RELEASE_SPEED = 0.2;
 
     // The server banks every block you are lowered and charges it on landing. A climb down
@@ -59,11 +54,8 @@ public final class Spider extends Module {
         .under(ceilings);
 
     private boolean hanging;
-    // Something held the player up last tick.
     private boolean clinging;
-    // Climbing round the edge of a ceiling just hung from.
     private boolean rounding;
-    // How far the climb down has lowered you since the last rise.
     private double lowered;
     private boolean lowering;
 
@@ -163,8 +155,6 @@ public final class Spider extends Module {
         mc.player.resetFallDistance();
     }
 
-    // Keeps pushing up into a ceiling. The collision holds the player against it.
-    // The keys then move the player along it at walking pace.
     private boolean hang() {
         if (!canCling() || !ceilingAbove()) {
             return false;
@@ -180,8 +170,6 @@ public final class Spider extends Module {
         mc.player.setDeltaMovement(velocity.x, 0, velocity.z);
     }
 
-    // Past the edge of a ceiling the block just left is held from the side. Jump
-    // climbs its face onto the top of it or up to a higher ceiling.
     private boolean roundEdge() {
         boolean rising = autoRound.isOn() || mc.player.input.keyPresses.jump();
         if (!canCling() || (!rising && !holdOn.isOn())) {
@@ -195,7 +183,6 @@ public final class Spider extends Module {
         return true;
     }
 
-    // The flat direction to the nearest block within reach. Null when none is close.
     private Vec3 pullTowardsEdge() {
         AABB box = mc.player.getBoundingBox();
         AABB reach = box.inflate(GRIP_REACH, 0, GRIP_REACH).expandTowards(0, GRIP_REACH, 0);
@@ -228,12 +215,10 @@ public final class Spider extends Module {
         }
     }
 
-    // Clinging only happens in the air.
     private boolean airborne() {
         return !mc.player.onGround() && !mc.player.isInWater() && !mc.player.isInLava();
     }
 
-    // Sneak lets go of a ceiling and takes over on a wall.
     private boolean canCling() {
         return airborne() && !mc.player.isShiftKeyDown();
     }

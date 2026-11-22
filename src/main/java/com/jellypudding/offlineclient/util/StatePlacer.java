@@ -53,21 +53,16 @@ public final class StatePlacer {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // How a caller wants its blocks clicked.
     public record Rules(double range, boolean needSight, boolean airPlace, FaceMode face, SwingMode swing) {
     }
 
-    // A click that puts the wanted state at the spot. One that is not ready waits for the
-    // server to take the look the placer is holding for it.
+    // A plan that is not ready waits for the server to take the look the placer is holding for it.
     public record Plan(BlockPos pos, BlockHitResult hit, boolean sneak, float yaw, float pitch, boolean ready) {
     }
 
-    // Why the last spot asked about got no plan.
     public enum Hitch {
         NONE,
-        // Nothing in reach to click that would put a block there.
         NO_CLICK,
-        // No click from here gives the wanted state.
         NO_STATE
     }
 
@@ -77,7 +72,6 @@ public final class StatePlacer {
     private record Look(float yaw, float pitch) {
     }
 
-    // A look held for one spot until its click can go.
     private record Aim(long cell, Look look, FaceMode face, int since) {
     }
 
@@ -102,18 +96,13 @@ public final class StatePlacer {
     // A sign or a banner faces back at whoever places it.
     private static final float HALF_TURN = 180;
 
-    // Ticks a look is held for one spot before the spot is given up on for a while.
     private static final int AIM_TICKS = 10;
-    // Ticks before a spot with no plan is thought about again.
     private static final int RETRY_TICKS = 10;
-    // The server look counts as moved past this many degrees.
     private static final float LOOK_MOVED = 1;
     private static final int MOST_REMEMBERED = 4096;
 
-    // The wall form of every item that stands on the floor or hangs on a wall.
     private static final Map<Item, Block> WALL_FORMS = new IdentityHashMap<>();
 
-    // The yaw the server held when this tick began and when the one before began.
     private float lastYaw;
     private float earlierYaw;
     private float lastPitch;
@@ -149,7 +138,6 @@ public final class StatePlacer {
         }
     }
 
-    // Lets go of a held look and forgets every spot that got no plan.
     public void reset() {
         aim = null;
         noPlan.clear();
@@ -160,8 +148,8 @@ public final class StatePlacer {
         return hitch;
     }
 
-    // The click that puts the wanted state at the spot with the stack given. A null state takes
-    // whatever the click gives. Null when no click from here does it. Hitch then says why.
+    // A null state takes whatever the click gives. Null when no click from here does it and hitch
+    // then says why.
     public Plan plan(BlockPos pos, BlockState wanted, ItemStack stack, InteractionHand hand, Rules rules) {
         long cell = pos.asLong();
         hitch = remembered(cell);
@@ -207,7 +195,6 @@ public final class StatePlacer {
         return turn(pos, wanted, item, stack, hand, clicks, rules.face());
     }
 
-    // Finds a look that gives the wanted state and starts holding it.
     private Plan turn(BlockPos pos, BlockState wanted, BlockItem item, ItemStack stack, InteractionHand hand,
                       List<Click> clicks, FaceMode face) {
         Click nearClick = null;
@@ -243,9 +230,8 @@ public final class StatePlacer {
         return new Plan(pos, click.hit(), click.sneak(), look.yaw(), look.pitch(), false);
     }
 
-    // Makes the click of a ready plan with the item in the hand given. True when the game took it.
-    // The view turns to the look the server holds for the length of the click. The block the
-    // client puts down ahead of the answer is then the one the server will put down.
+    // The view turns to the look the server holds for the length of the click. The block the client
+    // puts down ahead of the answer is then the one the server will put down.
     public boolean click(Plan plan, InteractionHand hand, Rules rules) {
         if (rules.face() == FaceMode.SPAM) {
             rules.face().faceExact(plan.yaw(), plan.pitch(), RotationPriority.PLACE);
@@ -269,8 +255,6 @@ public final class StatePlacer {
         return taken;
     }
 
-    // Why a spot still has no plan without thinking it over again. None once it is worth
-    // another look.
     private Hitch remembered(long cell) {
         NoPlan last = noPlan.get(cell);
         if (last == null) {
@@ -294,8 +278,8 @@ public final class StatePlacer {
         return new Look(Mth.wrapDegrees(RotationManager.yawTo(point)), RotationManager.pitchTo(point));
     }
 
-    // The looks worth trying for a state. A sign or a banner or a head on the floor turns in
-    // sixteen steps with the yaw. Everything else goes by the four ways and by up and down.
+    // A sign or a banner or a head on the floor turns in sixteen steps with the yaw. Everything
+    // else goes by the four ways and by up and down.
     private static List<Look> looks(BlockState wanted) {
         List<Look> looks = new ArrayList<>();
         if (wanted.hasProperty(BlockStateProperties.ROTATION_16)) {
@@ -315,9 +299,8 @@ public final class StatePlacer {
         return looks;
     }
 
-    // Every click in reach that might put a block at the spot. The faces of the blocks beside
-    // it come first with the nearest in front. Then the spot itself when it holds something to
-    // click or the caller allows a click into thin air.
+    // The faces of the blocks beside the spot come first with the nearest in front. Then the spot
+    // itself when it holds something to click or the caller allows a click into thin air.
     private static List<Click> clicks(BlockPos pos, Rules rules) {
         ClientLevel level = MC.level;
         Vec3 eye = MC.player.getEyePosition();
@@ -386,8 +369,7 @@ public final class StatePlacer {
         return spots;
     }
 
-    // How the state a click would give compares with the wanted one. A settled look is one
-    // the server has held long enough for head and body to agree.
+    // A settled look is one the server has held long enough for head and body to agree.
     private StateMatch.Fit fit(BlockPos pos, BlockState wanted, BlockItem item, ItemStack stack,
                                InteractionHand hand, Click click, Look look, boolean settled) {
         float[] heads = settled ? new float[] {look.yaw()} : new float[] {look.yaw(), lastYaw, earlierYaw};
@@ -411,9 +393,8 @@ public final class StatePlacer {
         return worst;
     }
 
-    // The state the game would put at the spot for this click. Null when the click puts nothing
-    // there. The sneak key is set for the length of the question because the placing rules read
-    // it from the player.
+    // Null when the click puts nothing there. The sneak key is set for the length of the question
+    // because the placing rules read it from the player.
     private static BlockState result(BlockPos pos, BlockItem item, ItemStack stack, InteractionHand hand,
                                      Click click, Look look, float headYaw) {
         LocalPlayer player = MC.player;

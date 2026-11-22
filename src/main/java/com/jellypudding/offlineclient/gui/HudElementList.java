@@ -14,9 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// A panel in the HUD editor. Every piece it lists has a switch beside it and its
-// own settings underneath. The game's own parts come last under a heading and the foot
-// says how the editor works.
 public final class HudElementList extends PanelFrame {
 
     private static final int PILL_WIDTH = 16;
@@ -29,11 +26,8 @@ public final class HudElementList extends PanelFrame {
     private static final int HEADING_HEIGHT = GuiTheme.SETTING_HEIGHT;
 
     private final List<HudElement> elements;
-    // The first of the game's own parts. The heading goes above its row. Null when the list
-    // has none.
     private final HudElement firstGamePart;
     private final HudFoot foot;
-    // Where the panel keeps its place and its open rows between visits.
     private final String stateKey;
     private final Set<String> expanded = new HashSet<>();
     private final SettingWidget.Host host;
@@ -52,7 +46,6 @@ public final class HudElementList extends PanelFrame {
         SavedLayout.read(title, this::restore);
     }
 
-    // True when the layout held the panel.
     private boolean restore() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(stateKey) || !gui.get(stateKey).isJsonObject()) {
@@ -77,7 +70,6 @@ public final class HudElementList extends PanelFrame {
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(stateKey, state);
     }
 
-    // The element the pointer is over. Null whenever it is over none.
     public HudElement getHovered() {
         return hovered;
     }
@@ -195,7 +187,6 @@ public final class HudElementList extends PanelFrame {
         return false;
     }
 
-    // The same rules as a module row.
     private void clickRow(HudElement element, double mx, int button, int rowWidth) {
         ModuleRow.clickRow(button, mx >= getX() + rowWidth - ARROW_ZONE, () -> {
             element.setActive(!element.isActive());

@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.Setting;
 
 import java.util.List;
 
-// The rows one settings block draws and what owns them. A module block ends with its bind.
 // Keeps is the sentence that says what a reset of the whole block leaves alone.
 public record SettingBlock(Object owner, String name, List<Setting<?>> settings, KeybindSetting bind,
                            String keeps) {
@@ -25,18 +24,16 @@ public record SettingBlock(Object owner, String name, List<Setting<?>> settings,
             "The switch stays as it is.");
     }
 
-    // True for the bind of a module whose key switches it on and off. Only that key can be a
-    // held one.
+    // Only the key of a module that switches on and off can be a held one.
     public boolean holdable(Setting<?> row) {
         return row == bind && owner instanceof Module module && module.keySwitches();
     }
 
-    // How many settings differ from their defaults. The bind is left out.
+    // The bind is left out.
     public int changed() {
         return Defaults.changed(settings);
     }
 
-    // The settings and then the bind.
     public int rows() {
         return bind == null ? settings.size() : settings.size() + 1;
     }

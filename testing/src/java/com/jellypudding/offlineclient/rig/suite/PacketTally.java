@@ -46,7 +46,6 @@ final class PacketTally {
         }
     }
 
-    // What was counted since the last call. Each line names a kind and its sender.
     Map<String, Integer> drain() {
         synchronized (sent) {
             Map<String, Integer> counted = new TreeMap<>(sent);
@@ -55,7 +54,6 @@ final class PacketTally {
         }
     }
 
-    // The lines with the highest counts first.
     static List<String> busiest(Map<String, Integer> counted, int most) {
         return counted.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder()))
             .limit(most).map(line -> line.getValue() + " " + line.getKey()).toList();

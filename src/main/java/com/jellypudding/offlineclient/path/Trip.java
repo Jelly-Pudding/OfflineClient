@@ -15,7 +15,6 @@ public final class Trip {
 
     private static final int MAX_SEARCHES = 32;
 
-    // How close counts as there when the path stops short of the goal.
     private static final double CLOSE_ENOUGH = 1.5;
 
     // A path that stops short of the goal was planned over the land known at the time and more
@@ -32,7 +31,6 @@ public final class Trip {
     private State state = State.IDLE;
     private boolean stopsShort;
     private int walked;
-    // True whilst the search that is going began ahead of the player.
     private boolean rethinking;
 
     public PathFinder finder() {
@@ -117,7 +115,7 @@ public final class Trip {
         return state;
     }
 
-    // True where a search may start. In mid air the player stands on nothing a path begins at.
+    // In mid air the player stands on nothing a path begins at.
     private static boolean settled(LocalPlayer player) {
         return player.onGround() || player.isInWater() || player.isInLava() || player.onClimbable()
             || player.isPassenger() || player.getAbilities().flying;
@@ -141,7 +139,6 @@ public final class Trip {
         rethinking = finder.search(walker.ahead(LEAD), goal);
     }
 
-    // Takes a way found from ahead when it ends nearer the goal than the one being walked.
     private void rejoin(List<BlockPos> onward) {
         if (onward.size() < 2 || walker.arrived()) {
             return;

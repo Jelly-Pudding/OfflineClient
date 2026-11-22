@@ -18,19 +18,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// A command that is sent to a place. The place is three coordinates or two across the
-// ground or the name of a player or a waypoint or a kind of entity. With nothing typed
-// it is the block pointed at.
 public abstract class PlaceCommand extends Command {
 
-    // How a place reads in a usage line.
     protected static final String PLACE = "[x y z|x z|name]";
 
     protected PlaceCommand(String name, String description, String usage, String... aliases) {
         super(name, description, usage, aliases);
     }
 
-    // Null after telling the player what was wrong.
     protected Travel.Stop place(String[] words, LocalPlayer player) {
         Vec3 here = Vec3.atLowerCornerOf(player.blockPosition());
         return switch (words.length) {
@@ -70,9 +65,6 @@ public abstract class PlaceCommand extends Command {
         return stop;
     }
 
-    // The place a name stands for or null when nothing goes by it. A player in sight goes
-    // before a waypoint of the same name and a waypoint before a kind of entity. The place
-    // is the spot they stand on as the command is typed.
     protected static Travel.Stop known(String name) {
         Player other = EntityUtil.otherPlayerNamed(name);
         if (other != null) {
@@ -102,7 +94,6 @@ public abstract class PlaceCommand extends Command {
         return others;
     }
 
-    // What may come next in a place. The word counts from nought within it.
     protected static List<String> placeOptions(int word) {
         LocalPlayer player = OfflineClient.MC.player;
         List<String> options = new ArrayList<>();

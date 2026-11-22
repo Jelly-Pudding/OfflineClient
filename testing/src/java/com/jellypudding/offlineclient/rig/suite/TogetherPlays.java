@@ -68,6 +68,20 @@ final class TogetherPlays {
     private static final int PEACEFUL = 0;
 
     private static final int BEEF_GIVEN = 8;
+    // AutoEat starts a meal at fourteen points as it ships.
+    private static final int HUNGRY = 6;
+    // One steak from here fills the bar past that line and AutoEat rests after it.
+    private static final int PECKISH = 10;
+    private static final int MEAL_TICKS = 80;
+    private static final int BRIDGE_TICKS = 160;
+    private static final int BRIDGE_REACH = 48;
+    private static final int BOOK_TICKS = 300;
+    private static final float NORTH = 180;
+    // Steep enough for the crosshair to rest on the ground a block ahead.
+    private static final float AT_THE_GROUND = 60;
+    private static final int SOUL_SAND = 4;
+    private static final int PATTERN = 25;
+    private static final int STACK = 64;
     private static final int SEEN_TICKS = 10;
     private static final int FIGHT_TICKS = 300;
     private static final int SHORT_FIGHT = 120;
@@ -79,6 +93,9 @@ final class TogetherPlays {
     private static final int RUN_TICKS = 30;
     private static final int LONG_RUN = 45;
     private static final int NUKE_TICKS = 60;
+    private static final int LIFT_TICKS = 4;
+    // A block takes five times as long from the air. Thirty ticks for stone with a diamond pickaxe.
+    private static final int AIR_DIG_TICKS = 120;
     private static final int WORK_TICKS = 200;
     private static final int FLOOR_REACH = 6;
     private static final int PERCH = 8;
@@ -120,7 +137,8 @@ final class TogetherPlays {
         plays.put("Surround builds its walls in a fight and KillAura still hits with the full sword",
             this::surroundInAFight);
         plays.put("Scaffold holds the floor beside a husk and KillAura wastes no weak hit", this::scaffoldBesideAHusk);
-        plays.put("AutoEat eats on a bridge that Scaffold keeps building", this::eatOnABridge);
+        plays.put("AutoEat gets a meal down whilst Scaffold lays the bridge under your feet",
+            rig -> mealOnTheBridge(rig, false));
         plays.put("KillAura takes the sword for the fight and AutoTool hands Nuker the pickaxe after",
             this::swordThenPickaxe);
         plays.put("Freecam leaves the body standing and KillAura guards it", this::freecamGuarded);
@@ -143,15 +161,297 @@ final class TogetherPlays {
         plays.put("Goto walks on to its goal whilst AutoEat eats and KillAura fights a husk on the way",
             this::walkWithHelpers);
         plays.put("Flight keeps clear of the kick for floating whilst Freecam has the keys", this::hoverInFreecam);
+        plays.put("Nuker digs on whilst Flight holds you in the air", this::digFromTheAir);
         plays.put("AutoTool takes the pickaxe for a block and AutoWeapon the sword for a husk", this::toolThenWeapon);
         plays.put("AutoTotem puts up a second totem after a pop and KillAura fights on", this::secondTotem);
         plays.put("Spider climbs a wall and NoFall takes the hurt out of the drop behind it", this::overTheWall);
         plays.put("AutoFish lands a catch whilst AntiAFK keeps you moving", this::fishingAway);
         plays.put("AutoGap eats for health and AutoEat for hunger and each eats its own food", this::twoFeeders);
+        plays.put("AutoEat has its meal whilst Freecam holds your own clicks back", this::mealInFreecam);
+        plays.put("Freecam holds back the use that AutoClicker holds in your place", this::clickerInFreecam);
+        plays.put("AutoWither waits for your own click whilst AutoEat has a meal", this::witherWaitsOutAMeal);
+        plays.put("AutoEat gets a meal down from the offhand whilst Scaffold lays the bridge",
+            rig -> mealOnTheBridge(rig, true));
+        plays.put("AutoBuild finishes its pattern whilst AutoEat has a meal", this::builtThroughAMeal);
+        plays.put("AutoTool waits with the pickaxe whilst Multitask lets you eat and mine at once",
+            this::mealWhilstMining);
+        plays.put("Staircase waits on its steps whilst AutoEat has a meal and climbs on after", this::mealOnTheStairs);
+        plays.put("BookBot leaves the hand to a meal and signs its book after", this::mealBeforeTheBook);
+        plays.put("AutoEat waits behind a raised shield and has its meal once it is lowered", this::mealAfterTheShield);
+        plays.put("AutoEat has its meal with a chest under the crosshair and the chest stays shut",
+            this::mealBeforeAChest);
         return plays;
     }
 
-    // The husk has health enough to stand through the whole case.
+    // The click sets a block down before Freecam goes on. That is what Freecam has to hold back.
+    private void mealInFreecam(Rig rig) {
+        World world = rig.world();
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        Props.hold(rig, 0, COBBLE + " " + HANDFUL);
+        rig.controls().look(NORTH, AT_THE_GROUND);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        int byHand = HANDFUL - Props.carried(rig, COBBLE);
+        rig.client().enable("AutoEat");
+        rig.client().enable("Freecam");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        int inFreecam = HANDFUL - byHand - Props.carried(rig, COBBLE);
+        world.foodLevel(HUNGRY);
+        int waited = Props.await(rig, "AutoEat to eat with Freecam on", MEAL_TICKS, () -> food(rig) > HUNGRY);
+        rig.note("A click set " + byHand + " blocks down before Freecam and " + inFreecam + " with it on and the meal"
+            + " was down after about " + waited + " ticks");
+        rig.expect(byHand == 1, "A click set no block down before Freecam went on. That proves nothing");
+        rig.expect(inFreecam == 0, "A click of the player set a block down with Freecam on");
+    }
+
+    // AutoClicker holds the key as the player would. That use is the player's own click and no
+    // meal that a module takes by itself.
+    private void clickerInFreecam(Rig rig) {
+        Props.hold(rig, 0, COBBLE + " " + HANDFUL);
+        rig.controls().look(NORTH, AT_THE_GROUND);
+        rig.client().set("AutoClicker", "Left click", "off");
+        rig.client().set("AutoClicker", "Right click", "hold");
+        rig.client().enable("AutoClicker");
+        Props.await(rig, "the held use to set a block down", SWAP_TICKS, () -> Props.carried(rig, COBBLE) < HANDFUL);
+        rig.client().enable("Freecam");
+        rig.ticks(SEEN_TICKS);
+        int before = Props.carried(rig, COBBLE);
+        rig.ticks(STEADY_TICKS);
+        int set = before - Props.carried(rig, COBBLE);
+        rig.note((HANDFUL - before) + " blocks went down before Freecam and " + set + " with it on");
+        rig.expect(set == 0, "The use AutoClicker holds set " + set + " blocks down with Freecam on");
+    }
+
+    // AutoWither takes every press of the use key for its own whilst it waits. The last skull
+    // stays in hand and no wither wakes.
+    private void witherWaitsOutAMeal(Rig rig) {
+        World world = rig.world();
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        world.hotbar(2, "soul_sand " + SOUL_SAND);
+        world.hotbar(3, "wither_skeleton_skull 3");
+        Props.hold(rig, 0);
+        rig.controls().look(NORTH, AT_THE_GROUND);
+        rig.client().set("AutoWither", "Trigger", "right_click");
+        rig.client().set("AutoWither", "Last skull", "off");
+        rig.client().enable("AutoWither");
+        rig.client().enable("AutoEat");
+        rig.ticks(SEEN_TICKS);
+        int mark = rig.client().chatMark();
+        world.foodLevel(PECKISH);
+        int waited = Props.await(rig, "AutoEat to eat with AutoWither waiting", MEAL_TICKS, () -> food(rig) > PECKISH);
+        rig.ticks(SEEN_TICKS);
+        int sand = Props.carried(rig, "soul_sand");
+        List<String> said = rig.client().saidSince(mark);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS * 2);
+        int after = Props.carried(rig, "soul_sand");
+        List<String> answer = rig.client().saidSince(mark);
+        rig.note("The meal was down after about " + waited + " ticks with " + sand + " soul sand still carried."
+            + " After the click " + after + " were carried and the client said " + answer);
+        rig.expect(rig.client().isOn("AutoWither"), "AutoWither went off during the meal");
+        rig.expect(sand == SOUL_SAND, "AutoWither began to build on a bite");
+        rig.expect(said.isEmpty(), "AutoWither answered a bite with " + said);
+        rig.expect(after < SOUL_SAND || !answer.isEmpty(), "AutoWither did not answer the click of the player");
+    }
+
+    // One block a tick keeps the build going well into the meal.
+    private void builtThroughAMeal(Rig rig) {
+        World world = rig.world();
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        Props.hold(rig, 0, COBBLE + " " + STACK);
+        rig.client().set("AutoBuild", "Blocks per tick", "1");
+        rig.client().enable("AutoBuild");
+        rig.client().enable("AutoEat");
+        rig.controls().aimAtBlock(home.offset(0, -1, -3), Direction.UP);
+        rig.ticks(SEEN_TICKS);
+        int mark = rig.client().chatMark();
+        rig.controls().click(USE);
+        rig.ticks(2);
+        world.foodLevel(HUNGRY);
+        int ate = Props.await(rig, "AutoEat to eat whilst AutoBuild builds", MEAL_TICKS, () -> food(rig) > HUNGRY);
+        int built = Props.await(rig, "the whole pattern to stand", WORK_TICKS,
+            () -> Props.carried(rig, COBBLE) <= STACK - PATTERN);
+        rig.note("The meal was down after about " + ate + " ticks and the pattern stood " + built + " ticks later."
+            + " The client said " + rig.client().saidSince(mark));
+    }
+
+    // The walk is out over the drop before the hunger comes. Every block from there is one
+    // Scaffold has to lay. A change of slot ends a meal from the main hand. A Paper server ends
+    // a meal from either hand when a click on a block comes in.
+    private void mealOnTheBridge(Rig rig, boolean fromOffhand) {
+        World world = rig.world();
+        perch(rig);
+        Props.hold(rig, 0, COBBLE + " " + STACK);
+        if (fromOffhand) {
+            Props.wear(rig, OFFHAND, BEEF + " " + BEEF_GIVEN);
+        } else {
+            world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        }
+        enable(rig, "Scaffold", "AutoEat");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().hold(FORWARD);
+        rig.ticks(SEEN_TICKS * 2);
+        Vec3 from = rig.ask(mc -> mc.player.position());
+        world.foodLevel(PECKISH);
+        Meal meal = watchMeal(rig, BRIDGE_TICKS);
+        Vec3 fedAt = rig.ask(mc -> mc.player.position());
+        rig.ticks(RUN_TICKS);
+        rig.controls().release(FORWARD);
+        Vec3 to = rig.ask(mc -> mc.player.position());
+        rig.note(String.format(Locale.ROOT, "The meal was down after %d ticks and %d bites and %.1f blocks of bridge."
+            + " The walk went on %.1f blocks after it and ended %.1f lower", meal.ticks(), meal.bites(),
+            fedAt.subtract(from).horizontalDistance(), to.subtract(fedAt).horizontalDistance(), from.y - to.y));
+        rig.expect(Math.abs(from.y - to.y) < 0.1, "The player fell");
+        rig.expect(meal.down(), "No meal went down in " + BRIDGE_TICKS + " ticks on the bridge");
+        rig.expect(meal.bites() == 1, "The meal was cut short and had to begin again");
+        rig.expect(to.subtract(fedAt).horizontalDistance() >= 2, "The bridge did not go on after the meal");
+    }
+
+    // Obsidian keeps a diamond pickaxe busy for nine seconds. Multitask lets the dig go on
+    // through the meal and every tick of it would have AutoTool reach for the pickaxe.
+    private void mealWhilstMining(Rig rig) {
+        World world = rig.world();
+        BlockPos block = home.north().above();
+        world.fill(home.north(), block, OBSIDIAN);
+        world.hotbar(1, PICKAXE);
+        world.hotbar(2, BEEF + " " + BEEF_GIVEN);
+        Props.hold(rig, 0);
+        enable(rig, "AutoTool", "Multitask", "AutoEat");
+        rig.controls().aimAtBlock(block, Direction.SOUTH);
+        rig.controls().holdMouse(ATTACK);
+        try {
+            Props.await(rig, "AutoTool to take the pickaxe out", SWAP_TICKS, () -> inMainHand(rig, PICKAXE));
+            world.foodLevel(PECKISH);
+            int fed = Props.await(rig, "AutoEat to eat whilst you mine", MEAL_TICKS, () -> food(rig) > PECKISH);
+            int back = Props.await(rig, "AutoTool to take the pickaxe out again", SWAP_TICKS,
+                () -> inMainHand(rig, PICKAXE));
+            rig.note("The meal was down after about " + fed + " ticks and the pickaxe was back about " + back
+                + " ticks later");
+        } finally {
+            rig.controls().releaseMouse(ATTACK);
+        }
+    }
+
+    // A step went down every few ticks of the climb and each one used to end the meal.
+    private void mealOnTheStairs(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, COBBLE + " " + STACK);
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        rig.client().set("Staircase", "Walk for you", ON);
+        rig.client().set("Staircase", "Start paused", "off");
+        enable(rig, "Staircase", "AutoEat");
+        try {
+            rig.until("the first step up", WORK_TICKS, mc -> mc.player.getY() >= home.getY() + 1);
+            world.foodLevel(PECKISH);
+            int fed = Props.await(rig, "AutoEat to eat on the stairs", MEAL_TICKS, () -> food(rig) > PECKISH);
+            double height = rig.ask(mc -> mc.player.getY());
+            int climbed = rig.until("the stairs to go on three steps after the meal", WORK_TICKS,
+                mc -> mc.player.getY() >= height + 3);
+            rig.note("The meal was down after about " + fed + " ticks and three more steps took " + climbed + " ticks");
+        } finally {
+            rig.client().disable("Staircase");
+        }
+    }
+
+    // The meal is on before BookBot goes on. BookBot wants a blank book in hand and would
+    // take the hand back every tick.
+    private void mealBeforeTheBook(Rig rig) {
+        World world = rig.world();
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        world.hotbar(2, "writable_book");
+        Props.hold(rig, 0);
+        rig.client().enable("AutoEat");
+        world.foodLevel(PECKISH);
+        rig.until("the meal to begin", MEAL_TICKS, mc -> mc.player.isUsingItem());
+        rig.client().enable("BookBot");
+        Meal meal = watchMeal(rig, MEAL_TICKS);
+        int signed = Props.await(rig, "a signed book", BOOK_TICKS, () -> Props.carried(rig, "written_book") > 0);
+        rig.note("The meal was down after " + meal.ticks() + " ticks and " + meal.bites() + " bites and the book was"
+            + " signed about " + signed + " ticks later");
+        rig.expect(meal.down(), "No meal went down with BookBot on");
+        rig.expect(meal.bites() == 1, "BookBot cut the meal short and it had to begin again");
+    }
+
+    // A raised shield is the player's own use of the hand. Hunger sets in behind it.
+    private void mealAfterTheShield(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, SWORD);
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        Props.wear(rig, OFFHAND, "shield");
+        rig.client().enable("AutoEat");
+        rig.controls().holdMouse(USE);
+        try {
+            rig.until("the shield to go up", STEADY_TICKS, mc -> mc.player.isUsingItem());
+            world.foodLevel(PECKISH);
+            rig.ticks(STEADY_TICKS);
+            boolean raised = rig.ask(mc -> mc.player.isUsingItem() && mc.player.getUseItem().is(Items.SHIELD));
+            boolean armed = inMainHand(rig, SWORD);
+            rig.controls().releaseMouse(USE);
+            int lowered = rig.until("the shield to come down", STEADY_TICKS,
+                mc -> !mc.player.getUseItem().is(Items.SHIELD));
+            int fed = Props.await(rig, "AutoEat to eat once the shield is down", MEAL_TICKS, () -> food(rig) > PECKISH);
+            rig.note("The shield came down " + lowered + " ticks after the key was let go and the meal was down about "
+                + fed + " ticks later");
+            rig.expect(raised, "The shield did not stay up whilst the key was held");
+            rig.expect(armed, "AutoEat took the sword out of the hand behind the shield");
+        } finally {
+            rig.controls().releaseMouse(USE);
+        }
+    }
+
+    // The use of a feeder goes to the item in hand alone whatever the crosshair rests on.
+    private void mealBeforeAChest(Rig rig) {
+        World world = rig.world();
+        BlockPos chest = home.north();
+        world.setBlock(chest, "chest[facing=south]");
+        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
+        Props.hold(rig, 0);
+        rig.controls().aimAtBlock(chest, Direction.SOUTH);
+        rig.client().enable("AutoEat");
+        world.foodLevel(PECKISH);
+        int fed = Props.await(rig, "AutoEat to eat with a chest under the crosshair", MEAL_TICKS,
+            () -> food(rig) > PECKISH);
+        rig.note("The meal was down after about " + fed + " ticks");
+        rig.expect(rig.ask(mc -> mc.gui.screen() == null), "The meal opened the chest");
+    }
+
+    private static boolean inMainHand(Rig rig, String item) {
+        return Props.holds(rig, "weapon.mainhand", item);
+    }
+
+    private record Meal(int ticks, int bites) {
+
+        boolean down() {
+            return ticks != -1;
+        }
+    }
+
+    // Counts the bites begun until the food goes up. A meal that is cut short begins again. The
+    // player is one steak short of full when the watch begins. A question to a real server takes
+    // a tick or two of its own and the ticks are read off the game.
+    private static Meal watchMeal(Rig rig, int limitTicks) {
+        int began = rig.ask(mc -> mc.player.tickCount);
+        int bites = 0;
+        boolean biting = false;
+        for (int waited = 0; waited < limitTicks; waited = rig.ask(mc -> mc.player.tickCount) - began) {
+            rig.ticks(1);
+            boolean now = rig.ask(mc -> mc.player.isUsingItem());
+            bites += now && !biting ? 1 : 0;
+            biting = now;
+            if (food(rig) > PECKISH) {
+                return new Meal(rig.ask(mc -> mc.player.tickCount) - began, bites);
+            }
+        }
+        return new Meal(-1, bites);
+    }
+
+    private static int food(Rig rig) {
+        return Integer.parseInt(rig.world().facts().get("food"));
+    }
+
     private void auraAndEat(Rig rig) {
         World world = rig.world();
         Props.hold(rig, 0, SWORD);
@@ -185,7 +485,6 @@ final class TogetherPlays {
         rig.expect(hitsInABite == 0, "KillAura hit in the middle of a bite");
     }
 
-    // A husk that stands through a case and KillAura set to fight it.
     private static void fight(Rig rig, BlockPos huskAt) {
         Props.summon(rig, HUSK, huskAt, TOUGH_HUSK);
         rig.client().set("KillAura", "Hostile mobs", ON);
@@ -193,7 +492,6 @@ final class TogetherPlays {
         rig.client().enable("KillAura");
     }
 
-    // What the game holds as the health of the one husk on the stage.
     private static double huskHealth(Rig rig) {
         return rig.ask(mc -> {
             for (Entity entity : mc.level.entitiesForRendering()) {
@@ -205,7 +503,6 @@ final class TogetherPlays {
         });
     }
 
-    // What each hit took off the husk over the ticks.
     private static List<Double> hits(Rig rig, int ticks) {
         List<Double> hits = new ArrayList<>();
         double last = huskHealth(rig);
@@ -247,7 +544,6 @@ final class TogetherPlays {
         rig.expect(changes == 0, "The offhand changed hands " + changes + " times whilst the totem was needed");
     }
 
-    // How often the item in the offhand changed over a stretch of ticks.
     private static int offhandChanges(Rig rig) {
         int changes = 0;
         String last = null;
@@ -339,7 +635,6 @@ final class TogetherPlays {
         return broken(rig);
     }
 
-    // Twelve blocks of stone behind the player on a floor Nuker cannot break.
     private void quarry(Rig rig) {
         World world = rig.world();
         world.refill(home.offset(-FLOOR_REACH, -1, -FLOOR_REACH), home.offset(FLOOR_REACH, -1, FLOOR_REACH), BEDROCK);
@@ -354,14 +649,12 @@ final class TogetherPlays {
         return home.offset(1, 1, 3);
     }
 
-    // The blocks of the quarry that are gone. The count leaves the rest standing.
     private int broken(Rig rig) {
         String box = Props.at(quarryFrom()) + " " + Props.at(quarryTo());
         return rig.world().count("execute if blocks " + box + " " + Props.at(quarryFrom()) + " all")
             - rig.world().count("execute if blocks " + box + " " + Props.at(quarryFrom()) + " masked");
     }
 
-    // The player stands on one block high in the air and runs off it.
     private void scaffoldAndSpeed(Rig rig) {
         perch(rig);
         Props.hold(rig, 0, COBBLE + " 64");
@@ -371,10 +664,13 @@ final class TogetherPlays {
         rig.expect(moved.setbacks() == 0, "The server put the run back " + moved.setbacks() + " times");
     }
 
-    // One block high in the air with the player on top of it.
+    // The stage is put back six blocks round home. The bridge of an earlier play reaches further
+    // and would carry this one.
     private void perch(Rig rig) {
-        rig.world().setBlock(home.above(PERCH - 1), STONE);
-        rig.world().teleport(home.getX() + 0.5, home.getY() + PERCH, home.getZ() + 0.5, 180, 0);
+        World world = rig.world();
+        world.refill(home.offset(-1, PERCH - 1, -BRIDGE_REACH), home.offset(1, PERCH - 1, -FLOOR_REACH - 1), "air");
+        world.setBlock(home.above(PERCH - 1), STONE);
+        world.teleport(home.getX() + 0.5, home.getY() + PERCH, home.getZ() + 0.5, NORTH, 0);
     }
 
     private static void expectBridged(Rig rig, Moved moved, double fewest) {
@@ -400,7 +696,6 @@ final class TogetherPlays {
         expectFull(rig, hits, 3);
     }
 
-    // The hits of a stretch of ticks and how many of those ticks the game was breaking a block.
     private static List<Double> hitsWhilst(Rig rig, int ticks, int[] mining) {
         List<Double> hits = new ArrayList<>();
         for (int tick = 0; tick < ticks; tick++) {
@@ -436,7 +731,6 @@ final class TogetherPlays {
         }
     }
 
-    // The husk stands under the crosshair and both modules want it.
     private void twoAttackers(Rig rig) {
         Props.hold(rig, 0, SWORD);
         fight(rig, home.north(2));
@@ -492,25 +786,6 @@ final class TogetherPlays {
     }
 
     // Hunger sets in on the perch. The bridge has to hold whilst the food is in the hand.
-    private void eatOnABridge(Rig rig) {
-        World world = rig.world();
-        perch(rig);
-        Props.hold(rig, 0, COBBLE + " 64");
-        world.hotbar(1, BEEF + " " + BEEF_GIVEN);
-        enable(rig, "Scaffold", "AutoEat");
-        world.command("effect give " + world.player() + " hunger 30 255 true");
-        rig.ticks(STEADY_TICKS);
-        Moved moved = Motion.hold(rig, LONG_RUN * 2, FORWARD);
-        rig.ticks(STEADY_TICKS * 2);
-        int eaten = BEEF_GIVEN - Props.carried(rig, BEEF);
-        double fell = home.getY() + PERCH - rig.ask(mc -> mc.player.getY());
-        rig.note(String.format(Locale.ROOT, "It walked %.1f blocks out and ended %.1f lower and ate %d steaks",
-            moved.across(), fell, eaten));
-        rig.expect(Math.abs(fell) < 0.1, "The player fell");
-        rig.expect(moved.across() >= 4, "The player did not walk out over the drop");
-        rig.expect(eaten >= 1, "AutoEat did not eat on the bridge");
-    }
-
     // The husk dies after three hits. Nuker has the sword until then and the pickaxe after.
     private void swordThenPickaxe(Rig rig) {
         quarry(rig);
@@ -560,7 +835,6 @@ final class TogetherPlays {
         expectFull(rig, hits, 3);
     }
 
-    // A pool three wide lies ahead. Its water is level with the ground.
     private void overWater(Rig rig) {
         rig.world().fill(home.offset(-1, -1, -POOL_LENGTH), home.offset(1, -1, -2), "water");
         rig.ticks(SEEN_TICKS);
@@ -573,7 +847,6 @@ final class TogetherPlays {
         rig.expect(moved.setbacks() == 0, "The server put the run back " + moved.setbacks() + " times");
     }
 
-    // Blocks a tick covered whilst food was being eaten.
     private double paceWhilstEating(Rig rig) {
         World world = rig.world();
         goHome(rig);
@@ -625,7 +898,6 @@ final class TogetherPlays {
         rig.expect(Math.abs(moved.rise()) < 0.1, "The player went over the lip");
     }
 
-    // A walkway high up with three blocks missing from the middle of it.
     private void jumpedGap(Rig rig) {
         World world = rig.world();
         BlockPos start = home.above(PERCH - 1);
@@ -912,7 +1184,6 @@ final class TogetherPlays {
         rig.note("The first catch was in the backpack after about " + took + " ticks");
     }
 
-    // Stacks in the backpack and hotbar that are no fishing rod.
     private static int caught(Rig rig) {
         return rig.ask(mc -> {
             int stacks = 0;
@@ -966,6 +1237,29 @@ final class TogetherPlays {
             - home.getY(), WORK_TICKS, sank));
         rig.expect(height - home.getY() >= 1, "Flight never lifted the body. That proves nothing");
         rig.expect(Math.abs(sank) < 1.5, "The body did not keep its height");
+    }
+
+    // Nuker has to stay with one block for as long as the air makes it take whilst Flight dips
+    // and climbs to dodge the kick for floating.
+    private void digFromTheAir(Rig rig) {
+        quarry(rig);
+        Props.hold(rig, 0, PICKAXE);
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("Flight");
+        Motion.hold(rig, LIFT_TICKS, JUMP);
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("Nuker");
+        rig.ticks(AIR_DIG_TICKS);
+        rig.client().disable("Nuker");
+        double height = rig.ask(mc -> mc.player.getY()) - home.getY();
+        boolean hung = rig.ask(mc -> !mc.player.onGround());
+        rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, NORTH, 0);
+        rig.client().disable("Flight");
+        int broken = broken(rig);
+        rig.note(String.format(Locale.ROOT, "Nuker broke %d blocks of stone in %d ticks from %.1f blocks up", broken,
+            AIR_DIG_TICKS, height));
+        rig.expect(hung && height >= 1, "Flight never held the player in the air. That proves nothing");
+        rig.expect(broken >= 2, "Nuker broke " + broken + " blocks from the air");
     }
 
     // The husk walks and hits. A world of the rig's own is peaceful until the case says otherwise.

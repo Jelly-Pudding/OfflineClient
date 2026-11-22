@@ -31,7 +31,6 @@ import java.util.List;
 @Mixin(ChatScreen.class)
 public abstract class ChatScreenMixin extends Screen {
 
-    // How many completions show at once and the height of each row.
     @Unique
     private static final int POPUP_ROWS = 8;
     @Unique
@@ -52,14 +51,12 @@ public abstract class ChatScreenMixin extends Screen {
     @Shadow
     protected EditBox input;
 
-    // The completions of the client command in the box and when the command was asked for them.
     @Unique
     private List<String> offlineclient$options = List.of();
 
     @Unique
     private long offlineclient$optionsAt;
 
-    // Which of the shown completions the arrow keys have picked.
     @Unique
     private int offlineclient$picked;
 
@@ -180,7 +177,6 @@ public abstract class ChatScreenMixin extends Screen {
         }
 
         int picked = offlineclient$picked;
-        // The list scrolls to keep the pick among the rows shown.
         int shown = Math.min(POPUP_ROWS, options.size());
         int first = Math.clamp(picked - shown + 1, 0, options.size() - shown);
         String overflow = options.size() > shown

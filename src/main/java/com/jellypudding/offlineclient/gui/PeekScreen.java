@@ -18,8 +18,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// A window that shows what a container item holds without placing it.
-// Clicking an item inside that has contents of its own opens another window.
 public final class PeekScreen extends Screen {
 
     private static final int COLUMNS = 9;

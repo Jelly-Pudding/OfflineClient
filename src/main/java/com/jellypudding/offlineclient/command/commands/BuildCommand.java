@@ -27,13 +27,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// Puts build files down in the world and moves and turns and removes them. AutoBuild draws
-// each one and builds it whilst it is on.
 public final class BuildCommand extends Command {
 
     private static final List<String> VERBS = List.of("place", "move", "turn", "mirror", "hide", "show", "remove",
         "list", "files");
-    // Other words for a verb.
     private static final Map<String, String> ALIASES = Map.of("add", "place", "rotate", "turn", "flip", "mirror",
         "delete", "remove", "del", "remove");
 
@@ -74,13 +71,11 @@ public final class BuildCommand extends Command {
         }
     }
 
-    // The verb a typed word stands for.
     private static String verb(String typed) {
         String lower = typed.toLowerCase(Locale.ROOT);
         return ALIASES.getOrDefault(lower, lower);
     }
 
-    // A file name may hold spaces. Three coordinates after it are told apart by what they are.
     private void place(String[] args) {
         if (args.length < 2) {
             usage(PLACE_USAGE);
@@ -120,7 +115,6 @@ public final class BuildCommand extends Command {
         }
     }
 
-    // The file a player means. The ending may be left off whilst only one file has that name.
     private static String fileNamed(String typed) {
         List<String> names = BuildFiles.names();
         for (String name : names) {
@@ -132,7 +126,6 @@ public final class BuildCommand extends Command {
         return stems.size() == 1 ? stems.getFirst() : null;
     }
 
-    // The block a typed spot lies in. Null after telling the player it lies outside the world.
     private static BlockPos inWorld(Vec3 typed) {
         BlockPos spot = BlockPos.containing(typed);
         if (Level.isInSpawnableBounds(spot)) {
@@ -215,7 +208,6 @@ public final class BuildCommand extends Command {
             + (flipped.mirror() == Mirror.NONE ? "the right way round again." : "mirrored."));
     }
 
-    // A hidden placement stays saved but is neither drawn nor built.
     private void hidden(String[] args, boolean hide) {
         if (args.length != 2) {
             usage("build " + (hide ? "hide" : "show") + " <name>");
@@ -243,7 +235,6 @@ public final class BuildCommand extends Command {
         ChatUtil.message("§cRemoved §b" + placement.name() + "§7. The blocks that stand stay.");
     }
 
-    // Null after telling the player nothing here has that name.
     private static Placement named(String name) {
         Placement placement = BuildPlacements.get().find(name);
         if (placement == null) {
@@ -266,7 +257,6 @@ public final class BuildCommand extends Command {
         }
     }
 
-    // Clicking a name types the command that puts it down.
     private static void files() {
         List<String> names = BuildFiles.names();
         if (names.isEmpty()) {

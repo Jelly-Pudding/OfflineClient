@@ -47,9 +47,9 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
-// Turns sulfur cubes into bombs and traps. Shears take the TNT out of a cube and a lighter
-// primes it in the same tick before the cube notices the TNT is gone. The cube stays primed
-// with its fuse run down to nought and goes off the moment TNT gets back inside.
+// Shears take the TNT out of a cube and a lighter primes it in the same tick before the cube
+// notices the TNT is gone. The cube stays primed with its fuse run down to nought and goes off the
+// moment TNT gets back inside.
 public final class CubeRigger extends Module {
 
     // The server takes a click on an entity this far past the player's own reach.
@@ -58,10 +58,8 @@ public final class CubeRigger extends Module {
     // The biggest cube's box reaches under this far from its middle.
     private static final double SCAN_MARGIN = 2;
 
-    // Ticks a clicked cube is left alone whilst the server answers.
     private static final int HANDLED_TICKS = 20;
 
-    // Ticks a rigged cube has to show as primed before the rig counts as failed.
     private static final int CONFIRM_TICKS = 20;
 
     private static final String NO_SHEARS = "Shears have to be in your hotbar or offhand to rig a cube.";
@@ -133,19 +131,17 @@ public final class CubeRigger extends Module {
     private final Cooldowns<Integer> handled = new Cooldowns<>();
     private final ChatWarning warning = new ChatWarning();
 
-    // Cubes rigged and the tick the clicks went out. Checked until they show as primed.
+    // Cubes rigged and the tick the clicks went out.
     private final Map<Integer, Integer> rigging = new HashMap<>();
 
     private int loadTimer;
     private int lightTimer;
     private int rigged;
 
-    // The how to line shows on each enable until the first rig of the session.
     private boolean taught;
     private boolean toldNoFill;
 
-    // What the main hand held last tick and in which slot. A cube bucket that turns into an
-    // empty bucket in the same slot has just let a cube out.
+    // A cube bucket that turns into an empty bucket in the same slot has just let a cube out.
     private Item lastHeld;
     private int lastSlot = -1;
     private int pickAt = -1;
@@ -244,9 +240,7 @@ public final class CubeRigger extends Module {
         }
     }
 
-    // Shears the TNT out and pushes the fill in and lights the cube in one tick. The server
-    // takes all three clicks before the cube ticks and notices its TNT is gone. Null once the
-    // clicks are sent and the reason nothing was sent otherwise.
+    // Null once the clicks are sent and the reason nothing was sent otherwise.
     private String rig(SulfurCube cube, BooleanSupplier lighter) {
         if (!carries(stack -> stack.is(Items.SHEARS))) {
             return NO_SHEARS;
@@ -280,7 +274,6 @@ public final class CubeRigger extends Module {
         }
         boolean loading = load.isOn() && loadTimer == 0;
         boolean lighting = light.isOn() && lightTimer == 0;
-        // A meal or ShulkerPacker or an item in use has the hands.
         if (!loading && !lighting || Hands.slotsTaken() || mc.player.isUsingItem()) {
             return;
         }
@@ -339,9 +332,9 @@ public final class CubeRigger extends Module {
         return problem == null;
     }
 
-    // A Fire Aspect hit sets the cube on fire and the first burn lights it on its next tick. The burn
-    // only lights a cube that still holds its TNT. A sheared cube is never rigged by it. The hit goes
-    // out as a bare packet and no module that picks weapons for a hit swaps the sword away.
+    // A Fire Aspect hit sets the cube on fire and the first burn lights it on its next tick but
+    // only whilst it still holds its TNT. The hit goes out as a bare packet and no module that
+    // picks weapons swaps the sword away.
     private boolean burn(SulfurCube cube) {
         int slot = InventoryUtil.hotbarSlot(CubeRigger::burns);
         if (slot == -1 || EntityUtil.inWaterOrRain(cube)) {
@@ -356,14 +349,11 @@ public final class CubeRigger extends Module {
         return true;
     }
 
-    // A weapon with Fire Aspect that has hits to spare and lands a plain hit.
     private static boolean burns(ItemStack stack) {
         return ItemUtil.enchantLevel(Enchantments.FIRE_ASPECT, stack) > 0 && !ItemUtil.nearlyBroken(stack)
             && ItemUtil.landsPlainHit(stack);
     }
 
-    // Clicks the cube with the first stack the test accepts. One in the offhand needs no swap.
-    // False when neither the offhand nor the hotbar holds one.
     private boolean clickWith(SulfurCube cube, Predicate<ItemStack> item) {
         if (item.test(mc.player.getOffhandItem())) {
             return touch(cube, InteractionHand.OFF_HAND);
@@ -391,7 +381,6 @@ public final class CubeRigger extends Module {
         }
     }
 
-    // A rig shows as primed once the server has taken it. One that never does is reported.
     private void confirmRigs() {
         int now = mc.player.tickCount;
         Iterator<Map.Entry<Integer, Integer>> it = rigging.entrySet().iterator();
@@ -410,7 +399,6 @@ public final class CubeRigger extends Module {
         }
     }
 
-    // A cube let out of the held bucket leaves an empty bucket in the same slot.
     private void followBucket() {
         int slot = InventoryUtil.selectedSlot();
         Item held = mc.player.getMainHandItem().getItem();
@@ -429,7 +417,6 @@ public final class CubeRigger extends Module {
         }
     }
 
-    // The first hotbar slot after the given one that holds a cube bucket. Minus one when none does.
     private static int nextCubeBucket(int from) {
         for (int step = 1; step < InventoryUtil.HOTBAR_SIZE; step++) {
             int slot = (from + step) % InventoryUtil.HOTBAR_SIZE;
@@ -444,7 +431,6 @@ public final class CubeRigger extends Module {
         return load.isOn() || light.isOn();
     }
 
-    // A grown cube that is not primed yet and is in reach and not spared.
     private boolean inPlay(Entity entity) {
         if (!(entity instanceof SulfurCube cube) || !cube.isAlive() || cube.isBaby() || cube.isPrimed()
             || handled.contains(cube.getId()) || spared(cube)) {
@@ -471,17 +457,15 @@ public final class CubeRigger extends Module {
         return "Set to " + here;
     }
 
-    // A grown cube that swallowed something other than TNT.
     private static boolean holdsOther(SulfurCube cube) {
         return cube.hasBodyItem() && !TntChain.holdsTnt(cube);
     }
 
-    // Primed with no TNT inside. A cube lit the plain way still holds its TNT.
+    // A cube lit the plain way still holds its TNT.
     private static boolean rigged(SulfurCube cube) {
         return cube.isPrimed() && !TntChain.holdsTnt(cube);
     }
 
-    // The hand holding flint and steel or a fire charge. The main hand goes first as it does in the game.
     private static InteractionHand heldLighter() {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = mc.player.getItemInHand(hand);
@@ -496,7 +480,6 @@ public final class CubeRigger extends Module {
         return item.test(mc.player.getOffhandItem()) || InventoryUtil.hotbarSlot(item) != -1;
     }
 
-    // The first block on the fill list that a cube swallows and that is at hand.
     private Item filler() {
         for (Item item : fillWith.resolved()) {
             if (carries(stack -> stack.is(item) && stack.is(ItemTags.SULFUR_CUBE_SWALLOWABLE))) {

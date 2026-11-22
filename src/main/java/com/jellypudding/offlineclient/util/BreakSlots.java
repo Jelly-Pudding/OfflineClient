@@ -74,7 +74,6 @@ public final class BreakSlots {
         return clock() - INSTANCE.startTick;
     }
 
-    // True when a stop sent now breaks a block with this much progress a tick outright.
     public static boolean stopFinishes(float perTick) {
         return perTick * (sinceStart() + 1) >= BreakTime.SERVER_ACCEPTS;
     }

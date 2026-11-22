@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// The mirror of XRay. The listed blocks go see through and the rest stay solid.
 // XRay owns the meshing path and asks this module what the chosen blocks need.
 public final class WallHack extends MeshFilterModule {
 

@@ -37,7 +37,6 @@ public final class PlainGame implements AutoCloseable {
         this.process = process;
     }
 
-    // Starts the plain game and waits until the server holds its player.
     public static PlainGame join(Rig rig, PaperServer server) {
         Process process;
         Path folder = Path.of("").toAbsolutePath().resolveSibling(FOLDER);
@@ -95,7 +94,6 @@ public final class PlainGame implements AutoCloseable {
         return process;
     }
 
-    // What the launch settings of this game hand every client such as where the assets lie.
     private static List<String> gameWords() throws IOException {
         List<String> words = new ArrayList<>();
         boolean reading = false;

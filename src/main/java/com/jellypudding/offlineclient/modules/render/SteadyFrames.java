@@ -14,14 +14,11 @@ import net.minecraft.util.Util;
 
 import java.util.concurrent.TimeUnit;
 
-// Trims the render distance the game draws whilst frames are slow. The game's own setting is
-// never touched. Only what the renderer reads is lowered and the options file keeps yours
-// whatever happens to the game.
+// The game's own setting is never touched. Only what the renderer reads is lowered.
 public final class SteadyFrames extends Module {
 
     // The game counts its frames once a second.
     private static final long READING_MILLIS = TimeUnit.SECONDS.toMillis(1);
-    // Slow readings in a row before the distance comes down.
     private static final int SLOW_READINGS = 2;
     // A reading this close to the cap the game draws at says nothing about the distance.
     private static final double AT_CEILING = 0.95;
@@ -31,9 +28,7 @@ public final class SteadyFrames extends Module {
     private static final long BUILT_MILLIS = TimeUnit.SECONDS.toMillis(1);
     // A world that has just loaded is still building its sections.
     private static final long JOIN_SETTLE_MILLIS = TimeUnit.SECONDS.toMillis(10);
-    // Readings wait at most this long for sections that keep coming in.
     private static final long LONGEST_SETTLE_MILLIS = TimeUnit.MINUTES.toMillis(1);
-    // How many times the wait before a raise to one distance can double.
     private static final int MOST_DOUBLINGS = 6;
     // The game draws no fewer chunks than this.
     private static final int FEWEST_CHUNKS = 2;
@@ -51,20 +46,15 @@ public final class SteadyFrames extends Module {
     private final WorldWatch world = new WorldWatch();
     // The distance drawn whilst it is trimmed. Nought whilst yours is drawn.
     private int lowered;
-    // Your render distance as the game last worked it out with the server's limit.
     private int own;
     private long lastReading;
     private int slow;
     private int quick;
-    // The last change and the least time readings wait after it.
     private long changedAt;
     private long settleFor;
     private boolean settling;
-    // Since when every section has been built.
     private long builtSince = BUILDING;
-    // The distance the last change raised to. Nought after a drop.
     private int raisedTo;
-    // How often a raise to each distance came straight back down.
     private final Int2IntOpenHashMap bounces = new Int2IntOpenHashMap();
 
     public SteadyFrames() {
@@ -94,13 +84,11 @@ public final class SteadyFrames extends Module {
         world.forget();
     }
 
-    // The render distance the game draws. The game asks every frame with your own.
     public int effective(int yours) {
         own = yours;
         return drawn();
     }
 
-    // Your render distance as the game last worked it out before the trim.
     public int own() {
         return own;
     }
@@ -194,19 +182,16 @@ public final class SteadyFrames extends Module {
         settle(now, SETTLE_MILLIS);
     }
 
-    // True when one chunk more would still keep the target by the same square rule.
     private static boolean roomForOneMore(int fps, int drawn, double wanted) {
         double share = (double) drawn / (drawn + 1);
         return fps * share * share >= wanted;
     }
 
-    // The readings in a row a raise to that distance waits for. The wait doubles each time a
-    // raise to it came straight back down.
+    // The wait doubles each time a raise to that distance came straight back down.
     private long raiseWait(int distance) {
         return (long) raiseAfter.getInt() << Math.min(bounces.get(distance), MOST_DOUBLINGS);
     }
 
-    // The most frames a second the game lets itself draw with your frame limit and vertical sync.
     private double ceiling() {
         double ceiling = Double.MAX_VALUE;
         int limit = mc.options.framerateLimit().get();

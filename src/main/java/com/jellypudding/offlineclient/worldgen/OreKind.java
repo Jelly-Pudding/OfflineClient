@@ -1,8 +1,7 @@
 package com.jellypudding.offlineclient.worldgen;
 
-// The ores a player can ask to see. Stone and deepslate forms of one ore share a kind.
-// The colour is the one every ore finder draws the kind in until the player picks another.
-// A large vein is made of the blocks of a plain ore and is still a pick of its own.
+// Stone and deepslate forms of one ore share a kind. A large vein is made of the blocks of a plain
+// ore and is still a pick of its own.
 public enum OreKind {
     COAL("Coal", 0xFF909090),
     IRON("Iron", 0xFFD8C0A8),

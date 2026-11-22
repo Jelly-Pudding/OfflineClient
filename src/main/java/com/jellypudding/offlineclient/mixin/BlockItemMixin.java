@@ -32,7 +32,6 @@ public abstract class BlockItemMixin {
         }
     }
 
-    // A block you place has gone down on your screen.
     @Inject(
         method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/InteractionResult;",
         at = @At("RETURN"))

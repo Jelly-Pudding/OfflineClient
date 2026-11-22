@@ -50,7 +50,6 @@ public final class TrialEsp extends Module {
     private static final int JUDGE_TICKS = 60;
     // Your place on the server can trail the one you see. A block of room keeps clear of the edge.
     private static final double NEAR_MARGIN = 1;
-    // A label sits this far over the top of the spawner.
     private static final double LABEL_LIFT = 0.3;
     private static final int TEXT = 0xFFFFFFFF;
 
@@ -69,7 +68,6 @@ public final class TrialEsp extends Module {
     private final WorldWatch world = new WorldWatch();
     // The tick you came near each vault you still stand near.
     private final Map<BlockPos, Integer> nearSince = new HashMap<>();
-    // Rebuilt by every scan.
     private List<Vault> vaultsSeen = List.of();
     private List<TrialSpawnerBlockEntity> trialSpawners = List.of();
     private int open;
@@ -133,7 +131,6 @@ public final class TrialEsp extends Module {
         open = (int) found.stream().filter(vault -> !vault.looted()).count();
     }
 
-    // True once the vault is known to have rewarded you. Standing near it long enough settles it.
     private boolean judge(VaultBlockEntity vault, Set<BlockPos> near) {
         BlockPos pos = vault.getBlockPos();
         BlockMarks looted = BlockMarks.lootedVaults();
@@ -164,7 +161,7 @@ public final class TrialEsp extends Module {
         return vault.getSharedData().getConnectedPlayers().contains(mc.player.getUUID());
     }
 
-    // Such as Zombie 0.6s. A spawner whose time has come waits for room for its next mob.
+    // A spawner whose time has come waits for room for its next mob.
     private static String labelOf(TrialSpawnerStateData.Packed data, double now) {
         double left = (data.nextMobSpawnsAt() - now) / SharedConstants.TICKS_PER_SECOND;
         String when = left > 0 ? String.format(Locale.ROOT, "%.1fs", left) : "due";

@@ -36,12 +36,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
-// Your statistics on this server as the server itself counts them. The rows come in the
-// order you drag them.
 public final class StatsElement extends RowsElement {
 
-    // The rows on offer with the item each shows beside it in the settings. The editor shows a
-    // made up amount for each in the unit of its statistic until the server first answers.
     public enum Row {
         PLAY_TIME(Items.CLOCK, SAMPLE_PLAYED),
         DISTANCE(Items.LEATHER_BOOTS, 4_270_000),
@@ -76,14 +72,10 @@ public final class StatsElement extends RowsElement {
     private static final long TICKS_PER_HOUR = TimeUnit.HOURS.toSeconds(1) * SharedConstants.TICKS_PER_SECOND;
     // A rate from less than a minute of play swings too wildly to read.
     private static final long LEAST_RATE_TICKS = TimeUnit.MINUTES.toSeconds(1) * SharedConstants.TICKS_PER_SECOND;
-    // Below this an hourly rate keeps a decimal.
     private static final double WHOLE_RATE = 10;
-    // A row with nothing to say yet.
     private static final long NOTHING = Long.MIN_VALUE;
-    // Three hours and twelve minutes of play in ticks behind the sample rows.
     private static final long SAMPLE_PLAYED = 230_400;
 
-    // Every way of getting about the game counts towards distance.
     private static final List<Identifier> TRAVEL = List.of(Stats.WALK_ONE_CM, Stats.CROUCH_ONE_CM,
         Stats.SPRINT_ONE_CM, Stats.WALK_ON_WATER_ONE_CM, Stats.FALL_ONE_CM, Stats.CLIMB_ONE_CM, Stats.FLY_ONE_CM,
         Stats.WALK_UNDER_WATER_ONE_CM, Stats.MINECART_ONE_CM, Stats.BOAT_ONE_CM, Stats.PIG_ONE_CM,
@@ -93,8 +85,6 @@ public final class StatsElement extends RowsElement {
     private static final Set<Row> FIRST_SHOWN = EnumSet.of(Row.PLAY_TIME, Row.DISTANCE, Row.BLOCKS_MINED,
         Row.MOBS_KILLED, Row.PLAYERS_KILLED, Row.DEATHS, Row.SINCE_DEATH);
 
-    // A picked list that narrows one row to some entries or leaves some out. An empty list
-    // counts every entry. It only shows whilst its row does.
     private static final class Filter<T> {
 
         private final RegistryListSetting<T> list;
@@ -125,7 +115,6 @@ public final class StatsElement extends RowsElement {
             return isEmpty() || mode.getValue().admits(list.contains(entry));
         }
 
-        // A row counting one entry alone is named after it. Null otherwise.
         String onlyName() {
             Set<T> picked = list.resolved();
             return mode.is(ListMode.WHITELIST) && picked.size() == 1 ? list.displayName(picked.iterator().next())
@@ -158,7 +147,6 @@ public final class StatsElement extends RowsElement {
         "How often the server is asked for your statistics.", 5, 1, 60, 1, " seconds");
     private final ColorSetting color = labelColor("Statistics colour",
         "Colour of the row names. The numbers stay white.");
-    // The sums walk every statistic you have.
     private final RowCache<String> lines = new RowCache<>(this::build);
 
     public StatsElement() {
@@ -173,12 +161,6 @@ public final class StatsElement extends RowsElement {
         add(period, perHour, refresh, color);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !lines().isEmpty();
-    }
-
-    // Until the server first answers the editor shows the chosen rows with made up numbers.
     private List<String> lines() {
         if (OfflineClient.MC.player == null) {
             return List.of();
@@ -214,8 +196,6 @@ public final class StatsElement extends RowsElement {
         return built;
     }
 
-    // What the statistic behind a row has counted. NOTHING for a row with nothing to say yet
-    // such as the time since your last death before you have died.
     private long amount(Row row, boolean visit, long elapsed, long played) {
         return switch (row) {
             case PLAY_TIME -> played;
@@ -237,7 +217,6 @@ public final class StatsElement extends RowsElement {
         };
     }
 
-    // How a row reads once its statistic has counted this much.
     private String line(Row row, long amount, long played) {
         String label = EnumSetting.label(row);
         return switch (row) {
@@ -278,7 +257,6 @@ public final class StatsElement extends RowsElement {
             visit);
     }
 
-    // A row narrowed to one entry takes that entry's name such as Diamond Ore mined.
     private <T> String filtered(String label, Filter<T> filter, String suffix, long amount, long played) {
         String only = filter.onlyName();
         return count(only == null ? label : only + suffix, amount, played);
@@ -298,7 +276,6 @@ public final class StatsElement extends RowsElement {
         return text(label, String.format(Locale.ROOT, "%.0f hearts", hearts), rate(hearts, played, ""));
     }
 
-    // How much of it comes in an hour of play. Null whilst the rate is off or too young to read.
     private String rate(double amount, long played, String unit) {
         if (!perHour.isOn() || played < LEAST_RATE_TICKS) {
             return null;
@@ -308,12 +285,10 @@ public final class StatsElement extends RowsElement {
         return "(" + number + unit + "/h)";
     }
 
-    // The name in the element's colour then the number in white and the rate in grey.
     private static String text(String label, String value, String rate) {
         return label + " §f" + value + (rate == null ? "" : " §7" + rate);
     }
 
-    // Two units at most such as 3d 4h or 12m 5s.
     private static String span(long ticks) {
         Duration time = Duration.ofSeconds(ticks / SharedConstants.TICKS_PER_SECOND);
         if (time.toDays() > 0) {
@@ -328,7 +303,6 @@ public final class StatsElement extends RowsElement {
         return time.toSeconds() + "s";
     }
 
-    // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds.
     @Override
     protected List<TextRow> rows(Font font) {
         return TextRow.lines(font, lines(), color);

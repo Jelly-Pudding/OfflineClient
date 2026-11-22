@@ -15,7 +15,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// Feeds the food in your hand to any animal that will take it.
 public final class AutoBreed extends EntityUseAura {
 
     public enum Age { ADULTS, BABIES, BOTH }

@@ -32,12 +32,10 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-// Walks to the blocks players put down near you and mines them one by one.
 public final class Salvage extends Module {
 
     public enum Targets { NEVER_NATURAL, PLACED, LIST }
 
-    // The most found blocks drawn at once with the nearest first.
     private static final int MAX_DRAWN = 512;
 
     private final EnumSetting<Targets> targets = new EnumSetting<>("Targets",
@@ -165,7 +163,6 @@ public final class Salvage extends Module {
         }
     }
 
-    // A new choice of blocks starts the search over.
     private void refreshTest() {
         Targets now = targets.getValue();
         Set<Block> list = Set.copyOf(blocks.resolved());
@@ -186,7 +183,6 @@ public final class Salvage extends Module {
         announced = false;
     }
 
-    // Says what the first full search found. False when a walk has nothing to do and stops.
     private boolean announce() {
         List<Find> near = results.stream().filter(find -> inWindow(find.pos())).toList();
         if (near.isEmpty()) {

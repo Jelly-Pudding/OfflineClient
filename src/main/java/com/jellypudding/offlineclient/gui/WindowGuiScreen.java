@@ -20,13 +20,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-// A single centred window with a category sidebar and a module list. The
-// other half of the ClickGUI style setting.
 public final class WindowGuiScreen extends GuiScreenBase {
 
     private static final int MARGIN = WindowParts.MARGIN;
     private static final int MODULE_ROW = 18;
-    // Click zones on the left and right of a module row.
     private static final int FAV_ZONE = 20;
     private static final int ARROW_ZONE = 18;
     private static final int PILL_WIDTH = 22;
@@ -35,25 +32,22 @@ public final class WindowGuiScreen extends GuiScreenBase {
     private static final String FAVOURITES = "Favourites";
     private static final String ENABLED = "Enabled";
     private static final String ALL = "All";
-    // The rows under the categories. They stay whatever is hidden.
     private static final List<String> LISTS = List.of(FAVOURITES, ENABLED, ALL);
     private static final String HINT =
         "Click a row to toggle. The arrow opens settings. The star favourites.";
 
     private static final String STATE_KEY = "window";
 
-    // Every tab there is. The tallies are kept in the same order.
+    // The tallies are kept in the same order.
     private final List<String> tabs = new ArrayList<>();
     private final int[] tabCounts;
-    // The tabs the sidebar lists. A hidden category has none.
     private final List<String> sidebar = new ArrayList<>();
     private final Set<String> expanded = new LinkedHashSet<>();
     private final SettingWidget.Drag drag = new SettingWidget.Drag();
     private final ScrollBar scrollBar = new ScrollBar();
 
-    // The modules on show. Refilled in place to avoid a per frame allocation.
+    // Refilled in place to avoid a per frame allocation.
     private final List<Module> listed = new ArrayList<>();
-    // Everything the text in the box finds with the closest answer first.
     private final List<Module> ranked = new ArrayList<>();
     private String rankedFor = "";
     // getAll builds a fresh list on every call.
@@ -74,7 +68,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         restoreSearch();
     }
 
-    // True when the layout held the window.
     private boolean restoreState() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(STATE_KEY) || !gui.get(STATE_KEY).isJsonObject()) {
@@ -106,7 +99,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         return array;
     }
 
-    // The panel layout keeps its own keys.
     @Override
     protected void saveState() {
         JsonObject state = new JsonObject();
@@ -162,7 +154,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         return windowY() + windowHeight() - descHeight() - 5;
     }
 
-    // The bar at the foot of the window goes away with the hover help.
     private int descHeight() {
         return GuiTheme.hoverHelp() ? WindowParts.FOOT_HEIGHT : 0;
     }
@@ -213,7 +204,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     // A search covers every category and not just the chosen sidebar row.
-    // The closest answer goes to the top. Favourites come first either way.
     private void refreshListed() {
         refreshRanked();
         listed.clear();
@@ -233,7 +223,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
     }
 
-    // A hidden module is left out of its category and of the list of them all.
     private boolean inTab(Module module, String name) {
         return switch (name) {
             case FAVOURITES -> Favourites.has(module);

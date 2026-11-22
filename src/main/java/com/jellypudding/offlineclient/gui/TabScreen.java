@@ -12,12 +12,10 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-// One tab of the GUI on a screen of its own. It opens from the game's menus where there is no
-// world for the GUI itself and goes back to the screen it was opened over.
+// It opens from the game's menus where there is no world for the GUI itself.
 public final class TabScreen extends ScaledScreen {
 
     private static final int TITLE_TOP = 10;
-    // Where the box of rows starts under the title.
     private static final int BOX_TOP = 26;
     private static final int BACK_WIDTH = 44;
     private static final int BACK_HEIGHT = 14;

@@ -52,10 +52,8 @@ public final class RenderSuite implements Suite {
     private static final int HEIGHT = 540;
     // The mobs of the case before die in a puff of smoke that hangs about for a few seconds.
     private static final int STILL_TICKS = 80;
-    // Long enough for a fade or a zoom to finish.
     private static final int SHOWN_TICKS = 30;
     private static final int STILL_GAP = 20;
-    // Pictures of the scene at rest before a module goes on.
     private static final int STILLS = 3;
     private static final float NORTH = 180;
     private static final float PIT_PITCH = 40;
@@ -82,8 +80,6 @@ public final class RenderSuite implements Suite {
     private static final String IN_LIST = "In module list";
     private static final Pattern NUMBER = Pattern.compile("[0-9]+");
 
-    // One module to look at. The scene may get something more for it before the first picture and
-    // settings go on in pairs of a name and a value.
     private record Sight(String module, Consumer<Rig> arrange, String... settings) {
     }
 
@@ -312,7 +308,6 @@ public final class RenderSuite implements Suite {
         world.fill(home.offset(-6, 0, -5), home.offset(-3, 4, -5), "stone");
     }
 
-    // A waypoint saved six blocks ahead of where the pictures are taken from.
     private void waypoint(Rig rig) {
         World world = rig.world();
         world.teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5 - 6, 180, 0);
@@ -345,7 +340,6 @@ public final class RenderSuite implements Suite {
         });
     }
 
-    // A sitting wolf that belongs to the player.
     private void pet(Rig rig) {
         Props.summon(rig, "wolf", home.offset(-1, 0, -3), "{NoAI:1b,PersistenceRequired:1b,Sitting:1b}");
         rig.world().command("execute as @e[type=wolf] run data modify entity @s Owner set from entity "
@@ -381,8 +375,6 @@ public final class RenderSuite implements Suite {
         rig.expect(trailed > plain + WALK_TICKS / 2, "A walk with Trail on left no more particles than one without");
     }
 
-    // The particles in the world straight after a walk that way. The game counts them by kind in
-    // one line of words and numbers.
     private static int particlesAfter(Rig rig, int key) {
         Motion.hold(rig, WALK_TICKS, key);
         String counts = rig.ask(mc -> mc.particleEngine.countParticles());
@@ -409,7 +401,6 @@ public final class RenderSuite implements Suite {
         }
     }
 
-    // The picture a few ticks after the server hurt the player.
     private static Path hurtView(Rig rig, String name) {
         rig.world().command("damage " + rig.world().player() + " 1");
         rig.ticks(HURT_TICKS);

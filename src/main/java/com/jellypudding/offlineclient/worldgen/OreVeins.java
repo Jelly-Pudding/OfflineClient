@@ -34,7 +34,6 @@ public final class OreVeins {
         void place(OreKind kind, int x, int y, int z);
     }
 
-    // The band of heights the game keeps each vein in.
     private static final Map<OreKind, OreVeinRule.VeinType> BANDS = Map.of(
         OreKind.IRON_VEIN, OreVeinRule.VeinType.IRON, OreKind.COPPER_VEIN, OreVeinRule.VeinType.COPPER);
 
@@ -44,20 +43,16 @@ public final class OreVeins {
     // A replay reads the veins of a chunk and its neighbours. This covers the widest range by far.
     private static final int REMEMBERED_CHUNKS = 1024;
 
-    // A dimension without large veins.
     public static final OreVeins NONE = new OreVeins(null, List.of());
 
-    // One vein rule of the dimension and the pick its ore shows as.
     private record Vein(OreVeinRule rule, OreKind kind, int minY, int maxY) {
     }
 
     private final SeedWorld world;
     private final List<Vein> veins;
     private final Map<BlockState, OreKind> kinds = new HashMap<>();
-    // The heights outside which no vein of the dimension reaches.
     private final int lowest;
     private final int highest;
-    // The ore and raw ore blocks of each chunk worked out by block position.
     private final Map<Long, Long2ObjectMap<BlockState>> chunks = new BoundedMap<>(REMEMBERED_CHUNKS, true);
     private long lastKey;
     private Long2ObjectMap<BlockState> last;
@@ -82,8 +77,7 @@ public final class OreVeins {
         this.highest = high;
     }
 
-    // The vein rules the dimension runs on all of its ground. Its material rule is a sequence
-    // and the first step that answers a block wins.
+    // The material rule of a dimension is a sequence and the first step that answers a block wins.
     private static List<Vein> veinsOf(SeedWorld world) {
         List<Vein> veins = new ArrayList<>();
         if (!(named(world.settings().materialRule().value()) instanceof SequenceRule steps)) {
@@ -107,8 +101,7 @@ public final class OreVeins {
         return rule instanceof MaterialRule.HolderHolder held ? held.holder().value() : rule;
     }
 
-    // The ore or raw ore block a vein put at a block. Null for the filler stone of a vein and for
-    // ground the veins left alone.
+    // Null for the filler stone of a vein and for ground the veins left alone.
     public BlockState lump(int x, int y, int z) {
         if (y < lowest || y > highest) {
             return null;
@@ -117,7 +110,6 @@ public final class OreVeins {
             .get(BlockPos.asLong(x, y, z));
     }
 
-    // Every vein ore block of the chunk the ground still holds.
     public void run(int chunkX, int chunkZ, OreSimulation.Ground ground, Sink sink) {
         if (veins.isEmpty()) {
             return;

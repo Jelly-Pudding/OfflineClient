@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.render;
 
-// Where a map sits on the screen and the land it shows. The middle of the box shows the centre
-// spot and the map turns about it. With no turn north points up.
+// The middle of the box shows the centre spot and the map turns about it. With no turn north points
+// up.
 public final class MapView {
 
     private final double centreX;
@@ -75,8 +75,7 @@ public final class MapView {
         return top + height / 2f;
     }
 
-    // How many pixels the land must reach from the middle across and down. A turning map needs
-    // its corners in every direction.
+    // A turning map needs its corners in every direction.
     public double reachAcross() {
         return turn == 0 ? width / 2.0 : Math.hypot(width, height) / 2;
     }
@@ -85,7 +84,6 @@ public final class MapView {
         return turn == 0 ? height / 2.0 : Math.hypot(width, height) / 2;
     }
 
-    // Where a world spot lands on the screen.
     public float screenX(double x, double z) {
         return middleX() + (float) turnedX((x - centreX) / zoom, (z - centreZ) / zoom);
     }
@@ -94,7 +92,6 @@ public final class MapView {
         return middleY() + (float) turnedY((x - centreX) / zoom, (z - centreZ) / zoom);
     }
 
-    // A world direction as it points on the screen.
     public double turnedX(double dx, double dz) {
         return dx * cos - dz * sin;
     }
@@ -103,7 +100,6 @@ public final class MapView {
         return dx * sin + dz * cos;
     }
 
-    // The world spot under a screen spot.
     public double worldX(double screenX, double screenY) {
         return centreX + ((screenX - middleX()) * cos + (screenY - middleY()) * sin) * zoom;
     }
@@ -112,7 +108,6 @@ public final class MapView {
         return centreZ + ((screenY - middleY()) * cos - (screenX - middleX()) * sin) * zoom;
     }
 
-    // True for a screen spot this many pixels or more inside the edge.
     public boolean inside(double screenX, double screenY, double inset) {
         return screenX >= left + inset && screenX <= left + width - inset
             && screenY >= top + inset && screenY <= top + height - inset;

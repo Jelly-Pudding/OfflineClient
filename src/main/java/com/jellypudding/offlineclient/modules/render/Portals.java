@@ -38,7 +38,6 @@ public final class Portals extends Module {
     private record Group(AABB box, int color) {
     }
 
-    // Ticks between merges. The boxes only move when a portal is built or broken.
     private static final int MERGE_INTERVAL = 20;
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -99,7 +98,6 @@ public final class Portals extends Module {
             || block == Blocks.END_GATEWAY || block == Blocks.END_PORTAL_FRAME;
     }
 
-    // Zero for a portal the settings hide.
     private int colorOf(Block block) {
         if (block == Blocks.NETHER_PORTAL) {
             return nether.isOn() ? netherColor.getColor() : 0;
@@ -152,7 +150,6 @@ public final class Portals extends Module {
         return result;
     }
 
-    // One box per patch of touching blocks.
     private static List<AABB> merge(Set<BlockPos> positions) {
         List<AABB> boxes = new ArrayList<>();
         Set<BlockPos> remaining = new HashSet<>(positions);

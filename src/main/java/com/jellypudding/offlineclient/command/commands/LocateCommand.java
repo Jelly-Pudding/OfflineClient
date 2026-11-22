@@ -47,7 +47,6 @@ import java.util.function.Function;
 public final class LocateCommand extends Command {
 
     private static final String BIOME = "biome";
-    // The waypoint link of an answer runs this form.
     private static final String MARK = "mark";
 
     // What the game's own biome search uses. How far it looks and the steps it takes across and up.
@@ -55,19 +54,15 @@ public final class LocateCommand extends Command {
     private static final int BIOME_STEP = 32;
     private static final int BIOME_HEIGHT_STEP = 64;
 
-    // A search still running after this long tells the player it is.
     private static final long SLOW_MILLIS = 2000;
 
-    // A question for the seeded world. It runs on the worker and hands back the lines to print.
-    // A search gives up once stopped answers true.
     @FunctionalInterface
     private interface Question {
         Runnable answer(SeedWorld world, BooleanSupplier stopped);
     }
 
-    // The line about the plain game goes out once on each server.
     private final ServerWatch told = new ServerWatch();
-    // Counts the searches asked for. Only the latest one answers.
+    // Only the latest search answers.
     private volatile int asked;
 
     public LocateCommand() {
@@ -104,7 +99,6 @@ public final class LocateCommand extends Command {
         }
     }
 
-    // False after telling the player why nothing can be worked out here.
     private static boolean canAnswer(LocalPlayer player) {
         if (SeedWorlds.seed().isEmpty()) {
             String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
@@ -119,7 +113,6 @@ public final class LocateCommand extends Command {
         return true;
     }
 
-    // A whole number after the name asks for that one counted from the nearest.
     private void structure(LocalPlayer player, String[] args) {
         OptionalInt last = args.length > 1 ? count(args[args.length - 1]) : OptionalInt.empty();
         int nth = last.orElse(1);
@@ -140,7 +133,6 @@ public final class LocateCommand extends Command {
         }
         String name = name(args, 1, args.length);
         BlockPos origin = player.blockPosition();
-        // The search only asks the level how tall it is.
         LevelReader level = player.level();
         ask(player, (world, stopped) -> biome(world, name, origin, level));
     }
@@ -153,14 +145,11 @@ public final class LocateCommand extends Command {
         }
     }
 
-    // The typed words as one id path such as end_city. A namespace in front is dropped.
     private static String name(String[] args, int from, int to) {
         String typed = String.join("_", Arrays.copyOfRange(args, from, to)).toLowerCase(Locale.ROOT);
         return typed.substring(typed.indexOf(':') + 1);
     }
 
-    // Puts a question to the seeded world of the dimension the player is in. The answer is dropped
-    // when a later search was asked for or the player has left that world.
     private void ask(LocalPlayer player, Question question) {
         int ticket = ++asked;
         String place = ServerInfo.worldKey();
@@ -225,8 +214,8 @@ public final class LocateCommand extends Command {
         return () -> found(what, nth, find.certain(), spot, away, next);
     }
 
-    // The structures of a set that accept a biome of this dimension. The game keeps a whole set for
-    // a dimension as soon as one of them does.
+    // The game keeps a whole set for a dimension as soon as one of its structures accepts a biome
+    // there.
     private static List<Holder<Structure>> startable(SeedWorld world, StructureSet set) {
         Set<Holder<Biome>> biomes = world.generator().getBiomeSource().possibleBiomes();
         List<Holder<Structure>> startable = new ArrayList<>();
@@ -238,8 +227,6 @@ public final class LocateCommand extends Command {
         return startable;
     }
 
-    // A typed name fits every id that holds its words in a row. Village fits each kind of village
-    // and portal fits each ruined portal.
     private static boolean fits(String id, String typed) {
         return ("_" + id + "_").contains("_" + typed + "_");
     }
@@ -271,12 +258,10 @@ public final class LocateCommand extends Command {
         return entry.unwrapKey().map(key -> key.identifier().getPath()).orElse("");
     }
 
-    // How far across the ground and which way the spot lies.
     private static String away(BlockPos origin, BlockPos spot, double distance) {
         return Notice.away(distance, Vec3.atCenterOf(origin), Vec3.atCenterOf(spot));
     }
 
-    // One answer. The next command when there is one finds the one after it by distance.
     private void found(String what, int nth, boolean certain, BlockPos spot, String away, String next) {
         MutableComponent line = Component.literal("§7The " + (nth == 1 ? "" : ordinal(nth) + " ") + "nearest §b"
                 + what + " §7is " + (certain ? "" : "likely ") + "§f" + away + "§7 at ")
@@ -296,7 +281,6 @@ public final class LocateCommand extends Command {
         }
     }
 
-    // Such as 2nd or 13th.
     private static String ordinal(int number) {
         int tens = number % 100;
         if (tens >= 11 && tens <= 13) {
@@ -310,7 +294,6 @@ public final class LocateCommand extends Command {
         };
     }
 
-    // The words run together with a capital each such as EndCity. Waypoints are named after it.
     private static String stem(String words) {
         StringBuilder stem = new StringBuilder();
         for (String word : words.split(" ")) {
@@ -356,7 +339,6 @@ public final class LocateCommand extends Command {
         return CommandManager.filter(current, biomes);
     }
 
-    // The id of every structure this dimension may start and the words the ids of a set share.
     private static Set<String> structureNames(SeedWorld world) {
         Set<String> names = new TreeSet<>();
         for (Holder<StructureSet> set : world.structures().possibleStructureSets()) {
@@ -373,7 +355,6 @@ public final class LocateCommand extends Command {
         return names;
     }
 
-    // The leading words every id starts with such as village. Empty when they share none.
     private static String shared(List<String> ids) {
         String[] words = ids.getFirst().split("_");
         for (int count = words.length; count > 0; count--) {

@@ -25,8 +25,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Steps a projectile forward with the same launch speed and gravity and drag as the
-// game until it lands. Trajectories draws the arcs and PearlTracker the pearls.
 public final class ProjectilePath {
 
     // A thrown item spawns this far below the eyes of whoever threw it.
@@ -83,8 +81,8 @@ public final class ProjectilePath {
     // Llama spit is gone the moment it touches water.
     private static final Launch LLAMA_SPIT = new Launch(0, 0.06, ProjectileUtil.AIR_DRAG, 0, 0, Motion.ARROW, true);
 
-    // The ticks of a flight one after another and how it ended. The landing is the block
-    // face it struck and stays null when it hit an entity or ran out of steps.
+    // The landing is the block face the flight struck and stays null when it hit an entity or ran
+    // out of steps.
     public record Path(List<Vec3> points, HitResult.Type type, List<Entity> hits, BlockHitResult landing) {
 
         // Where the projectile stood at the start of its last tick. A pearl
@@ -93,28 +91,24 @@ public final class ProjectilePath {
             return points.size() < 2 ? points.getFirst() : points.get(points.size() - 2);
         }
 
-        // Ticks spent in the air before the flight ended.
         public int ticks() {
             return points.size() - 1;
         }
     }
 
-    // A heading and a pitch in degrees.
     public record Aim(float yaw, float pitch) {
     }
 
-    // A pitch in degrees and the ticks a flight at it takes to get there.
     public record Arc(float pitch, double ticks) {
     }
 
-    // Where a projectile is at one moment in its flight.
     public record Shot(Vec3 pos, Vec3 velocity) {
     }
 
     private ProjectilePath() {
     }
 
-    // The physics of a projectile already in the air. Null for kinds that are not predicted.
+    // Null for kinds that are not predicted.
     private static Launch launchFor(Projectile projectile) {
         if (projectile instanceof ThrownTrident) {
             return TRIDENT;
@@ -146,7 +140,6 @@ public final class ProjectilePath {
         return null;
     }
 
-    // The rest of the flight of a projectile in the air. Null for kinds that are not predicted.
     public static Path of(Projectile projectile, int maxSteps) {
         Launch launch = launchFor(projectile);
         if (launch == null) {
@@ -177,8 +170,7 @@ public final class ProjectilePath {
         return new Aim((float) Math.toDegrees(Math.atan2(-x, z)), (float) Math.toDegrees(-Math.asin(y / power)));
     }
 
-    // The lowest arc that lands an arrow or a thrown trident loosed at this speed on the point.
-    // Null when the point is out of reach.
+    // The lowest arc. Null when the point is out of reach.
     public static Arc arrowArc(Vec3 from, Vec3 to, double speed) {
         double dx = to.x - from.x;
         double dz = to.z - from.z;
@@ -223,7 +215,7 @@ public final class ProjectilePath {
         return new Arc((float) -angleDegrees, flightTicks(angleDegrees, distance, speed));
     }
 
-    // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
+    // NaN if the arrow never gets there.
     private static double flightTicks(double angleDegrees, double distance, double speed) {
         double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
         double reach = horizontal / (1 - ProjectileUtil.AIR_DRAG);
@@ -246,7 +238,6 @@ public final class ProjectilePath {
         return (vertical + terminal) * fallen / (1 - ProjectileUtil.AIR_DRAG) - terminal * ticks;
     }
 
-    // The position and speed a projectile starts with when loosed at this yaw and pitch.
     public static Shot leaveHand(Entity shooter, Launch launch, Vec3 origin, double yaw, double pitch) {
         if (launch.motion() == Motion.BOBBER) {
             double sinYaw = Math.sin(Math.toRadians(-yaw) - Math.PI);
@@ -270,9 +261,8 @@ public final class ProjectilePath {
         return new Shot(pos, velocity);
     }
 
-    // Steps the projectile forward until it lands or the step budget runs out.
-    // A piercing arrow passes through that many entities before it stops. The thrower is
-    // left out until the projectile has flown clear of them as the game does.
+    // A piercing arrow passes through that many entities before it stops. The thrower is left out
+    // until the projectile has flown clear of them as the game does.
     public static Path fly(Entity shooter, Launch launch, Shot shot, int pierce, int maxSteps) {
         ClientLevel level = OfflineClient.MC.level;
         Entity thrower = shooter instanceof Projectile projectile && !projectile.leftOwner ? projectile.getOwner() : null;
@@ -347,7 +337,6 @@ public final class ProjectilePath {
         return new Path(points, type, hits, landing);
     }
 
-    // One tick of motion. Each projectile applies drag and gravity in its own order.
     private static Shot advance(Launch launch, Vec3 pos, Vec3 velocity, double drag) {
         return switch (launch.motion()) {
             case ARROW -> new Shot(pos.add(velocity),

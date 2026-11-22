@@ -5,9 +5,9 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 
 import java.lang.ref.WeakReference;
 
-// Notices a fresh join to a server. Every join builds a new connection listener
-// whilst a respawn or a dimension change keeps the one there is. A join counts once
-// the player has loaded into the world. The listener last seen is held weakly.
+// Every join builds a new connection listener whilst a respawn or a dimension change keeps the one
+// there is. A join counts once the player has loaded into the world. The listener last seen is held
+// weakly.
 public final class JoinWatch {
 
     private WeakReference<ClientPacketListener> seen = new WeakReference<>(null);
@@ -22,7 +22,6 @@ public final class JoinWatch {
         return true;
     }
 
-    // Takes the join the client is in as already seen.
     public void accept() {
         seen = new WeakReference<>(OfflineClient.MC.getConnection());
     }

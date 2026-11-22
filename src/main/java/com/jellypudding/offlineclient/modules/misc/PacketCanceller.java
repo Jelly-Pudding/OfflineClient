@@ -13,8 +13,7 @@ import net.minecraft.network.protocol.PacketType;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Both lists offer every packet kind the game knows. Login and configuration
-// packets can be dropped before a world exists.
+// Login and configuration packets can be dropped before a world exists.
 public final class PacketCanceller extends Module {
 
     private final ChoiceListSetting outgoing = new ChoiceListSetting("Outgoing",
@@ -26,7 +25,7 @@ public final class PacketCanceller extends Module {
         PacketNames::incoming)
         .onChange(this::resolve);
 
-    // The picked names resolved to types. Read from the netty thread and replaced whole.
+    // Read from the netty thread and replaced whole.
     private volatile Set<PacketType<?>> dropOutgoing = Set.of();
     private volatile Set<PacketType<?>> dropIncoming = Set.of();
 

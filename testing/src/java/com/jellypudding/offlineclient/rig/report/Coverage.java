@@ -37,7 +37,6 @@ final class Coverage {
     private Coverage() {
     }
 
-    // One line for the summary. Nothing when the run left no list of modules behind.
     static String write(Path out, List<Outcome> outcomes) throws IOException {
         Path list = out.resolve(Ledger.FILE);
         if (!Files.isRegularFile(list)) {

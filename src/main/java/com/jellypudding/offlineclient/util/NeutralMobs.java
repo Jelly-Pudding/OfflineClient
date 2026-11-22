@@ -10,8 +10,7 @@ import net.minecraft.world.entity.Mob;
 import java.util.List;
 import java.util.function.Supplier;
 
-// When a mob that only fights back counts. Endermen and piglins and wolves are the usual ones.
-// One rule covers them all and a list lifts single kinds out of it.
+// One rule covers every mob that only fights back and a list lifts single kinds out of it.
 public final class NeutralMobs {
 
     public enum When { ALWAYS, WHEN_ANGRY, NEVER }
@@ -36,7 +35,6 @@ public final class NeutralMobs {
         return new Setting<?>[] {when, always};
     }
 
-    // Makes the rule a sub option of another setting. The list stays under the rule.
     public void under(Setting<?> parent, Supplier<Boolean> shown) {
         when.under(parent, shown);
     }

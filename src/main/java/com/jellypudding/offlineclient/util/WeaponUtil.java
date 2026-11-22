@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
-// Picks the weapon for a hit. AutoWeapon and KillAura and AttributeSwap share it.
 // Every search covers the inventory up to a limit. The hotbar size keeps it to the hotbar.
 public final class WeaponUtil {
 
@@ -20,7 +19,6 @@ public final class WeaponUtil {
     private WeaponUtil() {
     }
 
-    // The slot holding the strongest weapon against this target or minus one.
     public static int bestWeaponSlot(LivingEntity target, int limit) {
         return bestWeaponSlot(target, true, DEFAULT_MARGIN, true, limit);
     }
@@ -48,14 +46,12 @@ public final class WeaponUtil {
             skipBreaking, limit);
     }
 
-    // The sword or axe with the fastest swing.
     public static int fastestWeaponSlot(boolean skipBreaking, int limit) {
         return bestSlot(stack -> stack.is(ItemTags.SWORDS) || stack.is(ItemTags.AXES),
             stack -> ItemUtil.attributeValue(stack, Attributes.ATTACK_SPEED, EquipmentSlot.MAINHAND),
             skipBreaking, limit);
     }
 
-    // The slot of the highest scoring stack of the kind or minus one.
     private static int bestSlot(Predicate<ItemStack> kind, ToDoubleFunction<ItemStack> score,
                                 boolean skipBreaking, int limit) {
         int best = -1;
@@ -78,7 +74,6 @@ public final class WeaponUtil {
         return OfflineClient.MC.player.getInventory().getItem(slot);
     }
 
-    // Damage one full strength hit would deal after their armour and your own effects.
     private static double damageAgainst(ItemStack stack, LivingEntity target) {
         return DamageUtil.attackDamage(OfflineClient.MC.player, target, stack);
     }

@@ -30,12 +30,11 @@ public final class AutoReconnect extends Module {
     private final BoolSetting connectLog = new BoolSetting("Connect log",
         "Shows the newest game log lines on the connecting and disconnected screens.", false);
 
-    // The last server joined. Kept even whilst the module is off and saved for the next game.
-    // Switched on after a disconnect it still knows where to go.
+    // Kept even whilst the module is off and saved for the next game.
     private static ServerData lastServer = LastServer.read();
 
-    // Every join this module has started by itself after a disconnect. A button press never
-    // counts. A flight the connection cut short only goes on after one.
+    // A button press never counts. A flight the connection cut short only goes on after a join this
+    // module made.
     private static int joinsMade;
 
     private int countdown = -1;
@@ -71,7 +70,7 @@ public final class AutoReconnect extends Module {
         return connectLog.isOn();
     }
 
-    // Seconds left rounded to one place. Below zero whilst nothing is counting.
+    // Below zero whilst nothing is counting.
     public double secondsLeft() {
         return countdown < 0 ? -1 : Math.round(countdown / 2f) / 10.0;
     }
@@ -80,13 +79,13 @@ public final class AutoReconnect extends Module {
         return lastServer != null;
     }
 
-    // The address of the last server joined. Null before the first join and after a realm whose
-    // address only lets you in through the realm menu.
+    // Null before the first join and after a realm whose address only lets you in through the realm
+    // menu.
     public static String lastAddress() {
         return lastServer == null || lastServer.isRealm() ? null : lastServer.ip;
     }
 
-    // Seconds before a dropped connection is joined again. Below zero whilst it will not be.
+    // Below zero whilst a dropped connection will not be joined again.
     public static double rejoinsIn() {
         AutoReconnect module = Modules.active(AutoReconnect.class);
         return module == null || lastServer == null || NameStore.get().checkedName() != null ? -1
@@ -97,12 +96,10 @@ public final class AutoReconnect extends Module {
         return joinsMade;
     }
 
-    // True whilst you play on a server there is a way back to.
     public static boolean canRejoin() {
         return canReconnect() && !mc.isLocalServer();
     }
 
-    // Leaves the server and joins it again straight away.
     public static void rejoin() {
         Leave.toMenu();
         connect();
@@ -113,13 +110,12 @@ public final class AutoReconnect extends Module {
         connect();
     }
 
-    // Joins again under another name. The name stays in use for later joins.
+    // The name stays in use for later joins.
     public void reconnectAs(String name) {
         NameStore.get().use(name);
         reconnectNow();
     }
 
-    // The button on the screen flips the module and starts the wait again.
     public void toggleFromScreen() {
         countdown = -1;
         toggle();
@@ -161,7 +157,7 @@ public final class AutoReconnect extends Module {
         }
     }
 
-    // Cancelling the connection goes back to the screen that was open. False when no join started.
+    // Cancelling the connection goes back to the screen that was open.
     private static boolean connect() {
         Screen parent = mc.gui.screen();
         if (lastServer == null || parent == null) {

@@ -8,10 +8,8 @@ import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 
-// A live value in braces is filled in first. Half your x is {x}/2.
 public final class CalcCommand extends Command {
 
-    // Digits kept after the point.
     private static final int DECIMALS = 6;
 
     // Past this a number is written with a power of ten. Its digits would fill the chat.
@@ -39,7 +37,6 @@ public final class CalcCommand extends Command {
             Component.literal("§7" + sum + " §8= §b" + result + stacks(answer.value())), result));
     }
 
-    // A whole count past one stack is also said in stacks such as 27 stacks and 3.
     private static String stacks(double value) {
         int stack = Item.DEFAULT_MAX_STACK_SIZE;
         if (value != Math.rint(value) || value <= stack || value > Integer.MAX_VALUE) {

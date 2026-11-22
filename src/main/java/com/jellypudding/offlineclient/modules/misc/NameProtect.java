@@ -24,25 +24,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-// Renames are client side only. Nobody else on the server sees them.
 // Chat and the tab list and the name tags and tracers all ask this for the display name.
 public final class NameProtect extends Module {
 
     private static final String DEFAULT_ALIAS = "Player";
 
-    // How many other players can be renamed one by one.
     private static final int SLOTS = 16;
 
-    // One name swapped for another. A null colour keeps whatever style the text had.
+    // A null colour keeps whatever style the text had.
     private record Rename(String from, String to, Integer colour) {
     }
 
-    // Every rename in force by real name and the same renames with the longest names first. A
-    // name that starts with another one is then never half swapped.
+    // With the longest names first a name that starts with another one is never half swapped.
     private record Renames(Map<String, Rename> byName, List<Rename> longestFirst) {
     }
 
-    // The settings for one renamed player. The name row folds the rest away.
     private static final class Slot {
 
         final TextSetting player;
@@ -65,7 +61,6 @@ public final class NameProtect extends Module {
                 .under(paint, () -> slot < count.getInt() && paint.isOn());
         }
 
-        // Null whilst either box is blank.
         Rename rename() {
             if (player.isBlank() || shownAs.isBlank()) {
                 return null;
@@ -93,7 +88,6 @@ public final class NameProtect extends Module {
     private final BoolSetting renameAll = new BoolSetting("Rename everyone",
         "Gives every other player on your screen a numbered name like Player1.", false);
 
-    // The number handed to each player the blanket rename has met.
     private final Map<String, String> numbered = new HashMap<>();
     // Built on first use. Every name drawn in a frame asks for it. A tick drops it to take in the
     // settings and a tab list packet drops it to take in who is online.
@@ -122,8 +116,7 @@ public final class NameProtect extends Module {
         renames = null;
     }
 
-    // ClientPacketListenerMixin calls this once the game has applied a tab list packet. Rename
-    // everyone numbers whoever is on that list.
+    // ClientPacketListenerMixin calls this once the game has applied a tab list packet.
     public void onTabListChange() {
         renames = null;
     }
@@ -133,7 +126,6 @@ public final class NameProtect extends Module {
         return hideSkins.isOn();
     }
 
-    // What the name reads as on this screen. Unchanged whilst the module is off.
     public String display(String name) {
         if (!isEnabled()) {
             return name;
@@ -142,7 +134,6 @@ public final class NameProtect extends Module {
         return rename == null ? name : rename.to();
     }
 
-    // The same player keeps the same number for as long as the module is on.
     private String numberFor(String name) {
         String found = numbered.get(name);
         if (found == null) {
@@ -211,9 +202,8 @@ public final class NameProtect extends Module {
         return result;
     }
 
-    // Copies the text across with every whole word rename swapped in. A colour code acts only
-    // inside the piece of text that holds it. Each piece cut off starts in the style the codes
-    // before it left in force.
+    // A colour code acts only inside the piece of text that holds it. Each piece cut off starts in
+    // the style the codes before it left in force.
     private static void append(MutableComponent result, String text, Style style,
                                List<Rename> renames) {
         int from = 0;
@@ -240,8 +230,8 @@ public final class NameProtect extends Module {
         appendPiece(result, text, from, text.length(), inForce, style);
     }
 
-    // Copies the text from one index to the other across and hands back the style its codes
-    // leave in force. A reset code goes back to the style of the whole part as it does uncut.
+    // Hands back the style its codes leave in force. A reset code goes back to the style of the
+    // whole part as it does uncut.
     private static Style appendPiece(MutableComponent result, String text, int from, int to,
                                      Style startStyle, Style own) {
         Style base = startStyle;

@@ -72,7 +72,6 @@ public final class ServerSpoof extends Module {
     // Far more packs than a server stacks. A flood of pushes drops the eldest.
     private static final int MOST_HELD = 32;
 
-    // Lines that wait for a world to be said in. A flood of pushes fills no more than this.
     private static final int MOST_NOTICES = 8;
 
     // The longest name the DNS holds.
@@ -82,7 +81,6 @@ public final class ServerSpoof extends Module {
     // of the server could read as the address and identity of another player.
     private static final Pattern LABEL = Pattern.compile("[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?");
 
-    // A host shown in chat is cut to this.
     private static final int SHOWN_HOST = 60;
 
     private final TextSetting brand = new TextSetting("Brand",
@@ -112,14 +110,13 @@ public final class ServerSpoof extends Module {
     private final BoolSetting ignoreBlocked = new BoolSetting("Ignore blocked list",
         "Lets you join servers that Mojang has put on its blocked list.", true);
 
-    // Every pack answered for on this connection. Written on the netty thread and read on others.
+    // Written on the netty thread and read on others.
     private final Map<UUID, HeldPack> held = Collections.synchronizedMap(new BoundedMap<>(MOST_HELD));
     // Filled from any thread and said on the game thread once there is a world to say them in.
     private final Queue<Component> notices = new ConcurrentLinkedQueue<>();
-    // True once the player has heard of a probe. A new connection or switching off forgets it.
     private boolean probeTold;
-    // Set as each join starts. True whilst the game's own connection went straight to an address on
-    // your own network. Read on a download thread.
+    // True whilst the game's own connection went straight to an address on your own network. Read
+    // on a download thread.
     private volatile boolean joinedAtHome;
 
     public ServerSpoof() {
@@ -159,11 +156,9 @@ public final class ServerSpoof extends Module {
         return isEnabled() && freshPacks.isOn();
     }
 
-    // True whilst the words of a text the server sent go back to it the way a game without mods
-    // reads them. Read by the sign and anvil mixins. A world of your own has nobody to hide from.
-    // The words a text reads as in a game with no mods. Null whilst mod text is not hidden. A
-    // text that asks for what only a mod knows is the server looking for mods. The player hears
-    // of the first one on each connection.
+    // Read by the sign and anvil mixins. Null whilst mod text is not hidden. A world of your own
+    // has nobody to hide from. A text that asks for what only a mod knows is the server looking for
+    // mods.
     public static String plainWords(Component text) {
         ServerSpoof spoof = Modules.active(ServerSpoof.class);
         if (spoof == null || !spoof.plainText.isOn() || mc.isLocalServer()) {
@@ -177,9 +172,8 @@ public final class ServerSpoof extends Module {
         return UnmoddedText.flatten(text);
     }
 
-    // Called by ConnectionMixin on the thread that opens a join to a server. It runs whether the
-    // module is on or not. Whatever an earlier join left waiting goes first. Hands back the host the
-    // handshake names.
+    // Called by ConnectionMixin on the thread that opens a join whether the module is on or not.
+    // Hands back the host the handshake names.
     public String joining(Connection connection, String typed) {
         held.clear();
         notices.clear();
@@ -205,8 +199,6 @@ public final class ServerSpoof extends Module {
         return plain;
     }
 
-    // The name the way the game sends one with a dot between labels. Null for anything that is not
-    // a plain host name.
     private static String plainHost(String chosen) {
         String ascii;
         try {
@@ -225,8 +217,7 @@ public final class ServerSpoof extends Module {
         return ascii;
     }
 
-    // A download of a server pack that keeps off your own network. Null whilst the switch is off.
-    // Read by HttpUtilMixin on a download thread.
+    // Read by HttpUtilMixin on a download thread. Null whilst the switch is off.
     public CheckedDownload guardedDownload(URL pack, java.net.Proxy route) {
         return homeGuard.isOn() ? new CheckedDownload(pack, route, this::refuseHome) : null;
     }
@@ -311,15 +302,15 @@ public final class ServerSpoof extends Module {
         PacketUtil.send(new ServerboundResourcePackPacket(packet.id(), action));
     }
 
-    // A pack the server took back cannot be loaded after that. The game takes it off by itself where
-    // the player loaded it first. Null takes them all back.
+    // The game takes a pack off by itself where the player loaded it first. Null takes them all
+    // back.
     private void withdraw(UUID id) {
         held.replaceAll((heldId, pack) ->
             id == null || id.equals(heldId) ? new HeldPack(pack.push(), false) : pack);
     }
 
-    // The same test the game makes before it downloads a pack. A stricter parse would answer
-    // some addresses differently from the game. Null for an address the game refuses.
+    // The same test the game makes before it downloads a pack. A stricter parse would answer some
+    // addresses differently from the game.
     @SuppressWarnings("deprecation")
     private static URL webAddress(String url) {
         try {
@@ -353,9 +344,8 @@ public final class ServerSpoof extends Module {
         }
     }
 
-    // Loads a pack held back on this connection through the game's own pack source. Null loads
-    // every one in the order the server sent them. What the game then reports about them never
-    // leaves. Hands back how many it started on.
+    // Null loads every held pack in the order the server sent them. What the game then reports
+    // about them never leaves. Hands back how many it started on.
     public int loadHeld(UUID only) {
         List<ClientboundResourcePackPushPacket> waiting;
         synchronized (held) {
@@ -375,7 +365,6 @@ public final class ServerSpoof extends Module {
         return waiting.size();
     }
 
-    // Names are matched anywhere in the channel with case ignored.
     private boolean isFingerprint(Identifier id) {
         String full = id.toString().toLowerCase(Locale.ROOT);
         for (String name : channels.all()) {

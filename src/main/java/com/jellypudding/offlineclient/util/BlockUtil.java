@@ -95,7 +95,6 @@ public final class BlockUtil {
     // The server takes a click on a block up to one block past the player's reach.
     private static final double SERVER_REACH_SLACK = 1;
 
-    // The neighbours a block is built up from. Below first and then the four sides.
     public static final List<Direction> BELOW_THEN_SIDES = List.of(
         Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST);
 
@@ -130,7 +129,6 @@ public final class BlockUtil {
             && !state.is(Blocks.COBWEB) && !state.is(Blocks.BAMBOO_SAPLING);
     }
 
-    // Standing in or on one of these hurts or traps the player.
     public static boolean harmful(BlockState state) {
         Block block = state.getBlock();
         return block instanceof BaseFireBlock
@@ -156,8 +154,7 @@ public final class BlockUtil {
         return cracks == null || cracks.isEmpty() ? -1 : cracks.last().getProgress();
     }
 
-    // True whilst someone other than you or a friend is breaking the block. Every crack the
-    // server sends carries the id of whoever makes it.
+    // Every crack the server sends carries the id of whoever makes it.
     public static boolean minedByOthers(BlockPos pos) {
         SortedSet<BlockDestructionProgress> cracks = MC.level.destructionProgress().get(pos.asLong());
         if (cracks == null) {
@@ -171,12 +168,10 @@ public final class BlockUtil {
         return false;
     }
 
-    // The three coordinates with spaces between.
     public static String text(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
-    // Reads back a position that text wrote. Null when the text is not three whole numbers.
     public static BlockPos parse(String text) {
         String[] parts = text.trim().split("\\s+");
         if (parts.length != 3) {
@@ -258,20 +253,16 @@ public final class BlockUtil {
         return MC.player.getBoundingBox().intersects(block);
     }
 
-    // The block under the crosshair or null when it rests on anything else.
     public static BlockHitResult aimedBlock() {
         return MC.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }
 
-    // Where a look straight ahead from the eyes ends within the range. A miss names the empty
-    // block at the far end. The camera plays no part and Freecam cannot move it. The look
-    // starts from the eyes and view of this moment as the crosshair does.
+    // A miss names the empty block at the far end. The camera plays no part and Freecam cannot move
+    // it.
     public static BlockHitResult look(double range) {
         return (BlockHitResult) MC.player.pick(range, 1, false);
     }
 
-    // The empty block the eyes look into at the end of the range. Null when the look meets a
-    // block first or the spot is outside the world or cannot take a block.
     public static BlockPos airSpot(double range) {
         BlockHitResult hit = look(range);
         if (hit.getType() != HitResult.Type.MISS) {
@@ -290,7 +281,6 @@ public final class BlockUtil {
         return MC.player.getAttributeValue(Attributes.BLOCK_INTERACTION_RANGE);
     }
 
-    // The furthest from the eyes the server takes a click on a block.
     public static double serverReachLimit() {
         return serverBlockReach() + SERVER_REACH_SLACK;
     }
@@ -306,12 +296,10 @@ public final class BlockUtil {
         return reachTo(pos, MC.player.getEyePosition());
     }
 
-    // From eyes somewhere else such as a spot the player could stand on.
     public static double reachTo(BlockPos pos, Vec3 eye) {
         return eye.distanceTo(nearestPoint(pos, eye));
     }
 
-    // True when the server takes a click on this block.
     public static boolean serverReaches(BlockPos pos) {
         return serverReaches(reachTo(pos));
     }
@@ -320,7 +308,6 @@ public final class BlockUtil {
         return distance < serverReachLimit();
     }
 
-    // Within the range a module allows and the server takes.
     public static boolean reaches(BlockPos pos, double range) {
         return reaches(pos, MC.player.getEyePosition(), range);
     }
@@ -330,12 +317,10 @@ public final class BlockUtil {
         return distance <= range && serverReaches(distance);
     }
 
-    // How far away a spot may be. One out of sight gets the walls range.
     public static double reachFor(Vec3 aim, double range, double wallsRange) {
         return canSee(aim) ? range : wallsRange;
     }
 
-    // Near enough to the eyes for a click on the block.
     public static boolean inReach(BlockPos pos) {
         return distanceTo(pos) <= serverBlockReach();
     }
@@ -350,14 +335,12 @@ public final class BlockUtil {
         return isReplaceable(clicked) ? clicked : clicked.relative(hit.getDirection());
     }
 
-    // True whilst any part of the box is inside a cobweb. As in vanilla a web that
-    // only touches the outside of the box does not count.
+    // As in vanilla a web that only touches the outside of the box does not count.
     public static boolean inCobweb(Entity entity) {
         return entity.level().getBlockStates(entity.getBoundingBox().deflate(1.0E-5))
             .anyMatch(state -> state.is(Blocks.COBWEB));
     }
 
-    // True when any block the box reaches into holds lava.
     public static boolean touchesLava(Level level, AABB box) {
         return level.getBlockStates(box).anyMatch(state -> state.getFluidState().is(FluidTags.LAVA));
     }
@@ -367,7 +350,6 @@ public final class BlockUtil {
         return level.getBlockStates(box).anyMatch(state -> state.is(Blocks.POWDER_SNOW));
     }
 
-    // Places against the neighbour in the support direction. True when the click was taken.
     public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing) {
         return place(target, support, rotate, swing, InteractionHand.MAIN_HAND);
     }
@@ -386,7 +368,6 @@ public final class BlockUtil {
         return click(new BlockHitResult(hit, face, against, false), swing, hand);
     }
 
-    // Right clicks a face. True when the game accepted the click.
     private static boolean click(BlockHitResult hit, boolean swing, InteractionHand hand) {
         InteractionResult outcome = MC.gameMode.useItemOn(MC.player, hand, hit);
         if (!outcome.consumesAction()) {
@@ -398,10 +379,9 @@ public final class BlockUtil {
         return true;
     }
 
-    // A click that places at pos. A null support clicks the empty spot itself.
+    // A null support clicks the empty spot itself.
     public record Placement(BlockPos pos, Direction support, Vec3 hit) {
 
-        // Turns the way the face mode says then clicks and swings. False when nothing went down.
         public boolean place(FaceMode face, SwingMode swing) {
             face.face(hit, RotationPriority.PLACE);
             boolean placed = support == null
@@ -416,10 +396,8 @@ public final class BlockUtil {
         }
     }
 
-    // A click the server takes that puts a block at the spot. Against a neighbour face when one
-    // is in reach and straight into the empty spot otherwise. Null when neither would land.
-    // The click into the spot lands on its point nearest the eyes. The server takes any point
-    // inside the block.
+    // Against a neighbour face when one is in reach and straight into the empty spot otherwise.
+    // Null when neither would land. The server takes any point inside the block.
     public static Placement reachablePlacement(BlockPos pos, double range, boolean needSight) {
         Placement leaning = placementInReach(pos, range, needSight);
         if (leaning != null && serverReaches(pos.relative(leaning.support()))) {
@@ -432,7 +410,6 @@ public final class BlockUtil {
         return needSight && !canSee(point) ? null : new Placement(pos, null, point);
     }
 
-    // Null unless a neighbour face sits within range of the eyes and in sight when that is asked for.
     public static Placement placementInReach(BlockPos pos, double range, boolean needSight) {
         Direction support = findPlaceSupport(pos);
         if (support == null) {
@@ -445,14 +422,12 @@ public final class BlockUtil {
         return needSight && !canSee(hit) ? null : new Placement(pos, support, hit);
     }
 
-    // Places against a neighbour when there is one and clicks the spot itself otherwise.
     public static boolean placeAny(BlockPos target, boolean rotate, boolean swing) {
         Direction support = findPlaceSupport(target);
         return support != null ? place(target, support, rotate, swing) : placeDirect(target, rotate, swing);
     }
 
-    // Holds the hotbar slot for one placement and swaps back straight after. A slot of
-    // minus one places nothing.
+    // A slot of minus one places nothing.
     public static boolean placeFrom(InventoryUtil.SlotSwap slots, int slot, BlockPos target, boolean rotate) {
         if (slot == -1) {
             return false;
@@ -506,7 +481,6 @@ public final class BlockUtil {
         centerPlayer(MC.player.blockPosition());
     }
 
-    // Moves the player level to the middle of the column the block stands in.
     public static void centerPlayer(BlockPos block) {
         double x = block.getX() + 0.5;
         double z = block.getZ() + 0.5;
@@ -530,12 +504,11 @@ public final class BlockUtil {
         return -1;
     }
 
-    // Hotbar slot holding a block item or minus one. Prefers the selected slot.
+    // Prefers the selected slot.
     public static int findBlockSlot() {
         return InventoryUtil.hotbarSlot(stack -> stack.getItem() instanceof BlockItem);
     }
 
-    // The closest position within the range that passes the test.
     public static BlockPos nearestWithin(double range, Predicate<BlockPos> test) {
         BlockPos[] best = {null};
         double[] bestDistanceSq = {Double.MAX_VALUE};
@@ -553,15 +526,13 @@ public final class BlockUtil {
         return best[0];
     }
 
-    // The position whose middle lies nearest the eyes of those that pass the test. Null when none
-    // does. A mutable position from a box walk is copied before it is kept.
+    // A mutable position from a box walk is copied before it is kept.
     public static BlockPos nearestOf(Iterable<BlockPos> positions, Predicate<BlockPos> test) {
         Vec3 eye = MC.player.getEyePosition();
         BlockPos best = null;
         double bestDistanceSq = Double.MAX_VALUE;
         for (BlockPos pos : positions) {
             double distanceSq = eye.distanceToSqr(Vec3.atCenterOf(pos));
-            // A position no nearer than the best hit cannot win and is never tested.
             if (distanceSq >= bestDistanceSq || !test.test(pos)) {
                 continue;
             }
@@ -575,12 +546,10 @@ public final class BlockUtil {
         return isBlastProof(state(pos));
     }
 
-    // A crystal or a bed cannot break it.
     public static boolean isBlastProof(BlockState state) {
         return state.getBlock().getExplosionResistance() >= BLAST_PROOF;
     }
 
-    // A hotbar slot holding something that survives a crystal and can be broken again.
     // Bedrock and other unbreakable blocks are no use.
     public static int findBlastProofSlot() {
         return findBlockSlot(block ->
@@ -592,8 +561,7 @@ public final class BlockUtil {
             stack.getItem() instanceof BlockItem item && filter.test(item.getBlock()));
     }
 
-    // The hotbar slot holding whichever allowed block stands up best to a blast. Blast
-    // resistance decides and the time it takes to break settles a tie. Minus one when none is there.
+    // Blast resistance decides and the time it takes to break settles a tie.
     public static int findStrongestBlockSlot(Predicate<Block> allowed) {
         int best = -1;
         float bestResistance = -1;
@@ -616,7 +584,6 @@ public final class BlockUtil {
         return best;
     }
 
-    // The hotbar slot holding whichever allowed block sits highest up the list.
     public static int findRankedBlockSlot(Collection<Identifier> preferred, Predicate<Block> allowed) {
         int best = -1;
         int bestRank = Integer.MAX_VALUE;
@@ -643,20 +610,19 @@ public final class BlockUtil {
         return unobstructed(pos, Blocks.OBSIDIAN.defaultBlockState());
     }
 
-    // A full block would go in. The spot is replaceable and nobody stands in it.
     public static boolean blockFits(BlockPos pos) {
         return isReplaceable(pos) && unobstructed(pos);
     }
 
-    // A standing torch would go in here. It has no collision and nobody standing in the spot stops it.
-    // A floor that opens on a click would open instead of taking the torch.
+    // A torch has no collision and nobody standing in the spot stops it. A floor that opens on a
+    // click would open instead of taking the torch.
     public static boolean torchStands(BlockPos pos) {
         BlockPos floor = pos.below();
         return isReplaceable(pos) && Block.canSupportCenter(MC.level, floor, Direction.UP)
             && !opensOnClick(state(floor));
     }
 
-    // A plain or soul or copper torch standing or on a wall. Redstone torches are not lights.
+    // Redstone torches are not lights.
     public static boolean isTorch(Block block) {
         return block instanceof TorchBlock;
     }
@@ -665,15 +631,14 @@ public final class BlockUtil {
         return findBlockSlot(BlockUtil::isTorch);
     }
 
-    // Turns the way the face mode says towards the nearest face and clicks it.
     public static boolean interact(BlockPos pos, FaceMode face) {
         Direction side = facingSide(pos);
         face.face(hitPoint(pos, side), RotationPriority.PLACE);
         return interact(pos, side);
     }
 
-    // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.
-    // The sneak is dropped for the click and put back straight after.
+    // Vanilla skips a block interaction whilst the player sneaks. The sneak is dropped for the
+    // click and put back straight after.
     public static boolean interact(BlockPos pos, Direction side) {
         return interact(pos, side, InteractionHand.MAIN_HAND);
     }
@@ -694,7 +659,6 @@ public final class BlockUtil {
         return isBuildingBlock(block, target) && block.defaultBlockState().canSurvive(MC.level, target);
     }
 
-    // True for a plain full standable cube.
     // Sand and gravel need something under the target to hold them up.
     public static boolean isBuildingBlock(Block block, BlockPos target) {
         BlockState state = block.defaultBlockState();
@@ -733,8 +697,7 @@ public final class BlockUtil {
             || block instanceof RespawnAnchorBlock;
     }
 
-    // A solid neighbour to place against. Blocks that open on click are skipped.
-    // The face closest to the eyes wins.
+    // Blocks that open on click are skipped. The face closest to the eyes wins.
     public static Direction findPlaceSupport(BlockPos target) {
         Vec3 eye = MC.player.getEyePosition();
         Direction best = null;
@@ -764,8 +727,7 @@ public final class BlockUtil {
         return center.add(side.getStepX() * halfX, side.getStepY() * halfY, side.getStepZ() * halfZ);
     }
 
-    // The outline the game gives the block pulled in off its faces as a drawn block is. A block
-    // without an outline gets a whole block.
+    // A block without an outline gets a whole block.
     public static AABB outlineBox(BlockPos pos, BlockState state) {
         VoxelShape shape = state.getShape(MC.level, pos);
         return shape.isEmpty() ? DrawBatch.blockBox(pos) : shape.bounds().move(pos).deflate(DrawBatch.BLOCK_INSET);
@@ -785,7 +747,6 @@ public final class BlockUtil {
         return best;
     }
 
-    // True when nothing solid sits between the eyes and the point.
     public static boolean canSee(Vec3 point) {
         BlockHitResult hit = MC.level.clip(new ClipContext(MC.player.getEyePosition(), point,
             ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, MC.player));
@@ -801,7 +762,6 @@ public final class BlockUtil {
         return hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos);
     }
 
-    // A plain right click on the nearest face. Nothing is placed by the call itself.
     public static boolean useOn(BlockPos pos, boolean rotate, boolean swing) {
         Direction side = facingSide(pos);
         Vec3 hit = hitPoint(pos, side);
@@ -815,18 +775,15 @@ public final class BlockUtil {
         return MC.level.getFluidState(pos).isSourceOfType(Fluids.WATER);
     }
 
-    // Water poured here boils away as it does in the Nether.
     public static boolean waterEvaporates(BlockPos pos) {
         return MC.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, pos);
     }
 
-    // True when liquid beside or above the block would pour in once it came out. Liquid below
-    // never flows up.
+    // Liquid below never flows up.
     public static boolean holdsBackLiquid(BlockPos pos) {
         return holdsBackLiquid(pos, liquid -> true);
     }
 
-    // The same for the liquids the test picks.
     public static boolean holdsBackLiquid(BlockPos pos, Predicate<FluidState> picked) {
         for (Direction side : Direction.values()) {
             FluidState liquid = state(pos.relative(side)).getFluidState();
@@ -837,7 +794,6 @@ public final class BlockUtil {
         return false;
     }
 
-    // The other half of a double chest. Null for a single chest or any other block.
     public static BlockPos otherChestHalf(BlockPos pos, BlockState state) {
         if (!state.hasProperty(ChestBlock.TYPE) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
             return null;

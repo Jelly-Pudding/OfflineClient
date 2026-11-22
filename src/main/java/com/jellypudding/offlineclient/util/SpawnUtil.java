@@ -10,7 +10,6 @@ import net.minecraft.world.level.LightLayer;
 import java.util.ArrayList;
 import java.util.List;
 
-// Works out where a hostile mob could appear.
 public final class SpawnUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -21,9 +20,7 @@ public final class SpawnUtil {
     // Sky light at or above this leaves a spot too bright for a mob until dusk.
     private static final int NIGHT_ONLY_SKY_LIGHT = 8;
 
-    // The game's own ground rule with a creeper as the mob. The floor block has to take a spawn
-    // and the spot and the block above it have to be open and safe. A creeper's box has to fit
-    // when asked and the block light has to be low enough.
+    // The game's own ground rule with a creeper as the mob.
     public static boolean spawnable(BlockPos pos, int maxLight, boolean hitbox) {
         if (!SpawnPlacementTypes.ON_GROUND.isSpawnPositionOk(MC.level, pos, EntityTypes.CREEPER)) {
             return false;
@@ -35,7 +32,6 @@ public final class SpawnUtil {
         return MC.level.getBrightness(LightLayer.BLOCK, pos) <= maxLight;
     }
 
-    // True for a spot the sun keeps clear. Mobs appear there once night falls.
     public static boolean nightOnly(BlockPos pos) {
         return MC.level.getBrightness(LightLayer.SKY, pos) >= NIGHT_ONLY_SKY_LIGHT;
     }

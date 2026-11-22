@@ -15,15 +15,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.ToIntFunction;
 
-// How a module points at its finds. Lines run from your view to them and a module that
-// marks chunks can raise a tall column through each one. The module draws its own boxes
-// with a BoxStyle and asks this which finds lie close enough to draw.
+// Lines run from your view to the finds of a module and a module that marks chunks can raise a
+// column through each one.
 public final class FindLines {
 
-    // Which lines a module starts with.
     public enum Tracers { OFF, EVERY, NEAREST }
 
-    // The four upright edges of a column one block across.
     private static final int CORNERS = 4;
 
     private final FindLog log;
@@ -43,7 +40,6 @@ public final class FindLines {
         this(log, tracersOn ? Tracers.EVERY : Tracers.OFF, false);
     }
 
-    // The same with the lines and columns a module starts with.
     public FindLines(FindLog log, Tracers startLines, boolean columnsOn) {
         this.log = log;
         tracers = new BoolSetting("Tracers", "Draws a line from your view to each find.", startLines != Tracers.OFF);
@@ -82,19 +78,16 @@ public final class FindLines {
         return all.toArray(new Setting<?>[0]);
     }
 
-    // True for a find close enough to draw its box.
     public boolean inDrawRange(Find find) {
         LocalPlayer player = OfflineClient.MC.player;
         double range = drawRange.getValue();
         return player != null && log.distanceSqr(find, player.getEyePosition()) <= range * range;
     }
 
-    // The tracers and columns of every find in the dimension you are in.
     public void draw(DrawBatch batch, ToIntFunction<Find> color) {
         draw(batch, log.here(), color);
     }
 
-    // The same for a module that shows only some of its finds.
     public void draw(DrawBatch batch, Collection<Find> finds, ToIntFunction<Find> color) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null || finds.isEmpty()) {

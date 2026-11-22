@@ -31,7 +31,6 @@ public final class Sneak extends Module {
     // Let go of once as a flight starts. A toggle the player then sets by hand stays as they set it.
     private final HeldKey shift = new HeldKey(options -> options.keyShift);
     private final ServerSneak serverSneak = new ServerSneak();
-    // The mode the last tick ran under.
     private Mode applied;
 
     public Sneak() {

@@ -61,7 +61,7 @@ public final class SeedWorld {
         return random;
     }
 
-    // Where each structure set may start. The stronghold rings are worked out on the first ask.
+    // The stronghold rings are worked out on the first ask.
     public ChunkGeneratorStructureState structures() {
         return structures;
     }
@@ -70,17 +70,17 @@ public final class SeedWorld {
         return height;
     }
 
-    // The biome at any spot. A reader keeps what it sampled last and belongs to the thread that asked for it.
+    // A reader keeps what it sampled last and belongs to the thread that asked for it.
     public BiomeResolver biomes() {
         return generator.getBiomeSource().createCachingResolver(random);
     }
 
-    // The climate the biomes are picked from. It belongs to one thread like a biome reader.
+    // Belongs to one thread like a biome reader.
     public Climate.Sampler climate() {
         return random.createClimateSampler(samplerContext());
     }
 
-    // Samplers for the density functions of the noise router and the material rules. One thread again.
+    // One thread at a time.
     public DensitySamplerSet samplers() {
         return random.samplersWithContext(samplerContext());
     }

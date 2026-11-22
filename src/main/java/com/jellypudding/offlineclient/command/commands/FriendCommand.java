@@ -48,7 +48,6 @@ public final class FriendCommand extends NameListCommand {
         return friends().isEnemy(name) ? "enemies" : null;
     }
 
-    // A ping with no name goes to every friend online.
     @Override
     protected boolean runOwn(String verb, String[] args) {
         SecretChat secretChat = Modules.get(SecretChat.class);

@@ -46,7 +46,6 @@ public abstract class FirstPersonHandsAndItemsRendererMixin {
         }
     }
 
-    // The swing progress both hands are drawn with.
     @ModifyExpressionValue(method = SUBMIT_HANDS,
         at = @At(value = "FIELD",
             target = "Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;swingAnimation:F"))
@@ -77,7 +76,6 @@ public abstract class FirstPersonHandsAndItemsRendererMixin {
         offlineclient$blocked = false;
     }
 
-    // Just before an empty arm is drawn.
     @Inject(method = SUBMIT_ARM,
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;renderPlayerArm("

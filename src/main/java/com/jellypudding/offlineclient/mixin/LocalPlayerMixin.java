@@ -28,6 +28,8 @@ import com.jellypudding.offlineclient.modules.player.PortalMenus;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
 import com.jellypudding.offlineclient.modules.world.AirPlace;
+import com.jellypudding.offlineclient.modules.world.Scaffold;
+import com.jellypudding.offlineclient.modules.world.Staircase;
 import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.CrosshairClip;
 import com.jellypudding.offlineclient.util.Modules;
@@ -344,7 +346,15 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer implements I
             return true;
         }
         EdgeGuard edgeGuard = Modules.get(EdgeGuard.class);
-        return edgeGuard != null && edgeGuard.shouldGuard();
+        if (edgeGuard != null && edgeGuard.shouldGuard()) {
+            return true;
+        }
+        Scaffold scaffold = Modules.get(Scaffold.class);
+        if (scaffold != null && scaffold.holdsAtEdge()) {
+            return true;
+        }
+        Staircase staircase = Modules.get(Staircase.class);
+        return staircase != null && staircase.holdsAtEdge();
     }
 
     @Override
@@ -407,7 +417,6 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer implements I
             oPortalEffectIntensity = 0;
         }
     }
-
 
     // A view that is away can swap the whole ray for one cast from the camera.
     @Inject(method = "raycastHitResult(FLnet/minecraft/world/entity/Entity;)Lnet/minecraft/world/phys/HitResult;",

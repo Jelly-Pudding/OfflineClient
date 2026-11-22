@@ -34,18 +34,17 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
-// Reads one chunk for blocks a player left. It runs on a scanner thread with the settings as they
-// stood. Every rule was checked against the structure templates and world generation of 26.3.
+// Runs on a scanner thread with the settings as they stood. Every rule was checked against the
+// structure templates and world generation of 26.3.
 public final class BlockClues {
 
-    // What one chunk showed and where. The words read after found such as a lit nether portal. A
-    // sign comes without words and the game thread reads what it says.
+    // The words read after found such as a lit nether portal. A sign comes without words and the
+    // game thread reads what it says.
     public record Hit(BaseClue clue, BlockPos pos, String what) {
     }
 
-    // The settings a scan reads by. Needed holds how many of each picked block alone mark a chunk.
-    // The margins are layers left out at the bottom and top. Growth is how many grown plants mark
-    // a chunk.
+    // Needed holds how many of each picked block alone mark a chunk. The margins are layers left
+    // out at the bottom and top. Growth is how many grown plants mark a chunk.
     public record Rules(Set<BaseClue> clues, Map<Block, Integer> needed, int skyHeight, int floorMargin,
                         int ceilingMargin, boolean paper, ResourceKey<Level> dimension, int growth) {
     }
@@ -86,10 +85,8 @@ public final class BlockClues {
         new Reading(rules, view, out).run();
     }
 
-    // How many of the picked blocks a chunk holds and the kind there is most of.
     private static final class Picked {
         private final Map<Block, Integer> counts = new HashMap<>();
-        // The highest of each kind. The find stands on it.
         private final Map<Block, BlockPos> tops = new HashMap<>();
         private int total;
 
@@ -116,7 +113,6 @@ public final class BlockClues {
             return counts.entrySet().stream().max(Map.Entry.comparingByValue()).orElseThrow().getKey();
         }
 
-        // Such as a beacon or 7 player blocks such as black concrete.
         private String words() {
             Block most = most();
             return total == 1 ? ChatUtil.withArticle(name(most))
@@ -173,7 +169,6 @@ public final class BlockClues {
             }
         }
 
-        // Signs and portals and bubbles and spawners and beds and the picked blocks in one pass.
         private void placedBlocks() {
             boolean counting = settled && !rules.needed().isEmpty();
             view.forEachMatching(low, high, state -> placedClue(state) || (counting && picked(state)),
@@ -494,7 +489,6 @@ public final class BlockClues {
         }
     }
 
-    // The plants of one chunk grown past what the world makes them and the first of them.
     private static final class Growth {
         private int count;
         private BlockPos first;
@@ -507,7 +501,6 @@ public final class BlockClues {
             }
         }
 
-        // Such as 3 grown plants such as kelp 15 blocks tall at the surface.
         private String words() {
             return count == 1 ? firstWords : Tally.counted(count, "grown plant") + " such as " + firstWords;
         }

@@ -24,8 +24,7 @@ import java.util.Set;
 // trail those packets and staleStop says when that word is stale.
 public final class SprintPause {
 
-    // What a module may want the server to hear for a hit. The further down the stronger
-    // and the strongest asked for stands.
+    // The further down the stronger and the strongest asked for stands.
     private enum Wish {
         NONE,
         RENEW,
@@ -44,17 +43,14 @@ public final class SprintPause {
 
     private static final SprintPause INSTANCE = new SprintPause();
 
-    // The modules that are on and ask for something around their hits.
     private static final Set<Module> users = new HashSet<>();
 
-    // What the modules want for the next hit that leaves.
     private static Wish wish = Wish.NONE;
 
     // The hit being written and what its wish still owes the server behind it.
     private static Packet<?> flanked;
     private static Wish owed = Wish.NONE;
 
-    // True only whilst the start lent to a hit goes out.
     private static boolean lending;
 
     // Whether the server sees no sprint for the hit the game is playing out. Every attack
@@ -81,7 +77,6 @@ public final class SprintPause {
         }
     }
 
-    // The same module calls this as it stops.
     public static void detach(Module module) {
         if (users.remove(module) && users.isEmpty()) {
             OfflineClient.INSTANCE.getEventBus().unregister(INSTANCE);
@@ -127,14 +122,12 @@ public final class SprintPause {
         return lending;
     }
 
-    // Read by PlayerMixin. True when the server sees no sprint for the hit the game is
-    // playing out. The client then plays it out the same way.
+    // Read by PlayerMixin. The client plays the hit out the way the server sees it.
     public static boolean hitUnsprinted() {
         return hitUnsprinted;
     }
 
-    // True for a swing the server will call full strength. Read it before the game resets
-    // the cooldown.
+    // Read it before the game resets the cooldown.
     public static boolean fullStrength(LocalPlayer player) {
         return player.getAttackStrengthScale(0.5f) > FULL_STRENGTH;
     }

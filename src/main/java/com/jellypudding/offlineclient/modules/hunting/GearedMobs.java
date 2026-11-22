@@ -46,11 +46,10 @@ import java.util.List;
 // treasure enchantments. Anything past that was picked up where a player had been.
 public final class GearedMobs extends Module {
 
-    // A mob with every piece that gave it away.
     private record Suspect(Mob mob, List<Carried.Piece> pieces) {
     }
 
-    // What every message of this module is about. One quiet time covers them all.
+    // One quiet time covers every message of this module.
     private static final String KIND = "mob";
 
     private static final String NETHERITE = "netherite";
@@ -81,7 +80,6 @@ public final class GearedMobs extends Module {
     // A mob walking up to you would hide behind its own box.
     private final NearFade fade = new NearFade(3);
 
-    // Rebuilt once a tick.
     private List<Suspect> found = List.of();
     private final Sightings sightings = new Sightings();
 
@@ -164,7 +162,6 @@ public final class GearedMobs extends Module {
         return Carried.pieces(mob, this::playerSign);
     }
 
-    // What marks the stack as a player's or null when nothing does.
     private String playerSign(ItemStack stack) {
         String name = ChatUtil.words(stack.getItem());
         if (items.contains(stack.getItem())) {

@@ -45,12 +45,9 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Breaks the blocks you click with a start and stop pair instead of a held click. The server
-// finishes each one on its own and the queue moves to the next. An area around each clicked
-// block can come down with it.
+// A start and stop pair stands in for a held click and the server finishes each block on its own.
 public final class PacketMine extends Module {
 
-    // Ticks of grace before a block or an area that will not break is given up on.
     private static final int PATIENCE_TICKS = 50;
 
     private static final int MAX_QUEUE = 16;
@@ -124,7 +121,6 @@ public final class PacketMine extends Module {
         .under(render);
     private final BreakTrail trail = new BreakTrail();
 
-    // One clicked block waiting its turn or being broken or kept clear.
     private static final class Target {
 
         private final BlockPos pos;
@@ -193,7 +189,6 @@ public final class PacketMine extends Module {
         return ExclusivityGroup.MINING;
     }
 
-    // True whilst a clicked block waits in the queue or its spot is kept for a rebreak.
     public boolean hasTarget() {
         return !queue.isEmpty();
     }
@@ -220,8 +215,6 @@ public final class PacketMine extends Module {
         attackHeld = InputUtil.physicallyHeld(mc.options.keyAttack);
     }
 
-    // A fresh left click on a block puts it at the back of the queue. Under Rebreak it also
-    // moves the kept spot on to the new block.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
         if (attackHeld || BlockMiner.isSelfCall() || !inGame() || Hands.tied()) {
@@ -304,7 +297,6 @@ public final class PacketMine extends Module {
         }
     }
 
-    // True when break packets went out for the clicked block this tick.
     private boolean driveCentre(Target head) {
         BlockState state = BlockUtil.state(head.pos);
         if (head.mining) {
@@ -325,7 +317,6 @@ public final class PacketMine extends Module {
         return start(head, state);
     }
 
-    // True once the entry is done with or can never finish.
     private boolean finished(Target target) {
         if (!BlockUtil.serverReaches(target.pos)) {
             return true;
@@ -351,16 +342,13 @@ public final class PacketMine extends Module {
             && mc.player.tickCount - target.startTick > PATIENCE_TICKS;
     }
 
-    // Nothing is left around the block or nothing has come down for too long.
     private boolean areaDone(Target target) {
         BlockPos slow = areaBreaker.slowBlock();
         int patience = PATIENCE_TICKS + (slow == null ? 0 : BreakTime.breakTicks(slow));
         return target.areaLeft == 0 || target.areaStall > patience;
     }
 
-    // The pair goes out once the server has an angle on the block and room to take it. A block
-    // put back at a kept spot waits whilst AutoTool keeps it standing for want of a Silk Touch tool
-    // or NoInteract keeps it for the lava behind it.
+    // The pair goes out once the server has an angle on the block and room to take it.
     private boolean start(Target target, BlockState state) {
         if (Modules.toolRefuses(state, true) || BlockMiner.kept(target.pos)) {
             return false;
@@ -385,7 +373,6 @@ public final class PacketMine extends Module {
         return true;
     }
 
-    // True on the ticks a shot at the empty spot is due.
     private boolean canPoke(Target target) {
         if (!rebreak.isOn() || !instantRebreak.isOn()
             || (onlyPickaxe.isOn() && !mc.player.getMainHandItem().is(ItemTags.PICKAXES))) {
@@ -407,8 +394,6 @@ public final class PacketMine extends Module {
         }
     }
 
-    // The blocks around the clicked one come down once its own pair has gone out. True when
-    // any went out this tick.
     private boolean breakArea(Target head) {
         if (!head.mining && !head.cleared) {
             return false;
@@ -507,7 +492,6 @@ public final class PacketMine extends Module {
         }
     }
 
-    // The box fills from the bottom as the estimate climbs.
     private void drawProgress(DrawBatch batch, Target target) {
         double done = Math.clamp(progress(target), 0, 1);
         BoxStyle style = done >= 1 ? readyBox : miningBox;

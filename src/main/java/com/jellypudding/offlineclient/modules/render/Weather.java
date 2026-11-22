@@ -26,7 +26,6 @@ public final class Weather extends Module {
     private final NumberSetting thunder = new NumberSetting("Thunder",
         "How dark a storm looks. Zero is no storm.", 0, 0, 1, 0.05).max(1);
 
-    // Set whilst a rule or a reading sees the real weather and time on the client thread.
     private static boolean paused;
 
     public Weather() {

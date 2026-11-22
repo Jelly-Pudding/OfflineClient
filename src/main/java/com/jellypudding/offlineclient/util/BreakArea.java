@@ -6,14 +6,14 @@ import net.minecraft.core.Direction;
 import java.util.ArrayList;
 import java.util.List;
 
-// The blocks around a clicked block that an area pattern covers. The pattern lies in a plane
-// that is either level with the ground or stands across the way you look into the block.
-// Every offset counts sideways first then across the plane and last through it.
+// The pattern lies in a plane that is either level with the ground or stands across the way you
+// look into the block. Every offset counts sideways first then across the plane and last through
+// it.
 public enum BreakArea {
     SINGLE, SIDE, BOTH_SIDES, PLUS, SQUARE, SQUARE_AND_POLES, ROUNDED_CUBE, CUBE;
 
-    // The blocks the pattern adds around the centre. The centre is never one of them. Ahead
-    // must point across the ground and right and left are as seen looking that way.
+    // The centre is never one of the blocks. Ahead must point across the ground and right and left
+    // are as seen looking that way.
     public List<BlockPos> around(BlockPos centre, Direction ahead, boolean flat, boolean right) {
         Direction side = ahead.getClockWise();
         Direction across = flat ? ahead : Direction.UP;

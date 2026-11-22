@@ -5,30 +5,24 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.joml.Matrix3x2fStack;
 
-// The shapes a waypoint can carry on screen. Each is a few filled rectangles with a dark rim
-// that keeps it readable against the sky.
 public final class WaypointIcons {
 
-    // How far a shape reaches from its middle at a scale of one and how far its rim does.
     private static final int REACH = 4;
     private static final int RIM_REACH = REACH + 1;
-    // Half the width of each bar of the cross and of its rim.
     private static final int BAR = 1;
     private static final int RIM_BAR = BAR + 1;
-    // A label under an icon starts this far below the middle of it at a scale of one.
     public static final int ROOM_BELOW = RIM_REACH + 3;
 
     private static final int RIM = 0xFF000000;
     private static final float EIGHTH_TURN = (float) (Math.PI / 4);
     // The side of a square whose corners reach as far as its turned twin's sides do.
     private static final double TURNED_SHARE = Math.sqrt(0.5);
-    // Half the width of the tall and the wide bar that round a square off into a circle.
     private static final double ROUND_SHARE = 0.45;
 
     private WaypointIcons() {
     }
 
-    // The shape centred on a screen point. The colour has to be solid.
+    // The colour has to be solid.
     public static void draw(GuiGraphicsExtractor context, Icon icon, double x, double y, float scale, int color) {
         if (icon == Icon.NONE) {
             return;
@@ -73,7 +67,6 @@ public final class WaypointIcons {
         context.fill(-half, -half, half, half, color);
     }
 
-    // Draws with the screen turned an eighth of the way round. A square comes out as a diamond.
     private static void turned(GuiGraphicsExtractor context, Runnable drawing) {
         Matrix3x2fStack pose = context.pose();
         pose.pushMatrix();

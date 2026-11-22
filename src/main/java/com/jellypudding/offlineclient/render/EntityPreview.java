@@ -14,10 +14,8 @@ import org.joml.Vector3f;
 
 import java.util.function.Function;
 
-// A slowly turning mob drawn inside a tooltip.
 public final class EntityPreview implements ClientTooltipComponent {
 
-    // A body turned this far faces out of the screen.
     public static final float FACING_YOU = 180;
 
     private static final int WIDTH = 64;
@@ -65,7 +63,6 @@ public final class EntityPreview implements ClientTooltipComponent {
         spin += TURN_PER_TICK * OfflineClient.MC.getDeltaTracker().getGameTimeDeltaTicks();
     }
 
-    // A living entity lit fully with no shadow or outline. Null for anything else.
     public static LivingEntityRenderState flatState(LivingEntity entity, float partialTick) {
         EntityRenderState raw = OfflineClient.MC.getEntityRenderDispatcher().getRenderer(entity)
             .createRenderState(entity, partialTick);
@@ -78,8 +75,7 @@ public final class EntityPreview implements ClientTooltipComponent {
         return state;
     }
 
-    // Draws the entity upright inside the box. Each kind of body has a picture of its own and
-    // two bodies of one kind cannot share a frame.
+    // Each kind of body has a picture of its own and two bodies of one kind cannot share a frame.
     public static void draw(GuiGraphicsExtractor context, Function<BodyPicture.Scene, BodyPicture> kind,
                             LivingEntityRenderState state, float scale, Vector3f offset,
                             int left, int top, int right, int bottom) {

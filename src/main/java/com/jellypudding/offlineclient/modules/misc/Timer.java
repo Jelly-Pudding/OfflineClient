@@ -35,7 +35,6 @@ public final class Timer extends Module {
 
     private final Map<String, Float> overrides = new ConcurrentHashMap<>();
 
-    // Ticks saved up for a burst and whether one is running.
     private double saved;
     private boolean bursting;
     // Set on whichever thread sends the packet.
@@ -59,13 +58,11 @@ public final class Timer extends Module {
         return speed.write(effective) + "x";
     }
 
-    // The game speed in force. One when nothing is speeding it up.
     public static float current() {
         Timer timer = Modules.get(Timer.class);
         return timer == null ? 1f : timer.getSpeed();
     }
 
-    // Pushes an override without the caller having to look the module up first.
     public static void override(String key, float multiplier) {
         Timer timer = Modules.get(Timer.class);
         if (timer != null) {
@@ -82,7 +79,6 @@ public final class Timer extends Module {
         }
     }
 
-    // The speed the module itself asks for. Charge only speeds the game up whilst a burst runs.
     private float ownSpeed() {
         if (mode.is(Mode.STEADY)) {
             return speed.getFloat();

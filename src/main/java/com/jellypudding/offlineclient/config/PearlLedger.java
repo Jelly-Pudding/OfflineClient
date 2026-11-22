@@ -8,10 +8,7 @@ import net.minecraft.resources.RegistryOps;
 import java.util.Map;
 import java.util.UUID;
 
-// Who owns each stasis pearl on the server you play on. A pearl keeps its id whilst its owner
-// is away and names its owner again on the next visit. The owners sit in a file beside the
-// finds. Two games on one computer add to the same file and neither loses what the other
-// learnt.
+// A pearl keeps its id whilst its owner is away and names its owner again on the next visit.
 public final class PearlLedger extends ServerLedger<UUID, Owner> {
 
     private static final String FILE = "pearlowners.json";
@@ -28,13 +25,11 @@ public final class PearlLedger extends ServerLedger<UUID, Owner> {
         DataFiles.entries(root, PearlLedger::pearl, WHAT).forEach(pearl -> into.put(pearl.getKey(), pearl.getValue()));
     }
 
-    // The id of a pearl and its owner.
     private static Map.Entry<UUID, Owner> pearl(JsonElement line) {
         String[] parts = line.getAsString().split(" ", 3);
         return Map.entry(UUID.fromString(parts[0]), new Owner(UUID.fromString(parts[1]), parts[2]));
     }
 
-    // One line for each pearl such as its id and its owner's id and name.
     @Override
     protected JsonElement encode(Map<UUID, Owner> owners, RegistryOps<JsonElement> ops) {
         JsonArray lines = new JsonArray();

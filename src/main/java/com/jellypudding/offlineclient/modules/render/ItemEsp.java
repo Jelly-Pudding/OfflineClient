@@ -29,11 +29,9 @@ public final class ItemEsp extends Module {
 
     public enum Size { ACCURATE, FANCY }
 
-    // How much a fancy box grows and how far it lifts off the ground.
     private static final double FANCY_GROW = 0.1;
     private static final double FANCY_LIFT = 0.05;
 
-    // Blocks a tick an item has to drop by to count as falling.
     private static final double FALLING = 0.1;
 
     private final BoolSetting boxes = new BoolSetting("Boxes",
@@ -136,7 +134,6 @@ public final class ItemEsp extends Module {
         count = found;
     }
 
-    // An item hitbox is tiny. The fancy box is grown and lifted clear of the floor.
     private AABB shown(AABB box) {
         return size.is(Size.ACCURATE) ? box : box.inflate(FANCY_GROW).move(0, FANCY_LIFT, 0);
     }

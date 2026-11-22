@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
@@ -37,6 +38,7 @@ public final class LocalWorld extends World {
     private static final int SPARE_FRAMES = 20;
 
     private final TestSingleplayerContext single;
+    private int toldAt;
 
     LocalWorld(Rig rig, TestSingleplayerContext single) {
         super(rig, rig.ask(mc -> mc.getUser().getName()));
@@ -56,6 +58,21 @@ public final class LocalWorld extends World {
 
     public <T> T server(Function<MinecraftServer, T> question) {
         return single.getServer().computeOnServer(question::apply);
+    }
+
+    @Override
+    protected void told() {
+        super.told();
+        toldAt = server(MinecraftServer::getTickCount);
+    }
+
+    // The server sends what it changed with its next tick.
+    @Override
+    protected void catchUp() {
+        if (server(MinecraftServer::getTickCount) == toldAt) {
+            rig.ticks(1);
+        }
+        single.getConnection().waitForClientboundPackets();
     }
 
     @Override
@@ -97,10 +114,12 @@ public final class LocalWorld extends World {
         };
     }
 
-    // Makes the game tick this many times as fast as its own pace. Every tick still needs a frame
-    // of its own and the frame limit is raised to match.
+    // Makes the game tick this many times as fast as its own pace. The game and its server tick
+    // in turns and the slower of the two sets the pace. Every tick still needs a frame of its own
+    // and the frame limit is raised to match.
     public void hurry(float times) {
         RigClock.set(times);
+        single.getServer().runOnServer(server -> server.tickRateManager().setTickRate(NORMAL_PACE * times));
         rig.act(mc -> mc.options.framerateLimit().set(
             Math.max(NORMAL_FRAMES, Math.round(NORMAL_PACE * times) + SPARE_FRAMES)));
         rig.ticks(SYNC_TICKS);
@@ -187,12 +206,21 @@ public final class LocalWorld extends World {
     }
 
     @Override
+    public void foodLevel(int points) {
+        told();
+        single.getServer().runOnServer(server -> {
+            FoodData food = server.getPlayerList().getPlayers().getFirst().getFoodData();
+            food.setFoodLevel(points);
+            food.setSaturation(0);
+        });
+    }
+
+    @Override
     public String blockAt(BlockPos pos) {
         return server(server -> BuiltInRegistries.BLOCK.getKey(server.overworld().getBlockState(pos).getBlock())
             .toString());
     }
 
-    // Every living thing of the server's overworld the test accepts.
     public List<LivingEntity> living(Predicate<LivingEntity> wanted) {
         return server(server -> {
             List<LivingEntity> found = new ArrayList<>();

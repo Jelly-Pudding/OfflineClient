@@ -46,11 +46,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-// Prints or files every packet of the kinds you pick. The kick report keeps every packet
-// both ways for a few seconds and files them when the server drops you.
 public final class PacketLogger extends Module {
 
-    // One line of the kick report and when it happened on the nano clock.
     private record Recent(long nanos, String line) {
     }
 
@@ -58,15 +55,13 @@ public final class PacketLogger extends Module {
 
     private static final double NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
 
-    // A packet line in the kick report stops here. A chunk sent whole would fill the file.
+    // A chunk sent whole would fill the file.
     private static final int REPORT_LINE = 400;
 
-    // Lines the kick report holds at most however busy the window.
     private static final int MAX_RECENT = 50_000;
 
     private static final int MEGABYTE = 1024 * 1024;
 
-    // Lines held whilst the game thread is busy. Anything past this is dropped.
     private static final int MAX_PENDING = 8192;
 
     private final ChoiceListSetting incoming = new ChoiceListSetting("Incoming",
@@ -102,7 +97,7 @@ public final class PacketLogger extends Module {
         "Seconds of packets and movement the report keeps.", 5, 1, 30, 1, "s")
         .under(kickReport);
 
-    // The picked names resolved to types. Read from the netty thread and replaced whole.
+    // Read from the netty thread and replaced whole.
     private volatile Set<PacketType<?>> logIncoming = Set.of();
     private volatile Set<PacketType<?>> logOutgoing = Set.of();
 
@@ -119,10 +114,8 @@ public final class PacketLogger extends Module {
     // Filled from the netty thread and the game thread and read when the server drops you.
     private final ConcurrentLinkedDeque<Recent> recent = new ConcurrentLinkedDeque<>();
     private final AtomicInteger recentCount = new AtomicInteger();
-    // When the last client tick with a player in the world ran on the nano clock. A report needs
-    // one inside its window.
     private long lastTick = Long.MIN_VALUE;
-    // The server you are on. It is gone by the time the disconnected screen opens.
+    // It is gone by the time the disconnected screen opens.
     private String server;
 
     public PacketLogger() {
@@ -201,7 +194,6 @@ public final class PacketLogger extends Module {
         remember("in", event.getPacket());
     }
 
-    // Where you were and how you moved on each tick of the window.
     @Subscribe
     private void onTick(TickEvent event) {
         LocalPlayer player = mc.player;
@@ -221,7 +213,6 @@ public final class PacketLogger extends Module {
         remember(direction + " " + packet.type().id() + " " + TextCut.quote(String.valueOf(packet), REPORT_LINE));
     }
 
-    // Lines older than the window go as each new one comes.
     private void remember(String line) {
         long now = System.nanoTime();
         recent.addLast(new Recent(now, line));
@@ -365,7 +356,6 @@ public final class PacketLogger extends Module {
         }
     }
 
-    // Says which file is being written. Clicking the line opens the folder.
     private static void announce(Path file) {
         ChatUtil.component(Component.literal(ChatUtil.from("PacketLogger", "is writing to "))
             .append(ChatUtil.fileLink(file)));

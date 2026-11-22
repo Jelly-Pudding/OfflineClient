@@ -21,8 +21,7 @@ import net.minecraft.sounds.SoundEvents;
 // state when a saved setting makes the game unplayable.
 public final class RecoveryScreen extends Screen {
 
-    // Confirm marks an action that throws away something you built up. It needs a
-    // second click to go through.
+    // Confirm marks an action that throws away something you built up and needs a second click.
     private record Action(String label, String description, Runnable task, String doneMessage,
                           boolean confirm) {
     }
@@ -36,7 +35,6 @@ public final class RecoveryScreen extends Screen {
     private static final float TITLE_SCALE = 2f;
     private static final String SUBTITLE = "Puts the client back into a known good state.";
 
-    // Room above the buttons for the title and below them for the description.
     private static final int TITLE_ROOM = 70;
     private static final int FOOT_ROOM = 24;
 
@@ -48,7 +46,6 @@ public final class RecoveryScreen extends Screen {
     private int done = -1;
     private long doneUntil;
 
-    // The index of the button that waits for its second click.
     private final Armed<Integer> armed = new Armed<>();
 
     public RecoveryScreen(Screen parent) {
@@ -75,7 +72,6 @@ public final class RecoveryScreen extends Screen {
         return actions.length * (BUTTON_HEIGHT + GAP) - GAP;
     }
 
-    // The whole column is centred. The title always keeps its room.
     private int topY() {
         int column = TITLE_ROOM + listHeight() + FOOT_ROOM + BACK_HEIGHT;
         return Math.max(TITLE_ROOM, (height - column) / 2 + TITLE_ROOM);
@@ -113,7 +109,6 @@ public final class RecoveryScreen extends Screen {
             Action action = actions[i];
             boolean hovered = overButton(mouseX, mouseY, y);
             boolean waiting = armed.isArmed(i);
-            // A finished button holds its message for a moment and then eases back to normal.
             float success = done == i ? Flash.strength(doneUntil) : 0f;
 
             int fill = ColorUtil.lerp(hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
@@ -140,7 +135,6 @@ public final class RecoveryScreen extends Screen {
             y += BUTTON_HEIGHT + GAP;
         }
 
-        // What the hovered button does. Red whilst it waits for the second click.
         if (hovering != null) {
             context.centeredText(font, hovering, width / 2, topY() + listHeight() + 8,
                 hoveringArmed ? GuiTheme.RED_TEXT : GuiTheme.textDim());
@@ -150,8 +144,6 @@ public final class RecoveryScreen extends Screen {
             overBack(mouseX, mouseY), true);
     }
 
-    // The message a finished action leaves on its own button. The tick leads it
-    // and the pair stays centred.
     private void renderDone(GuiGraphicsExtractor context, Font font, String message, int textY,
                             float strength) {
         int left = width / 2 - (RenderUtil.TICK_SIZE + TICK_GAP + font.width(message)) / 2;
@@ -160,7 +152,6 @@ public final class RecoveryScreen extends Screen {
             ColorUtil.lerp(GuiTheme.text(), GuiTheme.GREEN, strength));
     }
 
-    // The title in the accent at twice size with a rule and small print below.
     private void renderTitle(GuiGraphicsExtractor context, Font font) {
         String title = OfflineClient.NAME + " Recovery";
         Font titleFont = ClientFonts.guiAt(TITLE_SCALE);
@@ -177,7 +168,6 @@ public final class RecoveryScreen extends Screen {
         context.centeredText(font, SUBTITLE, width / 2, ruleY + 7, GuiTheme.textDim());
     }
 
-    // A hairline that fades out towards both ends.
     private static void rule(GuiGraphicsExtractor context, int left, int right, int y) {
         int centre = (left + right) / 2;
         int half = Math.max(1, centre - left);
@@ -228,7 +218,6 @@ public final class RecoveryScreen extends Screen {
         Action action = actions[index];
         click();
 
-        // Anything that throws work away asks twice. The rest goes through at once.
         if (action.confirm() && !armed.press(index)) {
             done = -1;
             return;

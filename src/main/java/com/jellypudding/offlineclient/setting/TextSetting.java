@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.setting;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 
-// A line of free text.
 public final class TextSetting extends Setting<String> {
 
     // A value nobody else should read such as a shared key or the spot of a base. A copy of
@@ -27,7 +26,6 @@ public final class TextSetting extends Setting<String> {
         return value.isBlank();
     }
 
-    // Quoted the way it was typed. Nothing at all reads as empty.
     @Override
     public String defaultText() {
         return defaultValue.isEmpty() ? "empty" : "\"" + defaultValue + "\"";

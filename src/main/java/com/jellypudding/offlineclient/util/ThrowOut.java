@@ -14,7 +14,6 @@ public final class ThrowOut {
     private final BoolSetting on;
     private final BoolSetting backwards;
 
-    // The description says what is thrown.
     public ThrowOut(String description) {
         on = new BoolSetting("Throw out", description, false);
         backwards = new BoolSetting("Throw backwards", "Throws the pile behind you.", false).under(on);

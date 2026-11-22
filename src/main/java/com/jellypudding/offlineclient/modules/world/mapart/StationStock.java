@@ -27,17 +27,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// The materials carried and the marked chests they come from. A trip fetches what it needs from
-// the chests and leftovers go back into the chests that hold them or into the dump.
+// The materials carried and the marked chests they come from.
 public final class StationStock {
 
-    // A material a chest was found without.
     private record Out(BlockPos chest, Item item) {
     }
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // Ticks a chest found without a material is passed over for it.
     private static final int EMPTY_TICKS = 600;
 
     private final Printer printer;
@@ -46,11 +43,8 @@ public final class StationStock {
     private Map<Item, Integer> carried = Map.of();
     private final Cooldowns<Out> outOf = new Cooldowns<>();
     private final Set<BlockPos> fullChests = new HashSet<>();
-    // Ticks spent waiting for a material every chest is out of.
     private int starved;
-    // Set once a chest had more of a material than the inventory could take this trip.
     private boolean noRoom;
-    // When the dump was last found full and how often it was waited for since it last took something.
     private int dumpFullAt;
     private int dumpWaits;
 
@@ -59,7 +53,6 @@ public final class StationStock {
         this.trip = trip;
     }
 
-    // Every trip starts with no chest passed over and no wait for a chest counted.
     public void reset() {
         noRoom = false;
         starved = 0;
@@ -72,19 +65,15 @@ public final class StationStock {
         dumpWaits = 0;
     }
 
-    // Once a tick. Counts what is carried and lets a chest found without a material come back.
     public void tick() {
         outOf.tick();
         carried = carried();
     }
 
-    // How far a trip gets along the items the cells to come need with what is carried and the
-    // slots the printer may fill.
     public MapPicture.Trip<Item> plan(List<Item> items) {
         return MapPicture.plan(items, carried, freeSlots(), Item::getDefaultMaxStackSize);
     }
 
-    // Every material carried by item. The offhand is left out.
     private Map<Item, Integer> carried() {
         Map<Item, Integer> counts = new HashMap<>();
         for (int slot = 0; slot < InventoryUtil.WHOLE_INVENTORY; slot++) {
@@ -96,13 +85,11 @@ public final class StationStock {
         return counts;
     }
 
-    // A block the picture needs or a marked chest held.
     private boolean isMaterial(ItemStack stack) {
         return !stack.isEmpty() && stack.getItem() instanceof BlockItem
             && (printer.pictureItems().contains(stack.getItem()) || printer.station().anyChestHolds(stack.getItem()));
     }
 
-    // Slots the printer may fill. Empty ones and those holding materials.
     private int freeSlots() {
         int free = 0;
         for (int slot = 0; slot < InventoryUtil.WHOLE_INVENTORY; slot++) {
@@ -118,7 +105,6 @@ public final class StationStock {
         return carried.getOrDefault(item, 0);
     }
 
-    // Materials the trip does not need are put away when the trip needs their room.
     public boolean dumpLeftovers(Map<Item, Integer> needs) {
         Predicate<Item> unneeded = item -> !needs.containsKey(item);
         if (!carriesAny(unneeded) || roomForTrip(needs)) {
@@ -133,7 +119,6 @@ public final class StationStock {
         return printer.station().block(Role.RESET) == null;
     }
 
-    // True when the slots that are empty or hold what the trip needs take the whole trip.
     private boolean roomForTrip(Map<Item, Integer> needs) {
         int room = 0;
         for (int slot = 0; slot < InventoryUtil.WHOLE_INVENTORY; slot++) {
@@ -159,10 +144,9 @@ public final class StationStock {
         return false;
     }
 
-    // Fetches what the trip needs from the chests that hold it. True whilst a visit is under
-    // way or the printer waits for a chest to fill. A chest found without a material is looked
-    // in again for it after a while and a material that stays out of stock stops the printer. A
-    // trip that has some of a material goes as far as that takes it.
+    // True whilst a visit is under way or the printer waits for a chest to fill. A material that
+    // stays out of stock stops the printer and a trip that has some of a material goes as far as
+    // that takes it.
     public boolean restock(Map<Item, Integer> needs) {
         if (noRoom) {
             return false;
@@ -195,7 +179,6 @@ public final class StationStock {
         return false;
     }
 
-    // The nearest chest known for the item that was not found without it a moment ago.
     private MapStations.Chest nearestChest(Item item) {
         MapStations.Chest best = null;
         double nearest = Double.MAX_VALUE;
@@ -212,8 +195,6 @@ public final class StationStock {
         return best;
     }
 
-    // One stack of the item out of the open chest a tick until the trip has enough. A chest
-    // with none left is passed over for that item for a while.
     private Step take(AbstractContainerMenu menu, BlockPos chest, Item item, int wanted) {
         learn(chest, menu);
         int held = InventoryUtil.count(item, InventoryUtil.WHOLE_INVENTORY);
@@ -246,10 +227,8 @@ public final class StationStock {
         }
     }
 
-    // Puts every material the test picks into a chest that holds it or else into the dump.
-    // True whilst something is still to go. The dump alone takes it when the chests are not
-    // asked for. A chest found full is passed over and the dump takes what is left. Glass panes
-    // lock maps and are never put away.
+    // True whilst something is still to go. A chest found full is passed over and the dump takes
+    // what is left. Glass panes lock maps and are never put away.
     public boolean putAway(Predicate<Item> picked, boolean toChests) {
         Predicate<Item> which = picked.and(item -> item != Items.GLASS_PANE);
         Item item = null;
@@ -298,8 +277,7 @@ public final class StationStock {
         return null;
     }
 
-    // One stack a tick from the inventory into the open container. A stack that stays put has
-    // found the container full.
+    // A stack that stays put has found the container full.
     private Step put(AbstractContainerMenu menu, BlockPos target, Predicate<ItemStack> which) {
         if (printer.station().chestAt(target) != null) {
             learn(target, menu);
@@ -317,7 +295,6 @@ public final class StationStock {
         return Step.MORE;
     }
 
-    // The kinds of block a container menu holds.
     public static Set<Item> blocksIn(AbstractContainerMenu menu) {
         Set<Item> items = new LinkedHashSet<>();
         for (int slot : MenuClicks.containerSlots(menu)) {

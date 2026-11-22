@@ -24,7 +24,6 @@ public abstract class ItemEntityRendererMixin {
             + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;"
             + "Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V";
 
-    // The bob that lifts the drop off the ground.
     @WrapOperation(method = SUBMIT,
         at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(FFF)V"))
     private void onLift(PoseStack target, float x, float y, float z, Operation<Void> original,
@@ -34,7 +33,6 @@ public abstract class ItemEntityRendererMixin {
         original.call(target, x, physics == null ? y : physics.groundOffset(state), z);
     }
 
-    // The spin the drop turns with.
     @WrapOperation(method = SUBMIT,
         at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/vertex/PoseStack;rotate(Lcom/mojang/math/Axis;F)V"))

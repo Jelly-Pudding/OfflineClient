@@ -33,8 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// What Notifier tells you about yourself. The server pulling you back and the anti cheat it seems
-// to run and what hurt you and bad effects and worn armour and rain.
+// What Notifier tells you about yourself.
 final class SelfWarnings {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -42,7 +41,6 @@ final class SelfWarnings {
     // A deep tone that stands apart from the soft ping.
     private static final float WARNING_PITCH = 0.5f;
 
-    // After a pull back line the next ones wait this long and are counted in one line.
     private static final int PULL_BACK_QUIET_TICKS = 60;
 
     private static final double PERCENT = 100;
@@ -75,10 +73,8 @@ final class SelfWarnings {
         "Says in chat when it starts to rain.", false);
 
     private final Notifier notifier;
-    // The level of each effect you had last tick. It outlives a dimension change and the
-    // effects the server sends again then are nothing new.
+    // It outlives a dimension change and the effects the server sends again then are nothing new.
     private final Map<Holder<MobEffect>, Integer> effectLevels = new HashMap<>();
-    // The piece in each armour slot that has been warned about.
     private final Map<EquipmentSlot, Item> wornOut = new EnumMap<>(EquipmentSlot.class);
     private final Feed.Reader<Double> pulls = PullBacks.reader();
     private final HurtReport hurts = new HurtReport(false);
@@ -91,12 +87,10 @@ final class SelfWarnings {
         this.notifier = notifier;
     }
 
-    // Pull backs and the anti cheat the server seems to run.
     Setting<?>[] serverRows() {
         return new Setting<?>[] {pullBacks, antiCheat};
     }
 
-    // Hits taken and bad effects and worn armour and rain.
     Setting<?>[] warningRows() {
         return new Setting<?>[] {hitsTaken, badEffects, warnEffects, wornArmour, armourLeft, rain};
     }
@@ -140,9 +134,7 @@ final class SelfWarnings {
         }
     }
 
-    // Warns once for each piece as it wears down to the line. A piece mended well past the
-    // line can be warned about again. Another piece put on in its place can be too. A portal
-    // changes nothing about what you wear and the pieces warned about stay warned about.
+    // A portal changes nothing about what you wear and the pieces warned about stay warned about.
     private void checkArmour() {
         if (!wornArmour.isOn()) {
             wornOut.clear();
@@ -171,8 +163,8 @@ final class SelfWarnings {
         raining = now;
     }
 
-    // Warns once when an effect is gained or grows stronger. The first ticks of a new
-    // player object only take stock of what the server sends along with it.
+    // The first ticks of a new player object only take stock of what the server sends along with
+    // it.
     private void checkEffects() {
         Map<Holder<MobEffect>, MobEffectInstance> active = MC.player.getActiveEffectsMap();
         boolean settling = MC.player.tickCount < Notifier.SETTLE_TICKS;
@@ -196,13 +188,11 @@ final class SelfWarnings {
         warning("§7You have §c" + EffectText.name(effect) + time + "§7.");
     }
 
-    // A line about yourself with the deep tone.
     private static void warning(String line) {
         ChatUtil.message(line);
         MC.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_BASS, WARNING_PITCH));
     }
 
-    // The server pulled you back this many blocks.
     private void onPullBack(double distance) {
         if (!pullBacks.isOn()) {
             return;
@@ -215,7 +205,6 @@ final class SelfWarnings {
         notifier.say("§7The server pulled you back §b" + String.format(Locale.ROOT, "%.1f", distance) + "§7 blocks.");
     }
 
-    // The pull backs held back in the quiet time go out in one line which starts another.
     private void endPullBackQuiet() {
         if (pullBackQuiet == 0 || --pullBackQuiet > 0 || pullBacksHeld == 0) {
             return;
@@ -225,7 +214,6 @@ final class SelfWarnings {
         pullBackQuiet = PULL_BACK_QUIET_TICKS;
     }
 
-    // Once a join and once more after the module is switched on.
     private void tellAntiCheat() {
         if (antiCheatTold || !antiCheat.isOn() || !AntiCheatGuess.INSTANCE.settled()) {
             return;

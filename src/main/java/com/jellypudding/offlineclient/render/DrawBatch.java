@@ -37,8 +37,6 @@ public final class DrawBatch {
     private static final Direction[] SIDES = Direction.values();
 
     private static final int SPHERE_SEGMENTS = 32;
-    // The rings of a wire ball in degrees. Latitudes run up from the equator and
-    // longitudes turn round the upright axis.
     private static final double[] LATITUDES = {-60, -30, 0, 30, 60};
     private static final double[] LONGITUDES = {0, 45, 90, 135};
 
@@ -60,7 +58,6 @@ public final class DrawBatch {
         return camera == null ? Vec3.ZERO : camera.position();
     }
 
-    // A point in front of the camera that tracer lines start from.
     private static Vec3 tracerOrigin() {
         Camera camera = OfflineClient.MC.gameRenderer.mainCamera();
         return camera == null ? Vec3.ZERO : new Vec3(camera.forwardVector()).scale(TRACER_START);
@@ -85,7 +82,6 @@ public final class DrawBatch {
         }
     }
 
-    // A wire ball of rings of latitude and longitude round the centre.
     public void sphere(Vec3 centre, double radius, int color, boolean throughWalls) {
         for (double latitude : LATITUDES) {
             double lift = Math.toRadians(latitude);
@@ -111,12 +107,10 @@ public final class DrawBatch {
         outlineBox(blockBox(pos), color, throughWalls);
     }
 
-    // A bit per side for the joined box calls.
     public static int sideBit(Direction side) {
         return 1 << side.ordinal();
     }
 
-    // A bit for every side on which the set holds a neighbour of the key.
     public static int sharedSides(LongSet keys, long key) {
         int hidden = 0;
         for (Direction side : SIDES) {
@@ -127,7 +121,6 @@ public final class DrawBatch {
         return hidden;
     }
 
-    // A bit for every side on which the map holds the same kind as the key.
     public static <K> int sharedSides(Long2ObjectMap<K> kinds, long key, K kind) {
         int hidden = 0;
         for (Direction side : SIDES) {
@@ -138,7 +131,6 @@ public final class DrawBatch {
         return hidden;
     }
 
-    // The faces of a box that the mask does not hide.
     public void solidBoxPart(AABB box, int hidden, int color, boolean throughWalls) {
         if (hidden == 0) {
             solidBox(box, color, throughWalls);
@@ -151,7 +143,6 @@ public final class DrawBatch {
         }
     }
 
-    // The edges of a box leaving out every edge that lies on a hidden face.
     public void outlineBoxPart(AABB box, int hidden, int color, boolean throughWalls) {
         float[] b = relative(box, camera);
         float x1 = b[0];
@@ -220,8 +211,6 @@ public final class DrawBatch {
         boxFaces(buffer(Pipelines.fill(throughWalls)), pose, box, camera, color);
     }
 
-    // Every face of a box as a tinted quad. The silhouettes of the outline shader fill their
-    // boxes here too.
     static void boxFaces(VertexConsumer vc, PoseStack.Pose pose, AABB box, Vec3 camera, int color) {
         float[] b = relative(box, camera);
         for (Direction side : SIDES) {
@@ -229,7 +218,6 @@ public final class DrawBatch {
         }
     }
 
-    // One face of a box as a tinted quad.
     public void solidFace(AABB box, Direction side, int color, boolean throughWalls) {
         quad(buffer(Pipelines.fill(throughWalls)), pose, color, corners(relative(box, camera), side));
     }
@@ -249,7 +237,6 @@ public final class DrawBatch {
             (float) b.maxX, (float) b.maxY, (float) b.maxZ};
     }
 
-    // The corners of one face in order round its edge.
     private static float[] corners(float[] b, Direction side) {
         float x1 = b[0];
         float y1 = b[1];
@@ -267,7 +254,6 @@ public final class DrawBatch {
         };
     }
 
-    // One filled face between four world points in order around its edge.
     public void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
         Vec3 ra = a.subtract(camera);
@@ -285,14 +271,12 @@ public final class DrawBatch {
         line(d, a, color, throughWalls);
     }
 
-    // A box whose sides blend from one colour at the bottom to another at the top.
     public void gradientBox(AABB box, int bottom, int top, boolean throughWalls) {
         solidFace(box, Direction.DOWN, bottom, throughWalls);
         solidFace(box, Direction.UP, top, throughWalls);
         gradientSides(box, bottom, top, throughWalls);
     }
 
-    // The four upright faces of a box blending from bottom colour to top colour.
     public void gradientSides(AABB box, int bottom, int top, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
         float[] b = relative(box, camera);
@@ -309,7 +293,6 @@ public final class DrawBatch {
         wall(vc, bottom, top, x1, z2, x1, z1, y1, y2);
     }
 
-    // One upright face between two corners with its own colour at each height.
     private void wall(VertexConsumer vc, int bottom, int top,
                       float ax, float az, float bx, float bz, float y1, float y2) {
         vc.addVertex(pose, ax, y1, az).setColor(bottom);
@@ -318,7 +301,6 @@ public final class DrawBatch {
         vc.addVertex(pose, bx, y1, bz).setColor(bottom);
     }
 
-    // Everything collected this frame goes through a single render pass.
     public void draw() {
         if (buffer == null) {
             return;
@@ -349,7 +331,6 @@ public final class DrawBatch {
         }
     }
 
-    // Frees everything collected this frame without drawing it.
     public void discard() {
         if (buffer == null) {
             return;

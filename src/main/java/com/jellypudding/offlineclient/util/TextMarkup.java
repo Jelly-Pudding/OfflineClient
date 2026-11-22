@@ -20,11 +20,9 @@ public final class TextMarkup {
     public static final Pattern LINE_BREAK = Pattern.compile(Pattern.quote("\\n"));
 
     private static final char HEX = '#';
-    // The ampersand and the character after it.
     private static final int CODE_LENGTH = 2;
     private static final int HEX_DIGITS = 6;
 
-    // A code read at some point in the text and how many characters it took up.
     private record Code(Style style, int length) {
     }
 

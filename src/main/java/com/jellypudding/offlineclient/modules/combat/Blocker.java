@@ -48,11 +48,9 @@ import java.util.Set;
 // side somebody is mining and then the crystal spots that would hurt most.
 public final class Blocker extends Module {
 
-    // Crystal spots are looked for from one below your feet to two above.
     private static final int LOWEST_SPOT = -1;
     private static final int HIGHEST_SPOT = 2;
 
-    // How far from your block a piston is still watched.
     private static final int PISTON_REACH = 3;
 
     private record Spot(BlockPos pos, float damage) {
@@ -96,11 +94,10 @@ public final class Blocker extends Module {
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 50).under(render);
 
     private List<BlockPos> pending = List.of();
-    // The spots you marked with the keep key. They belong to the world they were marked in.
+    // They belong to the world they were marked in.
     private final Set<BlockPos> kept = new LinkedHashSet<>();
     private final WorldWatch world = new WorldWatch();
     private final CrystalGuard guard = new CrystalGuard();
-    // The tick each block of the cover was first seen mined by somebody else.
     private final Map<BlockPos, Integer> minedSince = new HashMap<>();
 
     public Blocker() {
@@ -142,7 +139,6 @@ public final class Blocker extends Module {
         for (BlockPos pos : kept) {
             addFillable(spots, pos);
         }
-        // Kept spots are filled wherever you stand. The rest wait for a hole whilst Only in holes is on.
         if (!onlyInHole.isOn() || Holes.playerInHole()) {
             if (pistons.isOn()) {
                 pistonSpots(spots);
@@ -177,7 +173,6 @@ public final class Blocker extends Module {
         }
     }
 
-    // Spots marked in another world point at nothing here.
     private void syncWorld() {
         if (world.changed()) {
             kept.clear();
@@ -215,9 +210,7 @@ public final class Blocker extends Module {
         }
     }
 
-    // The blocks beside and over and under each block of your cover that somebody else has
-    // mined at for long enough. With those filled the gap it leaves is no use to a crystal.
-    // A crystal already standing in one of them is hit whilst the wall still holds.
+    // With those filled the gap a mined block leaves is no use to a crystal.
     private void minedSpots(Set<BlockPos> spots) {
         guard.tick();
         Set<BlockPos> cover = cover();
@@ -248,7 +241,6 @@ public final class Blocker extends Module {
         }
     }
 
-    // The ring round your feet and the one round your head and the blocks over and under you.
     private static Set<BlockPos> cover() {
         List<BlockPos> body = Holes.feetBlocks(mc.player);
         Set<BlockPos> cover = new LinkedHashSet<>();
@@ -263,8 +255,6 @@ public final class Blocker extends Module {
         return cover;
     }
 
-    // Every empty block on obsidian or bedrock around the hole where a crystal would
-    // hurt at least the minimum. The worst go first.
     private void crystalSpots(Set<BlockPos> spots) {
         BlockPos feet = mc.player.blockPosition();
         int r = radius.getInt();

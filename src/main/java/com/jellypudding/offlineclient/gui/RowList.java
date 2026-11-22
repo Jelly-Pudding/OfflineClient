@@ -9,11 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 
-// A scrolled list of rows two lines tall with buttons at the end of each. The first line says
-// what the row is and the second is written fainter under it.
 final class RowList<T> {
 
-    // A button at the end of a row. One that warns is drawn in red.
     interface Button {
         String label();
 
@@ -22,12 +19,9 @@ final class RowList<T> {
         boolean warns();
     }
 
-    // One row as drawn. The buttons read from left to right and the help shows in the footer
-    // whilst the pointer rests on the row.
     record Row<T>(T item, String text, int color, String detail, List<? extends Button> buttons, String help) {
     }
 
-    // Where a button landed this frame and the row it acts on.
     private record Spot<T>(T item, Button button, int x, int y, int w) {
     }
 
@@ -40,7 +34,6 @@ final class RowList<T> {
     private final ScrollBar scrollBar = new ScrollBar();
     private final List<Spot<T>> spots = new ArrayList<>();
     private List<Row<T>> rows = List.of();
-    // Where the list drew last. Clicks and the wheel are measured against it.
     private int x;
     private int top;
     private int w;
@@ -63,7 +56,6 @@ final class RowList<T> {
         return rows.size() * ROW_HEIGHT;
     }
 
-    // The empty text shows when there are no rows.
     void render(GuiGraphicsExtractor context, Font font, int x, int top, int w, int h, int mouseX, int mouseY,
                 Footer footer, String empty) {
         this.x = x;
@@ -98,7 +90,6 @@ final class RowList<T> {
         }
     }
 
-    // The two lines with the buttons laid out from the right edge.
     private void renderRow(GuiGraphicsExtractor context, Font font, Row<T> row, int y, int rowW, boolean inView,
                            int mouseX, int mouseY, Footer footer) {
         boolean hovered = inView && SettingWidget.isOver(mouseX, mouseY, x, y, rowW, ROW_HEIGHT);
@@ -134,15 +125,13 @@ final class RowList<T> {
         }
     }
 
-    // A button that throws work away once pressed again. It has a red edge and red writing.
     static void warning(GuiGraphicsExtractor context, Font font, int x, int y, int w, int h, String label) {
         RenderUtil.roundedBorderedRect(context, x, y, x + w, y + h, GuiTheme.CORNER, GuiTheme.bgPanel(), GuiTheme.RED);
         context.guiRenderState.up();
         context.centeredText(font, label, x + w / 2, GuiTheme.textY(y, h), GuiTheme.RED_TEXT);
     }
 
-    // True when the click fell on the list. A row or one of its buttons goes to the handler
-    // and a null button stands for the row itself.
+    // A null button stands for the row itself.
     boolean click(double mx, double my, BiConsumer<T, Button> pressed) {
         if (!SettingWidget.isOver(mx, my, x, top, w, h)) {
             return false;

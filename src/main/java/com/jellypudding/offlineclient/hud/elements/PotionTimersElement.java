@@ -28,29 +28,22 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 
-// The effects on you and how long each has left. Each row lines up with the side the element
-// is anchored to.
 public final class PotionTimersElement extends HudElement {
 
     public enum Order { SOONEST_FIRST, LONGEST_FIRST, STRONGEST_FIRST, HARMFUL_FIRST, HELPFUL_FIRST, NAME }
 
-    // One effect as it is listed. The colour goes on as the row is drawn.
     private record Line(MobEffectInstance effect, String text) {
     }
 
     private static final int SECONDS_PER_MINUTE = 60;
 
-    // A potion of Speed II and a long one of Fire Resistance stand in whilst the editor is
-    // open and no effect is on you.
     private static final List<MobEffectInstance> SAMPLE = List.of(
         new MobEffectInstance(MobEffects.SPEED, 90 * SharedConstants.TICKS_PER_SECOND, 1),
         new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 8 * SECONDS_PER_MINUTE * SharedConstants.TICKS_PER_SECOND));
 
     // The game's own effect icons pulse through the last ten seconds of an effect.
     private static final int ENDING_TICKS = 10 * SharedConstants.TICKS_PER_SECOND;
-    // Ticks in one fade out and back in. Twice a second.
     private static final int PULSE_TICKS = 10;
-    // How far a pulsing row fades at its faintest.
     private static final float PULSE_DEPTH = 0.6f;
 
     // A few effects such as Blindness are nearly black. Their rows keep the hue but are never
@@ -58,13 +51,12 @@ public final class PotionTimersElement extends HudElement {
     private static final float LEAST_BRIGHTNESS = 0.6f;
 
     private static final int ICON_GAP = 2;
-    // Rows anchored past the middle line up on the right.
     private static final double MIDDLE = 0.5;
 
     private static final Comparator<MobEffectInstance> NAMES =
         Comparator.comparing(EffectText::plainName, String.CASE_INSENSITIVE_ORDER);
-    // A beacon or a conduit keeps topping its effect up. Those sit below the rest and an endless
-    // effect sits below every timed one. Ties go by name and rows never swap on their own.
+    // A beacon or a conduit keeps topping its effect up. Those sit below the rest and rows never
+    // swap on their own.
     private static final Comparator<MobEffectInstance> SOONEST = Comparator
         .comparing(MobEffectInstance::isAmbient)
         .thenComparing(MobEffectInstance::isInfiniteDuration)
@@ -113,7 +105,6 @@ public final class PotionTimersElement extends HudElement {
         add(order, hidden, hideAmbient, ownColours, rowColor, pulse, icons);
     }
 
-    // One kind of effect at the top then the next. Each group goes by time left.
     private static Comparator<MobEffectInstance> byKind(MobEffectCategory... kinds) {
         List<MobEffectCategory> ranked = List.of(kinds);
         return Comparator.<MobEffectInstance>comparingInt(
@@ -146,7 +137,6 @@ public final class PotionTimersElement extends HudElement {
         return player == null ? List.of() : linesOf(player.getActiveEffects());
     }
 
-    // The effects the settings let through in the chosen order.
     private List<Line> linesOf(Collection<MobEffectInstance> effects) {
         List<MobEffectInstance> shown = new ArrayList<>();
         for (MobEffectInstance effect : effects) {
@@ -162,8 +152,6 @@ public final class PotionTimersElement extends HudElement {
         return built;
     }
 
-    // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds and a
-    // row near its end keeps pulsing.
     private List<TextRow> rowsOf(Font font, List<Line> shown) {
         List<TextRow> rows = new ArrayList<>(shown.size());
         for (int i = 0; i < shown.size(); i++) {
@@ -188,8 +176,6 @@ public final class PotionTimersElement extends HudElement {
         return (float) (1 - PULSE_DEPTH * (1 - Math.cos(phase)) / 2);
     }
 
-    // The icon leads its row unless the rows line up on the right. There it follows the row and
-    // the icons stand in one column at the edge.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Line> shown = lines();
@@ -212,7 +198,6 @@ public final class PotionTimersElement extends HudElement {
         }
     }
 
-    // An icon stands as tall as a line of text.
     private static int iconRoom(Font font) {
         return font.lineHeight + ICON_GAP;
     }

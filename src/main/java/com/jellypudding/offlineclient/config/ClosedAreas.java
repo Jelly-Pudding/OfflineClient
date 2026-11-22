@@ -9,11 +9,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-// The areas NoReturn keeps you out of. Each is filed under the server and the dimension it
-// was closed in and saved to offlineclient/closed_areas.json.
 public final class ClosedAreas {
 
-    // A square of chunks round a centre chunk. A radius of nought follows your render distance.
+    // A radius of nought follows your render distance.
     public record Area(String server, String dimension, int chunkX, int chunkZ, int radius) {
     }
 
@@ -35,20 +33,16 @@ public final class ClosedAreas {
         return instance;
     }
 
-    // The areas of the server you play on in the order they were closed.
     public List<Area> onServer() {
         String server = ServerInfo.key();
         return areas.stream().filter(area -> ServerInfo.matches(area.server(), server)).toList();
     }
 
-    // The areas of the dimension you are in.
     public List<Area> here() {
         String dimension = ServerInfo.dimension();
         return onServer().stream().filter(area -> area.dimension().equals(dimension)).toList();
     }
 
-    // Closes the chunks round a centre in the dimension you are in. False when an area with
-    // that centre is closed already.
     public boolean close(int chunkX, int chunkZ, int radius) {
         for (Area area : here()) {
             if (area.chunkX() == chunkX && area.chunkZ() == chunkZ) {
@@ -66,7 +60,6 @@ public final class ClosedAreas {
         }
     }
 
-    // Opens every area of this server and says how many there were.
     public int openAll() {
         List<Area> gone = onServer();
         areas.removeAll(gone);

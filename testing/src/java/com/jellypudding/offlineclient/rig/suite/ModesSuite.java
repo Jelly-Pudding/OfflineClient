@@ -53,7 +53,6 @@ public final class ModesSuite implements Suite {
 
     private Stage stage;
     private BlockPos home;
-    // The plain paces of the ground the cases stand on. Nought until they are measured.
     private double walked;
     private double sprinted;
     private int bareBreak;
@@ -146,7 +145,6 @@ public final class ModesSuite implements Suite {
         rig.expect(fellShort.isEmpty(), module + " fell short with " + setting + " at " + fellShort);
     }
 
-    // The options of a choice the way a player types them.
     private static List<String> options(Rig rig, String module, String setting) {
         Module owner = rig.client().module(module);
         return rig.ask(mc -> {
@@ -255,8 +253,7 @@ public final class ModesSuite implements Suite {
             "it lost %.1f blocks of height against %.1f on wings alone", lost, bareGlide));
     }
 
-    // Blocks of height a glide straight ahead loses. It starts high up in creative where no
-    // landing hurts.
+    // The glide starts high up in creative where no landing hurts.
     private double glideLoss(Rig rig) {
         World world = rig.world();
         Props.wear(rig, "armor.chest", "elytra");
@@ -311,7 +308,6 @@ public final class ModesSuite implements Suite {
             + DIG_TICKS + " ticks");
     }
 
-    // The husk stands under the crosshair two blocks off.
     private void hits(Rig rig, String module) {
         Props.hold(rig, 0, SWORD);
         Props.summon(rig, HUSK, home.north(2), TOUGH_HUSK);
@@ -325,8 +321,7 @@ public final class ModesSuite implements Suite {
         rig.expect(dealt > 0, "it took nothing off the husk in " + FIGHT_TICKS + " ticks");
     }
 
-    // A shaft through the floor two blocks ahead with nothing under it. The blocks in the hand
-    // are for the mode that builds.
+    // The blocks in the hand are for the mode that builds.
     private void caughtOverTheVoid(Rig rig) {
         World world = rig.world();
         BlockPos shaft = home.north(2);
@@ -351,7 +346,6 @@ public final class ModesSuite implements Suite {
             + " by the bare hand");
     }
 
-    // Ticks a held click takes to break a log. The server must agree it is gone.
     private int logBroken(Rig rig) {
         BlockPos log = home.north(2);
         rig.world().setBlock(log, "oak_log");

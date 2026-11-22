@@ -18,7 +18,6 @@ public final class BindCommand extends Command {
     private static final String HOLD = "hold";
     private static final List<String> WAYS = List.of(TOGGLE, HOLD);
 
-    // A few of what can be typed. Any key name and any combination works.
     private static final List<String> EXAMPLES = List.of("none", "mmb", "mouse4", "mouse5", "ctrl+", "alt+",
         "shift+", TOGGLE, HOLD);
 
@@ -37,7 +36,6 @@ public final class BindCommand extends Command {
         if (module == null) {
             return;
         }
-        // A way on its own changes how the key acts and leaves the key where it is.
         boolean wayOnly = args.length == 2 && WAYS.contains(args[1].toLowerCase(Locale.ROOT));
         String way = wayOnly ? args[1] : args.length == 3 ? args[2] : null;
         Bind bind = wayOnly ? null : Bind.parse(args[1]);
@@ -57,7 +55,6 @@ public final class BindCommand extends Command {
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }
 
-    // False after telling the player why the way cannot be set.
     private boolean setWay(Module module, String way) {
         boolean hold = way.equalsIgnoreCase(HOLD);
         if (!hold && !way.equalsIgnoreCase(TOGGLE)) {

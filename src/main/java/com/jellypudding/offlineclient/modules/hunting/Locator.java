@@ -57,7 +57,6 @@ public final class Locator extends Module implements Leak.Source {
 
     private enum Kind { EXACT, CHUNK, BEARING }
 
-    // One player the locator bar tells you about.
     private static final class Target {
         // Null for a waypoint a plugin named with text.
         private final UUID uuid;
@@ -73,7 +72,6 @@ public final class Locator extends Module implements Leak.Source {
         // The last yaw the server sent. A change means a fresh reading arrived.
         private float angle = Float.NaN;
         private final BearingTrail trail = new BearingTrail(PLAYER, true);
-        // When the newest reading was taken.
         private long readAt;
         private final RepostGate toldPlace = RepostGate.forChat();
         private final RepostGate toldEstimate = RepostGate.forChat();
@@ -96,7 +94,6 @@ public final class Locator extends Module implements Leak.Source {
         }
     }
 
-    // Where a label goes and what it says.
     private record Label(Vec3 at, String kind, int color, boolean distance) {
     }
 
@@ -113,13 +110,10 @@ public final class Locator extends Module implements Leak.Source {
 
     private static final double FULL_TURN = 2 * Math.PI;
 
-    // Waypoints are named after the player with this after it.
     private static final String WAYPOINT_SUFFIX = "Located";
 
-    // Where along a bearing line its name sits.
     private static final double LINE_LABEL = 24;
 
-    // How tall the box on an exact mark is. A player stands under two blocks.
     private static final double BODY = 2;
 
     private static final double LABEL_LIFT = 0.5;
@@ -128,7 +122,6 @@ public final class Locator extends Module implements Leak.Source {
 
     private static final float LINE_SHARE = 0.6f;
 
-    // A player the server stopped sending and a spot they left draw this faint.
     private static final float GONE_STRENGTH = 0.45f;
 
     private static final long LIVE_MS = 1000;
@@ -171,7 +164,6 @@ public final class Locator extends Module implements Leak.Source {
 
     // Keyed by the waypoint id. Players are keyed by their account id.
     private final Map<Either<UUID, String>, Target> targets = new HashMap<>();
-    // What each target gives away. Rebuilt every tick.
     private final List<Leak> leaks = new ArrayList<>();
     private final PositionHistory history = new PositionHistory();
     private final WorldWatch world = new WorldWatch();
@@ -297,12 +289,10 @@ public final class Locator extends Module implements Leak.Source {
         return Math.abs(angle - last) > Math.PI && Math.abs(turn) < 2 * RESEND;
     }
 
-    // Null whilst the target is placed directly or its bearings do not cross yet.
     private BearingFix estimate(Target target) {
         return target.kind == Kind.BEARING && estimates.isOn() ? target.trail.fix(minSpread()) : null;
     }
 
-    // Null when the target gives nothing away worth listing.
     private Leak leakOf(Target target, BearingFix fix, long now) {
         if (seen(target)) {
             return null;
@@ -326,7 +316,6 @@ public final class Locator extends Module implements Leak.Source {
         };
     }
 
-    // Where a player now known only by yaw was last placed. Null when never or not shown.
     private Leak lastSpot(Target target, String name, int y, String here) {
         if (target.placed == Kind.EXACT && exact.isOn()) {
             return new Leak(name, "last seen", target.block, true, here, target.placedAt,
@@ -343,8 +332,6 @@ public final class Locator extends Module implements Leak.Source {
         return new BlockPos(chunk.getMiddleBlockX(), y, chunk.getMiddleBlockZ());
     }
 
-    // A placed player is posted when first placed and a new estimate when it appears.
-    // Either one on the move is posted once a minute at most.
     private void tell(Target target, BearingFix fix, long now) {
         if (messages.is(Notice.Where.OFF)) {
             return;
@@ -455,8 +442,6 @@ public final class Locator extends Module implements Leak.Source {
         }
     }
 
-    // Every label the target has. A player known by yaw can have one where they were last
-    // placed and one for the estimate or their line.
     private void labels(Target target, Vec3 camera, float partial, long now, List<Label> into) {
         if (seen(target)) {
             return;
@@ -491,7 +476,6 @@ public final class Locator extends Module implements Leak.Source {
         return new Vec3(block.getX() + 0.5, block.getY() + BODY + LABEL_LIFT, block.getZ() + 0.5);
     }
 
-    // Null when the spot they were last placed in is not shown.
     private Label lastLabel(Target target, Vec3 camera, long now) {
         String ago = " " + ChatUtil.ago(now - target.placedAt);
         if (target.placed == Kind.EXACT && exact.isOn()) {
@@ -506,7 +490,6 @@ public final class Locator extends Module implements Leak.Source {
         return null;
     }
 
-    // The estimate or else the line towards them. Null when neither is drawn.
     private Label farLabel(Target target, Vec3 camera, float partial) {
         BearingFix fix = estimate(target);
         if (fix != null) {

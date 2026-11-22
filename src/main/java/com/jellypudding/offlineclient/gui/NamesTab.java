@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-// The names you join offline servers with. Your account name heads the list.
 public final class NamesTab implements TabView.Source {
 
     private static final String ACCOUNT = "account";
@@ -50,7 +49,6 @@ public final class NamesTab implements TabView.Source {
         return "type a name and press enter";
     }
 
-    // Only shown until a name is saved.
     @Override
     public List<TabView.Hint> hints(String query) {
         if (!query.isEmpty() || !NameStore.get().saved().isEmpty()) {
@@ -70,7 +68,6 @@ public final class NamesTab implements TabView.Source {
         NameStore.get().use(name);
     }
 
-    // Your account name puts you back on it.
     @Override
     public void activate(String name) {
         NameStore.get().use(name);

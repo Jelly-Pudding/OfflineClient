@@ -13,12 +13,10 @@ import net.minecraft.world.InteractionHand;
 public enum SwingMode {
     BOTH, PACKET, CLIENT, NONE;
 
-    // The value behind a row that only switches the swing on this screen.
     public static SwingMode of(boolean onScreen) {
         return onScreen ? BOTH : PACKET;
     }
 
-    // After a block went down or something was used.
     public void use(InteractionHand hand) {
         if (onScreen()) {
             swingUse(hand);
@@ -62,7 +60,6 @@ public enum SwingMode {
         return this == BOTH || this == PACKET;
     }
 
-    // The arm on this screen alone the way the game moves it after a use.
     public static void swingUse(InteractionHand hand) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null) {
@@ -70,7 +67,6 @@ public enum SwingMode {
         }
     }
 
-    // The arm on this screen alone the way the game moves it for a hit or a mining tick.
     public static void swingHit() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null) {
@@ -78,12 +74,10 @@ public enum SwingMode {
         }
     }
 
-    // The row of a module that hits or mines and places nothing.
     public static EnumSetting<SwingMode> setting(SwingMode defaultValue) {
         return described(new EnumSetting<>("Swing", "Who sees your arm swing.", defaultValue));
     }
 
-    // The row of a module that hits or mines and places blocks as well.
     public static EnumSetting<SwingMode> settingWithUses(SwingMode defaultValue) {
         return described(new EnumSetting<>("Swing",
             "Who sees your arm swing. The server shows everyone else the swing of a block you place whatever this says.",
@@ -97,7 +91,6 @@ public enum SwingMode {
             .describe(NONE, "Nobody.");
     }
 
-    // The row of a module that only places or uses things.
     public static BoolSetting useSetting(boolean onScreen) {
         return new BoolSetting("Swing", "Swings your arm on your own screen. Everyone else sees it either way.",
             onScreen);

@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 
 public final class ItemUtil {
 
-    // Head to feet. The order armour is worn in.
     public static final List<EquipmentSlot> ARMOR_SLOTS = List.of(
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
 
@@ -56,14 +55,12 @@ public final class ItemUtil {
         Items.SEA_PICKLE, Items.GLOW_LICHEN, Items.SCULK_VEIN, Items.BOWL, Items.RABBIT_HIDE,
         Items.PUFFERFISH, Items.TROPICAL_FISH);
 
-    // Durability points left before a stack counts as about to break.
     private static final int BREAK_MARGIN = 5;
 
     // A tool that wears out sooner than iron gets less credit for its mining speed. Gold mines
     // fastest of all and breaks after 32 blocks.
     private static final double IRON_DURABILITY = 250;
 
-    // An enchantment written without a level asks for its first.
     private static final int FIRST_LEVEL = 1;
 
     // More digits than this overflow a whole number and no level or price comes near them.
@@ -73,12 +70,10 @@ public final class ItemUtil {
     // numbers may follow it after colons such as a level and then a price.
     public record EnchantmentEntry(Holder<Enchantment> enchantment, List<Integer> numbers) {
 
-        // The first number or level one when none was written.
         public int level() {
             return number(0, FIRST_LEVEL);
         }
 
-        // The number at that place or the fallback when fewer were written.
         public int number(int index, int fallback) {
             return index < numbers.size() ? numbers.get(index) : fallback;
         }
@@ -87,7 +82,7 @@ public final class ItemUtil {
     private ItemUtil() {
     }
 
-    // Every enchantment the world knows. Empty until a world is loaded.
+    // Empty until a world is loaded.
     public static Collection<String> enchantmentIds() {
         if (OfflineClient.MC.level == null) {
             return List.of();
@@ -96,8 +91,6 @@ public final class ItemUtil {
             .stream().map(Object::toString).sorted().collect(Collectors.toList());
     }
 
-    // Every enchantment the world knows followed by each of its levels above the first written
-    // after a colon. Empty until a world is loaded.
     public static Collection<String> enchantmentLevels() {
         if (OfflineClient.MC.level == null) {
             return List.of();
@@ -115,8 +108,7 @@ public final class ItemUtil {
         return choices;
     }
 
-    // Reads one written enchantment. Null outside a world or when the name matches no
-    // enchantment the world knows.
+    // Null outside a world or when the name matches no enchantment the world knows.
     public static EnchantmentEntry enchantmentEntry(String token) {
         if (OfflineClient.MC.level == null) {
             return null;
@@ -143,12 +135,10 @@ public final class ItemUtil {
         return !text.isEmpty() && text.length() <= MAX_DIGITS && text.chars().allMatch(Character::isDigit);
     }
 
-    // Any shulker box whatever its colour.
     public static boolean isShulkerBox(Item item) {
         return Block.byItem(item) instanceof ShulkerBoxBlock;
     }
 
-    // An item that places a whole solid cube such as stone or planks.
     public static boolean isFullBlock(Item item) {
         Block block = Block.byItem(item);
         return block != Blocks.AIR
@@ -170,7 +160,6 @@ public final class ItemUtil {
         return score;
     }
 
-    // The fastest a tool mines what it is made for. Nought for anything that is no tool.
     private static double toolSpeed(ItemStack stack) {
         Tool tool = stack.get(DataComponents.TOOL);
         float best = 0;
@@ -190,7 +179,6 @@ public final class ItemUtil {
         return total;
     }
 
-    // Plain or enchanted.
     public static boolean isGoldenApple(ItemStack stack) {
         return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
     }
@@ -204,12 +192,10 @@ public final class ItemUtil {
         return nearlyBroken(stack, BREAK_MARGIN);
     }
 
-    // True when this many durability points or fewer remain.
     public static boolean nearlyBroken(ItemStack stack, int margin) {
         return stack.isDamageableItem() && usesLeft(stack) <= margin;
     }
 
-    // True when a potion or a tipped arrow carries the effect.
     public static boolean carriesEffect(ItemStack stack, MobEffect effect) {
         return carriesEffect(stack, carried -> carried == effect);
     }
@@ -227,22 +213,18 @@ public final class ItemUtil {
         return false;
     }
 
-    // Durability points left before the stack breaks.
     public static int usesLeft(ItemStack stack) {
         return stack.getMaxDamage() - stack.getDamageValue();
     }
 
-    // How much of the durability is left out of a hundred.
     public static double durabilityPercent(ItemStack stack) {
         return 100.0 * usesLeft(stack) / stack.getMaxDamage();
     }
 
-    // True when the remaining durability is at or under this share of the whole.
     public static boolean wornBelow(ItemStack stack, double share) {
         return stack.isDamageableItem() && usesLeft(stack) <= stack.getMaxDamage() * share;
     }
 
-    // True when both lists hold the same stacks slot by slot. Lists of two lengths never do.
     public static boolean sameStacks(List<ItemStack> one, List<ItemStack> other) {
         return one.size() == other.size() && sameContents(one, other);
     }
@@ -260,7 +242,6 @@ public final class ItemUtil {
         return true;
     }
 
-    // The level of an enchantment on a stack. Zero when absent.
     public static int enchantLevel(ResourceKey<Enchantment> enchantment, ItemStack stack) {
         if (OfflineClient.MC.level == null || stack.isEmpty()) {
             return 0;
@@ -272,7 +253,6 @@ public final class ItemUtil {
             .orElse(0);
     }
 
-    // Mining speed against a block including the Efficiency enchantment.
     public static float miningSpeed(ItemStack stack, BlockState state) {
         float speed = stack.getDestroySpeed(state);
         if (speed > 1) {
@@ -289,8 +269,6 @@ public final class ItemUtil {
         return bestToolSlot(state, 1, stack -> true, InventoryUtil.HOTBAR_SIZE);
     }
 
-    // The slot among the first few up to the limit that mines the block fastest. A stack
-    // counts only when the filter accepts it and it beats the floor speed.
     public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed,
                                    int slots) {
         int bestSlot = -1;
@@ -337,19 +315,17 @@ public final class ItemUtil {
         return stack.get(DataComponents.TOOL) == null || stack.isCorrectToolForDrops(state);
     }
 
-    // True when the block drops something broken with this stack. Most blocks drop for anything.
     public static boolean getsDrops(ItemStack stack, BlockState state) {
         return !state.requiresCorrectToolForDrops() || stack.isCorrectToolForDrops(state);
     }
 
-    // True for a tool that loses durability on the blocks it breaks. Anything else mines for free.
     public static boolean wears(ItemStack stack) {
         Tool tool = stack.get(DataComponents.TOOL);
         return tool != null && tool.damagePerBlock() > 0 && stack.isDamageableItem();
     }
 
-    // True when breaking the block costs the stack durability. Shears wear on everything but fire.
-    // Any other tool breaks a block with no hardness such as grass for free.
+    // Shears wear on everything but fire. Any other tool breaks a block with no hardness such as
+    // grass for free.
     public static boolean wearsOn(ItemStack stack, BlockState state) {
         if (!wears(stack)) {
             return false;
@@ -360,19 +336,16 @@ public final class ItemUtil {
         return state.getBlock().defaultDestroyTime() != 0;
     }
 
-    // Null for items that cannot be worn.
     public static EquipmentSlot equipSlot(ItemStack stack) {
         Equippable equippable = stack.get(DataComponents.EQUIPPABLE);
         return equippable == null ? null : equippable.slot();
     }
 
-    // The slot as a player reads it such as main hand or offhand or head.
     public static String slotWords(EquipmentSlot slot) {
         return slot == EquipmentSlot.MAINHAND ? "main hand" : slot.getName();
     }
 
-    // Sums a flat attribute the item grants in a slot. Multiplier style
-    // modifiers scale a base of zero.
+    // Multiplier style modifiers scale a base of zero.
     public static double attributeValue(ItemStack stack, Holder<Attribute> attribute, EquipmentSlot slot) {
         ItemAttributeModifiers modifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS,
             ItemAttributeModifiers.EMPTY);

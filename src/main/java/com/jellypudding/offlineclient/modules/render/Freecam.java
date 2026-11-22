@@ -43,10 +43,8 @@ public final class Freecam extends Module implements AwayView {
 
     public enum Start { INSIDE, IN_FRONT, ABOVE }
 
-    // How far a start other than Inside sits from your eyes.
     private static final double START_STEP = 3;
 
-    // Share of the speed one wheel notch changes at sensitivity one.
     private static final double NOTCH_SHARE = 0.25;
     private static final double MIN_SPEED = 0.1;
 
@@ -138,7 +136,6 @@ public final class Freecam extends Module implements AwayView {
         return isEnabled() && blockClicks.isOn();
     }
 
-    // True whilst the keys and the mouse drive the camera rather than the body.
     public boolean movesCamera() {
         return isEnabled() && inputTarget.is(InputTarget.CAMERA);
     }
@@ -155,7 +152,7 @@ public final class Freecam extends Module implements AwayView {
 
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (blocksClicks()) {
+        if (blocksClicks() && !event.byModule()) {
             event.cancel();
         }
     }
@@ -298,7 +295,6 @@ public final class Freecam extends Module implements AwayView {
         moveCamera();
     }
 
-    // True whilst the body is walking to a clicked spot and the camera must stay put.
     private boolean walkTick() {
         if (!trip.active()) {
             return false;
@@ -363,7 +359,6 @@ public final class Freecam extends Module implements AwayView {
     }
 
     private void moveCamera() {
-        // Holding sprint doubles the pace.
         double move = speed.getValue() * (mc.options.keySprint.isDown() ? 1 : 0.5);
         double yaw = Math.toRadians(camYaw);
         Vec3 forward = new Vec3(-Math.sin(yaw), 0, Math.cos(yaw));

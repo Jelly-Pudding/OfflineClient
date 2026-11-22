@@ -44,8 +44,7 @@ public final class ProxyTunnel extends ChannelDuplexHandler {
         }
     }
 
-    // What the proxy asks for before it lets you through. It is saved as the name and the password
-    // on two lines.
+    // Saved as the name and the password on two lines.
     public record Login(String name, String password) {
 
         public static Login parse(String text) {
@@ -117,7 +116,6 @@ public final class ProxyTunnel extends ChannelDuplexHandler {
         this.login = login;
     }
 
-    // Finishes once the proxy has reached the server or fails with what went wrong.
     public CompletableFuture<Void> done() {
         return done;
     }
@@ -165,7 +163,6 @@ public final class ProxyTunnel extends ChannelDuplexHandler {
         });
     }
 
-    // Why this connection cannot go through the proxy. Null when it can.
     private String refusal() {
         if (host.isEmpty()) {
             return "No proxy is picked. Pick one in the Proxies tab.";
@@ -274,7 +271,6 @@ public final class ProxyTunnel extends ChannelDuplexHandler {
         }
     }
 
-    // The request that asks the proxy to reach the server.
     private void writeConnect(ByteBuf out) {
         switch (kind) {
             case SOCKS_5 -> writeSocks5(out);

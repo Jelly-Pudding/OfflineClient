@@ -8,19 +8,14 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.function.Predicate;
 
-// Another player who is no friend. One kind counts anyone in view and the other only those
-// within a range. Either can be narrowed to the players on the enemy list or to players doing
-// one thing such as holding a bed.
 final class PlayerNear extends Condition {
 
-    // Further than anyone can be seen.
     private static final double IN_VIEW = Double.MAX_VALUE;
 
     // Null for the kind that counts anyone in view.
     private final NumberSetting range;
     private final BoolSetting enemiesOnly;
     private final Predicate<Player> doing;
-    // What the player did such as came within or held a bed within.
     private final String did;
     private String reason = "";
 

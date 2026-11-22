@@ -21,7 +21,6 @@ public final class IdleTime {
     private IdleTime() {
     }
 
-    // Milliseconds since the last touch.
     public long millis() {
         return Util.getMillis() - touchedAt;
     }

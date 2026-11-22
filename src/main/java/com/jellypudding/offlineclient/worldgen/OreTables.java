@@ -32,7 +32,6 @@ import java.util.function.Predicate;
 // FeatureSorter puts each feature among every feature of its step on a vanilla server.
 public final class OreTables {
 
-    // The ground a dimension builds in and the ores its decoration step places.
     public record Table(int minBuildY, int maxBuildY, boolean nether, List<PlacedOre> ores) {
 
         public boolean outsideBuildHeight(int y) {
@@ -136,7 +135,6 @@ public final class OreTables {
     private OreTables() {
     }
 
-    // The ore kind a block is. Null for any other block.
     public static OreKind kindOf(Block block) {
         return KINDS.get(block);
     }

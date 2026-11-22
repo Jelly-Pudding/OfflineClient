@@ -27,7 +27,6 @@ public final class BaseBlocks {
     private static final int FEW = 3;
     private static final int MANY = 6;
 
-    // Valuables and trophies.
     private static final List<Block> RARE = List.of(Blocks.NETHERITE_BLOCK, Blocks.EMERALD_BLOCK,
         Blocks.IRON_BLOCK, Blocks.RAW_GOLD_BLOCK, Blocks.HEAVY_CORE, Blocks.SPONGE, Blocks.OCHRE_FROGLIGHT,
         Blocks.VERDANT_FROGLIGHT, Blocks.PEARLESCENT_FROGLIGHT, Blocks.DRAGON_HEAD, Blocks.PLAYER_HEAD,
@@ -37,7 +36,7 @@ public final class BaseBlocks {
         // A sniffer egg is only ever an item until a player puts it down.
         Blocks.SNIFFER_EGG);
 
-    // Blocks players stop at to use. Trees grow bee nests and never beehives.
+    // Trees grow bee nests and never beehives.
     private static final List<Block> WORKSTATIONS = List.of(Blocks.ENCHANTING_TABLE, Blocks.ANVIL,
         Blocks.CHIPPED_ANVIL, Blocks.BEACON, Blocks.CONDUIT, Blocks.LODESTONE, Blocks.RESPAWN_ANCHOR,
         Blocks.JUKEBOX, Blocks.BEEHIVE);
@@ -71,8 +70,6 @@ public final class BaseBlocks {
     private BaseBlocks() {
     }
 
-    // The blocks that show a spawner stands where its structure put it. Empty where no
-    // structure makes spawners.
     public static Set<Block> spawnerCompanions(ResourceKey<Level> dimension) {
         return COMPANIONS.getOrDefault(dimension, Set.of());
     }
@@ -275,7 +272,6 @@ public final class BaseBlocks {
         return blocks;
     }
 
-    // Every block of a colour set except the colours a structure uses.
     private static List<Block> allBut(ColorCollection<Block> family, Block... generated) {
         List<Block> skipped = List.of(generated);
         return family.asList().stream().filter(block -> !skipped.contains(block)).toList();

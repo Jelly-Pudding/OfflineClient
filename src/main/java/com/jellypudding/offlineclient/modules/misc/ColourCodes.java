@@ -38,7 +38,6 @@ public final class ColourCodes extends Module {
         tooHeavy.clear();
     }
 
-    // True whilst sign lines go out with their codes made real.
     public boolean coloursSigns() {
         return isEnabled() && signs.isOn();
     }

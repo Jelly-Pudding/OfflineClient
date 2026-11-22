@@ -18,21 +18,18 @@ final class HopPath {
 
     private static final double PLAN_STEP = 0.25;
 
-    // A leg this close to straight up or down counts as one.
     private static final double UPRIGHT = 1.0E-6;
 
     // A vault tries heights a block apart. It may go a little over the top of the world.
     private static final double VAULT_STEP = 1;
     private static final double VAULT_HEADROOM = 2;
 
-    // How far under a spot the ground may sit and still count as standing on it.
     private static final double GROUND_PROBE = 0.05;
 
     // The server's own test for a box hanging in the air looks this far round and below.
     private static final double FLOAT_MARGIN = 0.0625;
     private static final double FLOAT_DEPTH = 0.55;
 
-    // Spots round one with no room are tried nearest first out to two blocks.
     private static final double NEAR = 2;
     private static final List<Vec3> NEARBY = nearby();
 
@@ -65,7 +62,6 @@ final class HopPath {
         return to.subtract(from).horizontalDistance() <= UPRIGHT;
     }
 
-    // True when the whole box and anyone riding it has room at the spot.
     static boolean fits(Entity mover, Vec3 spot) {
         return clear(mover, spot, UnaryOperator.identity());
     }
@@ -78,7 +74,6 @@ final class HopPath {
         return !mover.level().noCollision(mover, boxAt(mover, spot).move(0, -GROUND_PROBE, 0));
     }
 
-    // True when the server takes a box at the spot for one hanging in the air.
     static boolean floating(Entity mover, Vec3 spot) {
         AABB around = boxAt(mover, spot).inflate(FLOAT_MARGIN).expandTowards(0, -FLOAT_DEPTH, 0);
         return mover.level().getBlockStates(around).allMatch(BlockState::isAir);
@@ -94,13 +89,10 @@ final class HopPath {
         return null;
     }
 
-    // Somewhere to stop that is clear and out of lava.
     static boolean landing(Entity mover, Vec3 spot) {
         return fits(mover, spot) && !BlockUtil.touchesLava(mover.level(), boxAt(mover, spot));
     }
 
-    // The first landing along a way past whatever blocks it. Null when nothing blocks the
-    // way or nothing behind it is free within the reach.
     static Vec3 beyond(Entity mover, Vec3 from, Vec3 way, double reach) {
         boolean blocked = !fits(mover, from);
         for (double far = PLAN_STEP; far <= reach; far += PLAN_STEP) {
@@ -129,7 +121,6 @@ final class HopPath {
         return null;
     }
 
-    // True when the box and its riders have room all along the way the server carries them.
     static boolean clearWay(Entity mover, Vec3 from, Vec3 to) {
         List<Vec3> turns = turns(from, to);
         for (int leg = 1; leg < turns.size(); leg++) {
@@ -155,7 +146,6 @@ final class HopPath {
         return delta.lengthSqr() == 0 || clear(mover, from, box -> box.expandTowards(delta));
     }
 
-    // Tests the mover's box and each rider's box moved to the spot and shaped.
     private static boolean clear(Entity mover, Vec3 spot, UnaryOperator<AABB> shape) {
         Vec3 shift = spot.subtract(mover.position());
         if (!mover.level().noCollision(mover, shape.apply(mover.getBoundingBox().move(shift)))) {
@@ -183,7 +173,6 @@ final class HopPath {
         return straight;
     }
 
-    // The way the server itself would carry the box with a stop at every turn.
     private static List<Vec3> corners(Vec3 from, Vec3 to, double hop, double drop) {
         List<Vec3> turns = turns(from, to);
         List<Vec3> stops = new ArrayList<>();

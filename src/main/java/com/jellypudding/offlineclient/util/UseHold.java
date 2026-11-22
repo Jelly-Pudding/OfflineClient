@@ -7,7 +7,6 @@ import net.minecraft.client.Minecraft;
 // moment to pick the item up and a use that never starts is written off rather than held.
 public final class UseHold {
 
-    // Ticks the hand is given to start before the attempt is abandoned.
     private static final int START_TIMEOUT = 20;
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -15,16 +14,15 @@ public final class UseHold {
     private boolean started;
     private int waited;
 
-    // Called once as the use begins.
     public void begin() {
         started = false;
         waited = 0;
     }
 
-    // True whilst the use is still running. False once it has finished or been abandoned. The
-    // game starts another use the tick after one ends for as long as the key is down and it
-    // does that before any module hears of the tick. The vanilla wait between two uses is kept
-    // full whilst this one runs and the key is let go before another can start.
+    // False once the use has finished or been abandoned. The game starts another use the tick after
+    // one ends for as long as the key is down and it does that before any module hears of the tick.
+    // The vanilla wait between two uses is kept full whilst this one runs and the key is let go
+    // before another can start.
     public boolean tick() {
         if (MC.player.isUsingItem()) {
             started = true;
@@ -32,13 +30,12 @@ public final class UseHold {
         } else if (started || ++waited > START_TIMEOUT) {
             return false;
         }
-        InputUtil.hold(MC.options.keyUse);
+        InputUtil.holdUse();
         return true;
     }
 
-    // Lets go of the key. A key the player really holds stays down.
     public void release() {
-        InputUtil.release(MC.options.keyUse);
+        InputUtil.releaseUse();
         begin();
     }
 }

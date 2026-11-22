@@ -26,16 +26,14 @@ public final class PaletteCells {
     private PaletteCells() {
     }
 
-    // The block palette of a section that lists its entries. Null for a section of a single
-    // block and for one on the global palette.
+    // Null for a section of a single block and for one on the global palette.
     public static Palette<BlockState> listedBlocks(LevelChunkSection section) {
         PalettedContainer.Data<BlockState> data = section.getStates().data;
         int bits = data.storage().getBits();
         return bits == 0 || bits > MAX_LISTED_BLOCK_BITS ? null : data.palette();
     }
 
-    // Which entries of a section's block palette at least one cell holds. Only for a section
-    // whose palette is listed.
+    // Only for a section whose palette is listed.
     public static boolean[] usedBlocks(LevelChunkSection section) {
         PalettedContainer.Data<BlockState> data = section.getStates().data;
         BitStorage storage = data.storage();

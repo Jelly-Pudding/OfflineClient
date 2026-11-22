@@ -11,7 +11,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 public final class WatermarkElement extends HudElement {
 
-    // Space between the name and the version.
     private static final int GAP = 6;
 
     // The windowed ClickGUI writes the client name near the top left. The watermark gives way
@@ -45,7 +44,6 @@ public final class WatermarkElement extends HudElement {
         }
     }
 
-    // A rainbow runs along the name a letter at a time. Any other colour fills it whole.
     private void writeName(GuiGraphicsExtractor context, Font font) {
         if (!color.isRainbow()) {
             write(context, font, OfflineClient.NAME, 0, 0, color.getColor());

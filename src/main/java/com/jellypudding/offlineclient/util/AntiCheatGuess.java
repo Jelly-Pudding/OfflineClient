@@ -28,10 +28,8 @@ public enum AntiCheatGuess {
         }
     }
 
-    // How many pings after a join are read. Enough to tell a steady count from chance.
     private static final int PINGS = 5;
 
-    // How long after a join the guess waits for its pings before it settles on what it has.
     private static final long SETTLE_MILLIS = TimeUnit.SECONDS.toMillis(10);
 
     private static final List<Count> COUNTS = List.of(
@@ -45,7 +43,6 @@ public enum AntiCheatGuess {
     // far below nought. Polar counts down from anywhere else and Verus counts up.
     private static final int INTAVE_BELOW = -3005;
 
-    // The words an anti cheat goes by in its plugin name and in its commands.
     private static final Map<String, String> COMMAND_WORDS = Map.ofEntries(
         Map.entry("grim", "Grim"), Map.entry("grimac", "Grim"),
         Map.entry("vulcan", "Vulcan"), Map.entry("matrix", "Matrix"),
@@ -79,13 +76,11 @@ public enum AntiCheatGuess {
         }
     }
 
-    // True once the pings are all in or the wait for them is over.
     public synchronized boolean settled() {
         return pings.size() >= PINGS || System.currentTimeMillis() - joinedAt >= SETTLE_MILLIS;
     }
 
-    // The anti cheat the pings after the join point to. Null until they are all in and for a
-    // count that is not steady.
+    // Null until the pings are all in and for a count that is not steady.
     public synchronized String fromPings() {
         if (pings.size() < PINGS) {
             return null;
@@ -109,7 +104,7 @@ public enum AntiCheatGuess {
         };
     }
 
-    // The anti cheats among plugin names and command names. A command counts by its namespace.
+    // A command counts by its namespace.
     public static List<String> among(Collection<String> words) {
         Set<String> found = new LinkedHashSet<>();
         for (String word : words) {
@@ -123,12 +118,12 @@ public enum AntiCheatGuess {
         return List.copyOf(found);
     }
 
-    // The anti cheats whose commands the server sent. Empty whilst none did. Game thread only.
+    // Game thread only.
     public static List<String> fromCommands() {
         return among(ServerPlugins.roots());
     }
 
-    // The guess as a phrase for chat such as Grim going by its pings. Game thread only.
+    // Game thread only.
     public String summary() {
         List<String> named = fromCommands();
         if (!named.isEmpty()) {
@@ -147,7 +142,7 @@ public enum AntiCheatGuess {
         return settled() ? "§7none seen" : "§7still listening";
     }
 
-    // True when the guess has a name to give or saw pings it cannot place. Game thread only.
+    // Game thread only.
     public boolean found() {
         if (!fromCommands().isEmpty()) {
             return true;

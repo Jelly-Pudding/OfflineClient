@@ -26,12 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Every find the modules logged on this server in one window. The rows narrow to a module or
-// to a search and each can walk there or mark a waypoint or copy the spot or forget the find.
 public final class FindsScreen extends ListWindow {
 
-    // One find with what the list needs to sort and draw it. The distance is below nought
-    // for a find in another dimension.
+    // The distance is below nought for a find in another dimension.
     private record Row(FindLog log, Find find, double distance, String meta) {
 
         boolean here() {
@@ -39,7 +36,6 @@ public final class FindsScreen extends ListWindow {
         }
     }
 
-    // The buttons at the end of a row. Walking and marking only work in the dimension you are in.
     private enum RowAction implements RowList.Button {
         GO("go", "Walks there with the pathfinder and closes this list.", true),
         WAYPOINT("waypoint", "Saves the spot as a waypoint named after the find.", true),
@@ -97,7 +93,6 @@ public final class FindsScreen extends ListWindow {
 
     // Null lists every module.
     private FindLog filter;
-    // Clears the module in the filter after a second click.
     private ActionSetting clear;
     private boolean newestFirst;
     private boolean stale = true;
@@ -109,13 +104,10 @@ public final class FindsScreen extends ListWindow {
         choose(filter);
     }
 
-    // Opens the list over whatever screen is open. A null log lists every module.
     public static void open(FindLog log) {
         openOver(parent -> new FindsScreen(parent, log));
     }
 
-    // The rows a module with a log adds in one line. Saving the finds then opening the list
-    // and clearing the dimension you are in.
     public static Setting<?>[] settingsFor(FindLog log) {
         return new Setting<?>[] {
             log.saveSetting(),
@@ -145,8 +137,6 @@ public final class FindsScreen extends ListWindow {
         return sortX() - 4 - CLEAR_WIDTH;
     }
 
-    // The rows are worked out again when a find changes or the search or the order does.
-    // Twice a second they also catch up with the distances and ages.
     private void refresh() {
         int revisions = 1;
         for (FindLog log : logs) {
@@ -195,7 +185,6 @@ public final class FindsScreen extends ListWindow {
         list.show(shown);
     }
 
-    // The second line of a row such as 120 64 300 · Nether · 40 blocks · 5 minutes ago.
     private String meta(FindLog log, Find find, double distance) {
         StringBuilder text = new StringBuilder();
         if (filter == null) {
@@ -236,7 +225,6 @@ public final class FindsScreen extends ListWindow {
         footer.render(context, font, wx, wy, ww, wh, HINT);
     }
 
-    // The finds a tab holds on this server. The first tab counts them all.
     private String tally(int tab) {
         if (tab > 0) {
             return String.valueOf(counts.getOrDefault(logs.get(tab - 1), 0));
@@ -267,7 +255,6 @@ public final class FindsScreen extends ListWindow {
         }
     }
 
-    // Armed it turns red and the bar at the foot asks for the second click.
     private void renderClear(GuiGraphicsExtractor context, Font font, int y, int mouseX, int mouseY) {
         if (clear.isArmed()) {
             RowList.warning(context, font, clearX(), y, CLEAR_WIDTH, SearchField.HEIGHT, "confirm");
@@ -314,7 +301,6 @@ public final class FindsScreen extends ListWindow {
         return list.click(mx, my, this::act);
     }
 
-    // A click on the row itself does nothing.
     private void act(Row row, RowList.Button button) {
         if (button == null) {
             return;
@@ -332,7 +318,6 @@ public final class FindsScreen extends ListWindow {
         }
     }
 
-    // Named after the kind with the first free number such as stash3.
     private static String addWaypoint(Find find) {
         return WaypointStore.get().markFresh(find.kind().replace(" ", ""), find.pos(), find.dimension(),
             Modules.nextWaypointColour());

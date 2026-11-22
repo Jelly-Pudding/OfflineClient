@@ -35,11 +35,9 @@ import java.util.function.Function;
 // painting or name at all and its only item frames hang in End ships.
 public final class EntityClues {
 
-    // The clue an entity gives and the words read after found such as a painting.
     public record Clue(BaseClue clue, String what) {
     }
 
-    // One test of an entity. It hands back the words or null when the entity tells nothing.
     private record Rule(BaseClue clue, Function<Entity, String> test) {
     }
 
@@ -60,7 +58,6 @@ public final class EntityClues {
     private EntityClues() {
     }
 
-    // The first wanted clue the entity gives. Null when it gives none.
     public static Clue judge(Entity entity, Set<BaseClue> wanted) {
         for (Rule rule : RULES) {
             if (wanted.contains(rule.clue())) {
@@ -118,7 +115,6 @@ public final class EntityClues {
         return worn > 1 || (worn == 1 && VILLAGE_ARMOUR.get(only.getKey()) != only.getValue());
     }
 
-    // A pearl kept for later in a stasis chamber. Your own never count.
     private static String pearl(Entity entity) {
         boolean stasis = entity instanceof ThrownEnderpearl pearl && pearl.getOwner() != OfflineClient.MC.player
             && ProjectileUtil.inStasis(pearl);
@@ -147,8 +143,6 @@ public final class EntityClues {
         return ChatUtil.withArticle(typeName(living)) + " named " + given;
     }
 
-    // Tamed or saddled or leashed or carrying a chest. Your own pets and mounts and one ridden
-    // in passing never count.
     private static String pet(Entity entity) {
         if (!(entity instanceof Mob mob) || EntityUtil.isYours(mob) || carriesPlayer(mob)) {
             return null;
@@ -180,8 +174,6 @@ public final class EntityClues {
         return EntityUtil.isPet(mob);
     }
 
-    // A mob in a dimension it never turns up in by itself such as a cow in the nether. One with a
-    // player riding it or that is yours is passing through.
     private static String lost(Entity entity) {
         if (!(entity instanceof Mob mob) || EntityUtil.isYours(mob) || carriesPlayer(mob)
             || !MobHomes.lost(mob.getType(), mob.level().dimension())) {

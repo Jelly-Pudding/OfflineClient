@@ -40,7 +40,6 @@ import java.util.Locale;
 
 public final class MiddleClickExtra extends Module {
 
-    // The item a mode reaches for. Held modes keep the use key down until the use ends.
     public enum Mode {
         ADD_FRIEND(null, false),
         PEARL(Items.ENDER_PEARL, false),
@@ -173,7 +172,6 @@ public final class MiddleClickExtra extends Module {
         }
     }
 
-
     private void useItem(Mode chosen) {
         int limit = quickSwap.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
         int slot = InventoryUtil.findSlot(chosen.item, limit);
@@ -187,7 +185,7 @@ public final class MiddleClickExtra extends Module {
         if (chosen.held) {
             using = true;
             hold.begin();
-            InputUtil.hold(mc.options.keyUse);
+            InputUtil.holdUse();
             return;
         }
         mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
@@ -243,7 +241,7 @@ public final class MiddleClickExtra extends Module {
             return;
         }
         if (bowDrawn()) {
-            InputUtil.release(mc.options.keyUse);
+            InputUtil.releaseUse();
             return;
         }
         if (!hold.tick()) {
@@ -256,7 +254,6 @@ public final class MiddleClickExtra extends Module {
             && BowItem.getPowerForTime(mc.player.getTicksUsingItem()) >= 1;
     }
 
-    // Lets the key go and puts the slots back. A cancelled use keeps the slot the player chose.
     private void finish(boolean completed) {
         using = false;
         hold.release();

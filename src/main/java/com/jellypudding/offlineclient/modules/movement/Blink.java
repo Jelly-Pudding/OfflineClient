@@ -37,8 +37,7 @@ public final class Blink extends Module {
     // A hit lets go before the modules that act on it see the attack.
     private static final int LET_GO_FIRST = 100;
 
-    // An enemy has to back off this much past the range before the hold lets go. One on the
-    // edge would start and end a blink every tick.
+    // An enemy on the edge of the range would start and end a blink every tick.
     private static final double LET_GO_SLACK = 1;
 
     private final BoolSetting showCopy = new BoolSetting("Show copy",
@@ -69,19 +68,16 @@ public final class Blink extends Module {
     // going whilst the next blink holds its own.
     private final Queue<Packet<?>> sending = new ArrayDeque<>();
 
-    // The last packet queued. A repeat of it is not worth holding.
     private volatile ServerboundMovePlayerPacket lastHeld;
 
-    // The player the held packets were captured from. Weak to avoid pinning a dead world.
+    // Weak to avoid pinning a dead world.
     private volatile WeakReference<LocalPlayer> owner = new WeakReference<>(null);
 
     // Packets sent by release come straight back through this handler.
     private boolean releasing;
 
-    // False whilst no enemy is close and nothing is held.
     private volatile boolean holding;
 
-    // Read by Blink whilst it is on and by the walk home once it is off.
     private final Lagback.Watcher moved = new Lagback.Watcher();
 
     private FakePlayer.Body copy;
@@ -172,8 +168,6 @@ public final class Blink extends Module {
             entity -> EntityUtil.isOtherPlayer(entity) && EntityUtil.isEnemy(entity)) != null;
     }
 
-    // The enemy left. One packet takes the server to where you are when the way is clear.
-    // Otherwise the walk home sets off at once ahead of your own movement packet.
     private void letGo() {
         if (sending.isEmpty() && jumpHome()) {
             held.clear();
@@ -182,8 +176,7 @@ public final class Blink extends Module {
         walkHome();
     }
 
-    // The server put you somewhere new. Every held move and the walk home would pull you back.
-    // Whilst nothing is held there is no blink to end.
+    // The server put you somewhere new and every held move and the walk home would pull you back.
     private void serverMoved() {
         held.clear();
         sending.clear();
@@ -232,7 +225,6 @@ public final class Blink extends Module {
     }
 
     // The server has to hold you where you are before the hit lands or it lands out of reach.
-    // One packet takes you there when the way is clear. Otherwise the hit waits for the walk.
     @Subscribe(priority = LET_GO_FIRST)
     private void onAttack(PacketSendEvent event) {
         if (releasing || !holding || !letGoOnAttack.isOn() || !inGame()
@@ -252,7 +244,6 @@ public final class Blink extends Module {
         begin();
     }
 
-    // The last held packet that passes the test. Null whilst none does.
     private ServerboundMovePlayerPacket newestHeld(Predicate<ServerboundMovePlayerPacket> test) {
         ServerboundMovePlayerPacket newest = null;
         for (Packet<?> packet : held) {
@@ -263,9 +254,8 @@ public final class Blink extends Module {
         return newest;
     }
 
-    // Straight from where the server holds you to the newest spot in one position. The packet
-    // carries the newest held look. Without it a hit sent next would land facing where the blink
-    // began. A drop that hurts and a way with a wall on it go the long way.
+    // The packet carries the newest held look. Without it a hit sent next would land facing where
+    // the blink began. A drop that hurts and a way with a wall on it go the long way.
     private boolean jumpHome() {
         ServerboundMovePlayerPacket look = newestHeld(ServerboundMovePlayerPacket::hasRotation);
         ServerboundMovePlayerPacket newest = newestHeld(ServerboundMovePlayerPacket::hasPosition);
@@ -308,8 +298,6 @@ public final class Blink extends Module {
             && previous.getZ(-1) == next.getZ(-1);
     }
 
-    // Throws the held packets and the rest of the walk home away and puts the player back where
-    // the server holds them.
     private void cancel() {
         Vec3 back = !sending.isEmpty() ? walkedTo : holding ? start : null;
         held.clear();
@@ -341,8 +329,6 @@ public final class Blink extends Module {
         }
     }
 
-    // Adds the held packets to the walk home. Until the walk sends a position the server holds
-    // you where this blink began.
     private void queueHeld() {
         if (sending.isEmpty()) {
             walkedTo = start;
@@ -360,7 +346,7 @@ public final class Blink extends Module {
         }
     };
 
-    // Sends what waits up to and including the next position. True once nothing is left.
+    // True once nothing is left.
     private boolean walkHome() {
         LocalPlayer player = mc.player;
         if (player == null || !isEnabled() && moved.happened()) {

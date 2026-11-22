@@ -15,8 +15,7 @@ import java.util.Map;
 // tied to a server brings the list for that server with it.
 public final class ModuleLock extends Module {
 
-    // How long the client stays quiet about a module after saying that it is locked. Something
-    // that tries every tick must not fill the chat.
+    // Something that tries every tick must not fill the chat.
     private static final long QUIET_MS = 3000;
 
     private final ChoiceListSetting locked = new ChoiceListSetting("Locked modules",
@@ -29,7 +28,6 @@ public final class ModuleLock extends Module {
             }
         });
 
-    // When the player was last told about each module.
     private final Map<Module, Long> told = new HashMap<>();
 
     public ModuleLock() {
@@ -44,12 +42,11 @@ public final class ModuleLock extends Module {
         return count(locked.size());
     }
 
-    // True for a module on the list. The lock never holds itself.
+    // The lock never holds itself.
     public boolean holds(Module module) {
         return module != this && locked.contains(module.getName());
     }
 
-    // Tells the player that the module stays off.
     public void refuse(Module module) {
         long now = System.currentTimeMillis();
         Long last = told.get(module);

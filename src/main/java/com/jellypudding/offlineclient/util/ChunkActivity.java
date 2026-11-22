@@ -23,15 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// Reads what a chunk the server loaded from its save gives away about who has been near
-// it. The server keeps a loaded palette as it is until the chunk is saved and unloaded.
-// An entry no cell holds any more is a block broken or replaced since then. An entry whose
-// block is still there in another state is a block that was used. Only means something
-// for a chunk the palettes call old. Game thread only.
+// The server keeps a loaded palette as it is until the chunk is saved and unloaded. An entry no
+// cell holds any more is a block broken or replaced since then. An entry whose block is still there
+// in another state is a block that was used. Only means something for a chunk the palettes call
+// old. Game thread only.
 public final class ChunkActivity {
 
-    // How a block changed. A used block flipped one property and the words read after its
-    // name for either way it went.
     public enum Use {
         GONE(null, "gone", "gone"),
         OPENED(BlockStateProperties.OPEN, "opened", "closed"),
@@ -66,29 +63,23 @@ public final class ChunkActivity {
         }
     }
 
-    // One block that changed and the way it went.
     public record Sign(Block block, Use use, boolean on) {
 
-        // Such as oak door opened or chest gone.
         public String text() {
             return ChatUtil.words(block) + " " + (on ? use.onWord : use.offWord);
         }
     }
 
-    // A section of the chunk with what changed in it.
     public record Change(int section, List<Sign> signs) {
     }
 
-    // How one chunk is read. Near is for a chunk the server ticks for you where only what
-    // nothing but a player could have done counts. Paper is for a server that may run its anti
-    // xray. Ignored blocks never count.
+    // Near is for a chunk the server ticks for you where only what nothing but a player could have
+    // done counts. Paper is for a server that may run its anti xray.
     public record Rules(boolean usedBlocks, boolean ores, boolean near, boolean paper, Set<Block> ignored) {
     }
 
-    // The uses a flipped property can show.
     private static final List<Use> USES = Arrays.stream(Use.values()).filter(use -> use.property != null).toList();
 
-    // How many signs a description names before it counts the rest.
     private static final int MAX_NAMED = 3;
 
     // Paper anti xray in its other modes adds its whole hidden list to every low section. A
@@ -98,13 +89,11 @@ public final class ChunkActivity {
     // nearly every chunk underground.
     private static final int ANTI_XRAY_SIGNS = 2;
 
-    // The raw blocks ore veins leave.
     private static final Set<Block> VEIN_BLOCKS = Set.of(Blocks.RAW_IRON_BLOCK, Blocks.RAW_COPPER_BLOCK);
 
     private ChunkActivity() {
     }
 
-    // Every section with a change the rules count from the bottom up. Empty when there is none.
     public static List<Change> read(LevelChunk chunk, Rules rules) {
         LevelChunkSection[] sections = chunk.getSections();
         List<List<Sign>> found = new ArrayList<>(sections.length);
@@ -142,7 +131,6 @@ public final class ChunkActivity {
         return sectionsGone.get(block) >= ANTI_XRAY_SECTIONS || (obfuscated && AntiXray.HIDDEN.contains(block));
     }
 
-    // The signs in words such as chest gone and oak door opened. Past a few the rest are counted.
     public static String describe(List<Change> changes) {
         Set<String> texts = new LinkedHashSet<>();
         for (Change change : changes) {
@@ -195,8 +183,7 @@ public final class ChunkActivity {
         return counts ? new Sign(state.getBlock(), Use.GONE, false) : null;
     }
 
-    // The use that turned this unused state into one a cell holds now. Null when there is
-    // none. Anti xray lists the default states of its hidden blocks and those say nothing.
+    // Anti xray lists the default states of its hidden blocks and those say nothing.
     private static Sign useOf(BlockState state, Set<BlockState> usedStates, Rules rules) {
         Block block = state.getBlock();
         if (!rules.usedBlocks() || (rules.paper() && AntiXray.HIDDEN.contains(block))) {
@@ -214,7 +201,6 @@ public final class ChunkActivity {
         return null;
     }
 
-    // Ores and the blocks ore veins leave. Anti xray engines hide these.
     private static boolean isOre(BlockState state) {
         return BlockUtil.isOre(state) || VEIN_BLOCKS.contains(state.getBlock());
     }

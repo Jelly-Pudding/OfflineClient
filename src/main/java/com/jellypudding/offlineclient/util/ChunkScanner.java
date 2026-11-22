@@ -46,7 +46,6 @@ public final class ChunkScanner<T> {
         void run(View view, List<T> out);
     }
 
-    // Handed world coordinates and the state standing there.
     public interface BlockVisitor {
         void accept(int x, int y, int z, BlockState state);
     }
@@ -88,13 +87,12 @@ public final class ChunkScanner<T> {
             return window.get(pos);
         }
 
-        // Every block of the centre chunk the test accepts. A section whose palette cannot
-        // hold one is skipped whole. A section of cave air counts as empty and is still read.
+        // A section whose palette cannot hold a wanted block is skipped whole. A section of cave
+        // air counts as empty and is still read.
         public void forEachMatching(Predicate<BlockState> wanted, BlockVisitor out) {
             forEachMatching(minY(), maxY(), wanted, out);
         }
 
-        // The same between two heights. A section wholly outside them is never read.
         public void forEachMatching(int fromY, int toY, Predicate<BlockState> wanted, BlockVisitor out) {
             LevelChunkSection[] sections = centre.getSections();
             int baseX = centre.getPos().getMinBlockX();
@@ -121,21 +119,18 @@ public final class ChunkScanner<T> {
         }
     }
 
-    // How many chunks out from the scanned one each view reaches.
     private final int reach;
     // A block changed this close to a chunk border also rescans the chunk across it. Read on the
     // network thread.
     private volatile int border;
     private final Map<ChunkPos, List<T>> results = new HashMap<>();
     private final Map<ChunkPos, Future<List<T>>> pending = new HashMap<>();
-    // Chunks scanned whilst part of their window was missing.
     private final Set<ChunkPos> partial = new HashSet<>();
-    // Chunks the server changed. Filled from the network thread.
+    // Filled from the network thread.
     private final Set<ChunkPos> changed = ConcurrentHashMap.newKeySet();
     // Changes seen last tick. The game applies a packet after the scanner sees it.
     private Set<ChunkPos> due = new HashSet<>();
     private List<T> collected = List.of();
-    // Set whenever a chunk result is added or dropped.
     private boolean stale;
     // A rejoin and a dimension change both hand out a new world. Scans of the last one are dropped.
     private final WorldWatch world = new WorldWatch();
@@ -185,7 +180,6 @@ public final class ChunkScanner<T> {
         }
     }
 
-    // The chunk of a changed block and every chunk across a border it lies close to.
     private void changedAt(BlockPos pos) {
         int west = SectionPos.blockToSectionCoord(pos.getX() - border);
         int east = SectionPos.blockToSectionCoord(pos.getX() + border);
@@ -219,7 +213,6 @@ public final class ChunkScanner<T> {
         return collected.size();
     }
 
-    // True once every loaded chunk in range has been read and nothing waits on the workers.
     public boolean idle() {
         return pending.isEmpty();
     }
@@ -287,8 +280,6 @@ public final class ChunkScanner<T> {
         }
     }
 
-    // Chunks scanned with part of their window missing that a chunk arriving within reach
-    // has made whole. Waiting for the whole window scans each of them once more at most.
     private Set<ChunkPos> filledIn(Set<ChunkPos> arrived) {
         if (partial.isEmpty() || arrived.isEmpty()) {
             return Set.of();

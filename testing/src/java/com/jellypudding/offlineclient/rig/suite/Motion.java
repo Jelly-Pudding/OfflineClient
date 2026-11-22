@@ -11,7 +11,7 @@ final class Motion {
     private static final int HEARD_TICKS = 4;
     private static final int LAND_LIMIT = 300;
 
-    // How one stretch of movement went. Heights are counted from where it began.
+    // Heights are counted from where the stretch began.
     record Moved(double across, double rise, double highest, double lowest, int airTicks, int takeOffs,
                  int setbacks) {
     }
@@ -19,7 +19,6 @@ final class Motion {
     private Motion() {
     }
 
-    // Holds the keys for the ticks and lets go of them again.
     static Moved hold(Rig rig, int ticks, int... keys) {
         return watch(rig, ticks, () -> {
             for (int key : keys) {
@@ -32,7 +31,6 @@ final class Motion {
         });
     }
 
-    // Watches the player for the ticks between two things a case does.
     static Moved watch(Rig rig, int ticks, Runnable begin, Runnable end) {
         Vec3 from = rig.world().where();
         int setbacks = rig.setbacks();
@@ -62,7 +60,6 @@ final class Motion {
             airTicks, takeOffs, rig.setbacks() - setbacks);
     }
 
-    // Ticks until the player stands on something or floats in water. The fall begins here.
     static int untilLanded(Rig rig) {
         rig.until("the fall to begin", HEARD_TICKS * 5, mc -> !mc.player.onGround());
         return rig.until("the landing", LAND_LIMIT, mc -> mc.player.onGround() || mc.player.isInWater());

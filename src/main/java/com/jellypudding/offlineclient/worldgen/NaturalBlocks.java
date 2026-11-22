@@ -9,10 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-// Blocks the world puts down on its own. Each one comes from the 26.3 terrain or its surface
-// rules or ore veins or a feature some biome places or from what those grow and form into. Anything
-// else found near you was most likely put there by a player. Every structure counts as placed and
-// dungeons and desert wells and fossils do as well.
+// Each block comes from the 26.3 terrain or its surface rules or ore veins or a feature some biome
+// places or from what those grow and form into. Every structure counts as placed and dungeons and
+// desert wells and fossils do as well.
 public final class NaturalBlocks {
 
     public static final List<Block> BLOCKS = build();
@@ -36,8 +35,7 @@ public final class NaturalBlocks {
         return SET.contains(block);
     }
 
-    // True for a block that can sit above the highest ground without a player. Trees and snow
-    // and lightning fire leave these and an enderman sets down whatever it carries.
+    // Trees and snow and lightning fire leave these and an enderman sets down whatever it carries.
     public static boolean aloft(BlockState state) {
         return state.is(BlockTags.LEAVES) || state.is(BlockTags.OVERWORLD_NATURAL_LOGS)
             || state.is(BlockTags.FIRE) || state.is(BlockTags.ENDERMAN_HOLDABLE)

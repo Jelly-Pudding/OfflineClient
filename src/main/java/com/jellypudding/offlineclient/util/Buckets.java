@@ -66,22 +66,20 @@ public final class Buckets {
         return hit != null && hit.getBlockPos().equals(source) ? aim : null;
     }
 
-    // Puts a bucket of the kind in hand through the loan and uses it once looking at the aim.
     // The loan stays open and the bucket the use leaves behind waits in the lent slot.
     public static boolean useHeld(InventoryUtil.HotbarLoan loan, Item bucket, Vec3 aim) {
         return loan.hold(bucket, InventoryUtil.WHOLE_INVENTORY) && useFacing(aim);
     }
 
-    // Borrows a bucket of the kind and uses it once looking at the aim. True when the game took the use.
+    // True when the game took the use.
     public static boolean use(InventoryUtil.HotbarLoan loan, Item bucket, Vec3 aim) {
         boolean used = useHeld(loan, bucket, aim);
         loan.giveBack();
         return used;
     }
 
-    // Borrows an empty bucket and fills it once looking at the aim. A lone bucket fills
-    // where it stands. One taken from a stack needs a free slot or the fill is dropped.
-    // True when the game took the use.
+    // A lone bucket fills where it stands. One taken from a stack needs a free slot or the fill is
+    // dropped.
     public static boolean fill(InventoryUtil.HotbarLoan loan, Vec3 aim) {
         int slot = InventoryUtil.findSlot(stack -> stack.is(Items.BUCKET) && stack.getCount() == 1,
             InventoryUtil.WHOLE_INVENTORY);
@@ -93,14 +91,12 @@ public final class Buckets {
         return used;
     }
 
-    // Uses the held item with the view turned to the aim for the one call.
     public static boolean useFacing(Vec3 aim) {
         return RotationManager.whileFacing(RotationManager.yawTo(aim), RotationManager.pitchTo(aim),
             InputUtil::useMainHand);
     }
 
-    // Fills an empty bucket from the water or powder snow at the spot. The bucket in hand
-    // goes first and the loan stays open. True once the use went through.
+    // The bucket in hand goes first and the loan stays open. True once the use went through.
     public static boolean scoop(BlockPos source, InventoryUtil.HotbarLoan loan) {
         Vec3 aim = scoopAim(source);
         return aim != null && useHeld(loan, Items.BUCKET, aim);
@@ -124,7 +120,6 @@ public final class Buckets {
             && container.canPlaceLiquid(MC.player, MC.level, pos, state, Fluids.WATER);
     }
 
-    // The middle of the face first and then four points around it on the same face.
     private static List<Vec3> facePoints(BlockPos pos, Direction face) {
         Vec3 middle = BlockUtil.hitPoint(pos, face);
         List<Vec3> points = new ArrayList<>();
@@ -137,7 +132,6 @@ public final class Buckets {
         return points;
     }
 
-    // The ray a bucket casts when the view points at the aim. Null when it meets nothing.
     private static BlockHitResult ray(Vec3 aim, ClipContext.Fluid fluids) {
         return ray(RotationManager.yawTo(aim), RotationManager.pitchTo(aim), fluids);
     }

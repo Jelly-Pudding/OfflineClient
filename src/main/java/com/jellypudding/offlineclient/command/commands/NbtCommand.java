@@ -34,8 +34,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 
-// Values are shown one to a line. The clipboard gets the command that makes the item or the
-// entity or the block again. An entity and a block show what the server has told the client.
 public final class NbtCommand extends Command {
 
     private static final String FULL = "full";
@@ -104,7 +102,6 @@ public final class NbtCommand extends Command {
         show(changed);
     }
 
-    // A player or anything else the summon command refuses puts its bare data on the clipboard.
     private static void showEntity(LocalPlayer player) {
         if (!(OfflineClient.MC.hitResult instanceof EntityHitResult hit)) {
             ChatUtil.error("Point at an entity first.");
@@ -132,7 +129,6 @@ public final class NbtCommand extends Command {
         show(data);
     }
 
-    // The state comes first and then whatever the block keeps inside that the server has sent.
     private static void showBlock(LocalPlayer player) {
         BlockHitResult hit = BlockUtil.aimedBlock();
         if (hit == null) {
@@ -167,7 +163,6 @@ public final class NbtCommand extends Command {
         return tag instanceof CompoundTag compound ? compound : new CompoundTag();
     }
 
-    // The item id with its changed components in brackets and the count after them.
     private static String giveCommand(ItemStack stack, CompoundTag changed) {
         StringBuilder command = new StringBuilder("/give @s ").append(stack.typeHolder().getRegisteredName());
         if (!changed.isEmpty()) {
@@ -183,7 +178,6 @@ public final class NbtCommand extends Command {
         return command.toString();
     }
 
-    // Each line copies its own value when clicked.
     private static void show(CompoundTag components) {
         for (String key : components.keySet().stream().sorted().toList()) {
             Tag value = components.get(key);

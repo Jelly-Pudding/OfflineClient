@@ -31,7 +31,6 @@ public final class Slingshot extends Module {
 
     public enum Way { BACK, AHEAD }
 
-    // Hops are tried this much shorter each time from the longest down.
     private static final double SEARCH_STEP = 0.5;
 
     // A hop ahead stops this far short of anything alive in the way. The shot would
@@ -93,8 +92,6 @@ public final class Slingshot extends Module {
         carrier.carry(event, shot, launch);
     }
 
-    // The chosen way first and then the level and the other ways where allowed. Null when
-    // none has room for a hop.
     private Hop.Plan launch(HeldShot shot) {
         Vec3 aim = shot.aim();
         List<Way> ways = new ArrayList<>(List.of(way.getValue()));
@@ -117,7 +114,6 @@ public final class Slingshot extends Module {
         return null;
     }
 
-    // The longest hop along the line that the server takes both ways.
     private Hop.Plan furthest(HeldShot shot, Way hop, Vec3 line) {
         Hop.Plan plan = Hop.plan();
         Entity mover = Hop.mover(mc.player);
@@ -143,7 +139,6 @@ public final class Slingshot extends Module {
         return null;
     }
 
-    // How far the mover goes along the line before it runs into anything alive.
     private double clearAhead(Entity mover, Vec3 line, double longest) {
         AABB box = mover.getBoundingBox();
         Vec3 centre = box.getCenter();

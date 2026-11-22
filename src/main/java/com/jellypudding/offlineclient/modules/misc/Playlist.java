@@ -33,11 +33,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Plays the songs you pick in place of the game's own music with the pause you choose. The
-// game's music stays quiet whilst this is on and comes back after its usual wait once it is off.
 public final class Playlist extends Module {
 
-    // One song of the game or a disc and the sound event that holds it.
     private record Track(Identifier event, Sound sound) {
 
         private String id() {
@@ -45,8 +42,6 @@ public final class Playlist extends Module {
         }
     }
 
-    // A song played as music the way the game plays its own with the track already chosen. Its
-    // volume and pitch follow the settings whilst it plays.
     private final class Song extends AbstractTickableSoundInstance {
 
         private final Track track;
@@ -84,12 +79,11 @@ public final class Playlist extends Module {
     // The game hands out a fresh one of these whenever it reloads its sounds.
     private static final Identifier GAME_MUSIC = Identifier.withDefaultNamespace("music.game");
     private static final int TICKS_PER_SECOND = SharedConstants.TICKS_PER_SECOND;
-    // A song the game would not start is tried again after this many ticks.
     private static final int RETRY_TICKS = TICKS_PER_SECOND;
     private static final float PERCENT = 100;
-    // A server's resource pack can name a song. Longer titles are cut.
+    // A server's resource pack can name a song.
     private static final int LONGEST_TITLE = 80;
-    // The music gain moves this much a tick at most. A full fade takes five seconds.
+    // A full fade takes five seconds.
     private static final float FADE_STEP = 0.01f;
     private static final float UNSET = -1;
 
@@ -111,9 +105,7 @@ public final class Playlist extends Module {
     private String lastPlayed;
     private boolean toldEmpty;
     private boolean toldSilent;
-    // The music gain it set last. Unset until its first tick.
     private float gain = UNSET;
-    // The songs as last read and the game music list they were read with.
     private List<Track> tracks = List.of();
     private WeighedSoundEvents readWith;
 
@@ -211,17 +203,15 @@ public final class Playlist extends Module {
         }
     }
 
-    // True whilst a song can be heard. The game would start one silently and play it unheard.
+    // The game would start a song silently and play it unheard.
     private boolean audible() {
         return turnedUp() && gain > 0;
     }
 
-    // True whilst its Volume and your music volume are above nought.
     private boolean turnedUp() {
         return volume.getValue() > 0 && mc.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0;
     }
 
-    // A random picked song that is not the one just played. Null when there is none.
     private Track pick() {
         List<Track> pool = new ArrayList<>();
         for (Track track : tracks()) {
@@ -239,7 +229,6 @@ public final class Playlist extends Module {
         return tracks().stream().map(Track::id).toList();
     }
 
-    // Every song the game's sound list holds with each song once in order of title.
     private List<Track> tracks() {
         SoundManager manager = mc.getSoundManager();
         WeighedSoundEvents marker = manager.getSoundEvent(GAME_MUSIC);
@@ -268,8 +257,6 @@ public final class Playlist extends Module {
         return tracks;
     }
 
-    // The title the game gives a song such as its composer and its name. A disc goes by its
-    // song. A song the game has no title for goes by its file.
     private static String title(String id) {
         Identifier location = Identifier.tryParse(id);
         if (location == null) {

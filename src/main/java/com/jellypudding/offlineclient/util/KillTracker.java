@@ -24,9 +24,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
 import java.util.Map;
 
-// Your kills and deaths as the server reports them. A player or mob that dies soon after you
-// hurt it is your kill. Only players count towards the numbers. The counts start again when you
-// join another server.
+// A player or mob that dies soon after you hurt it is your kill. Only players count towards the
+// numbers. The counts start again when you join another server.
 public final class KillTracker {
 
     public static final KillTracker INSTANCE = new KillTracker();
@@ -67,7 +66,6 @@ public final class KillTracker {
         return deaths;
     }
 
-    // Kills since your last death.
     public int streak() {
         return streak;
     }
@@ -76,12 +74,11 @@ public final class KillTracker {
         return bestStreak;
     }
 
-    // True whilst a death of the player would count as your kill.
     public boolean creditsYou(Player player) {
         return hurtAt.containsKey(player.getId());
     }
 
-    // Kills for each death. With no deaths yet it is the kills themselves.
+    // With no deaths yet it is the kills themselves.
     public double ratio() {
         return (double) kills / Math.max(1, deaths);
     }
@@ -99,7 +96,6 @@ public final class KillTracker {
         charges.values().removeIf(at -> ticks - at > BLAST_TICKS);
     }
 
-    // The counts belong to one server and start again on any other.
     private void checkServer() {
         if (server.changed()) {
             kills = 0;

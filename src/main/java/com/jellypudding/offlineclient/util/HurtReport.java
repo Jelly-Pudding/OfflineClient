@@ -13,12 +13,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-// Words what hurt you and where it came from such as Steve hit you with an arrow from 34
-// blocks north west for 3 hearts. The server sends the hit before the health it took and
-// each line waits a few ticks for the health.
+// The server sends the hit before the health it took and each line waits a few ticks for the
+// health.
 public final class HurtReport {
 
-    // A hit and your health as it landed.
     private record Hit(String words, float before, int due) {
     }
 
@@ -34,7 +32,6 @@ public final class HurtReport {
         this.everything = everything;
     }
 
-    // Records a hit on you. Hits on anything else and hits you gave yourself are left out.
     public void hit(EntityDamageEvent event) {
         LocalPlayer player = OfflineClient.MC.player;
         if (event.getEntity() != player) {
@@ -46,7 +43,6 @@ public final class HurtReport {
         }
     }
 
-    // Once a tick. The lines whose health has come in with colour codes for chat.
     public List<String> tick() {
         tick++;
         LocalPlayer player = OfflineClient.MC.player;
@@ -71,7 +67,6 @@ public final class HurtReport {
         waiting.clear();
     }
 
-    // Null for a hit that is left out.
     private String words(DamageSource source, Player player) {
         Entity attacker = source.getEntity();
         Entity direct = source.getDirectEntity();
@@ -97,7 +92,6 @@ public final class HurtReport {
             + Notice.away(player.position().distanceTo(from), player.position(), from) + "§7";
     }
 
-    // A player by name and anything else as a kind such as A zombie.
     private static String name(Entity entity) {
         if (entity instanceof Player other) {
             return EntityUtil.displayNameOf(other);

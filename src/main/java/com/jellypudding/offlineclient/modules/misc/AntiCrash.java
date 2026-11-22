@@ -57,10 +57,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
-// Drops or trims server packets carrying values nothing in the game produces. It runs
-// before the game or any other module handles them. Packets that fail to read at all
-// are AntiPacketKick's job. Firework bursts are counted where the game sets them off.
+// Packets that fail to read at all are AntiPacketKick's job. Firework bursts are counted where the
+// game sets them off.
 public final class AntiCrash extends Module {
 
     // Ten times what the server lets a player cover in one tick. Nothing in the game moves faster.
@@ -81,7 +81,6 @@ public final class AntiCrash extends Module {
     // The particle engine keeps at most this many of one kind. More in one tick is wasted work.
     private static final int PARTICLE_BUDGET = 16384;
 
-    // The farthest view distance a server can set.
     private static final int MAX_CHUNK_RADIUS = ChunkMap.MAX_VIEW_DISTANCE;
 
     // Far wider than any screen and room for the many parts a pack font builds a boss bar from.
@@ -139,16 +138,16 @@ public final class AntiCrash extends Module {
     private final BoolSetting notify = new BoolSetting("Notify",
         "Says in chat when a guard throws something away.", true);
 
-    // Particles asked for since the last client tick. Filled on the netty thread.
+    // Filled on the netty thread.
     private final AtomicInteger particlesThisTick = new AtomicInteger();
-    // Entities let in since the last client tick and in the tick before it. The world only
-    // counts one once the game thread has taken its packet. One let in just before a tick ended
-    // is in neither the world nor the fresh tally and the older tally still holds it.
+    // The world only counts an entity once the game thread has taken its packet. One let in just
+    // before a tick ended is in neither the world nor the fresh tally and the older tally still
+    // holds it.
     private final AtomicInteger spawnsThisTick = new AtomicInteger();
     private final AtomicInteger spawnsLastTick = new AtomicInteger();
     private final AtomicInteger chatThisSecond = new AtomicInteger();
     private int secondTicks;
-    // Stars set off since the last client tick. Bursts happen on the game thread.
+    // Bursts happen on the game thread.
     private int starsThisTick;
 
     public AntiCrash() {
@@ -368,7 +367,7 @@ public final class AntiCrash extends Module {
         return safe[0];
     }
 
-    // Asked by ClientLevelMixin as a rocket bursts. The stars of one tick stay within the budget.
+    // Asked by ClientLevelMixin as a rocket bursts.
     public boolean letsBurst(List<FireworkExplosion> stars) {
         if (!fireworks.isOn()) {
             return true;
@@ -382,8 +381,7 @@ public final class AntiCrash extends Module {
         return false;
     }
 
-    // The name the game draws for an item. Read by ItemStackMixin. A stack as the game makes it
-    // has a name of the game's own. The anvil reads the whole name and never this one.
+    // Read by ItemStackMixin. The anvil reads the whole name and never this one.
     public Component shortName(ItemStack stack, Component name) {
         return names.isOn() && !stack.getComponentsPatch().isEmpty() && tooLong(name) ? cut(name) : name;
     }
@@ -398,42 +396,35 @@ public final class AntiCrash extends Module {
     }
 
     private Packet<?> spawn(ClientboundAddEntityPacket spawn) {
-        if (positions.isOn() && !inWorld(new Vec3(spawn.getX(), spawn.getY(), spawn.getZ()))) {
-            return outOfWorld();
-        }
-        if (!velocity.isOn() || sane(spawn.getMovement())) {
-            return spawn;
-        }
-        report(VELOCITY, TOO_FAST);
-        return new ClientboundAddEntityPacket(spawn.getId(), spawn.getUUID(), spawn.getX(), spawn.getY(),
-            spawn.getZ(), spawn.getXRot(), spawn.getYRot(), spawn.getType(), spawn.getData(), Vec3.ZERO,
-            spawn.getYHeadRot());
+        return move(spawn, new Vec3(spawn.getX(), spawn.getY(), spawn.getZ()), spawn.getMovement(),
+            () -> new ClientboundAddEntityPacket(spawn.getId(), spawn.getUUID(), spawn.getX(), spawn.getY(),
+                spawn.getZ(), spawn.getXRot(), spawn.getYRot(), spawn.getType(), spawn.getData(), Vec3.ZERO,
+                spawn.getYHeadRot()));
     }
 
     // A dropped teleport is never confirmed. The server resends it and you stay put.
     private Packet<?> teleport(ClientboundPlayerPositionPacket teleport) {
         PositionMoveRotation change = teleport.change();
-        if (positions.isOn() && !inWorld(change.position())) {
-            return outOfWorld();
-        }
-        if (!velocity.isOn() || sane(change.deltaMovement())) {
-            return teleport;
-        }
-        report(VELOCITY, TOO_FAST);
-        return new ClientboundPlayerPositionPacket(teleport.id(), stilled(change), teleport.relatives());
+        return move(teleport, change.position(), change.deltaMovement(),
+            () -> new ClientboundPlayerPositionPacket(teleport.id(), stilled(change), teleport.relatives()));
     }
 
     private Packet<?> teleport(ClientboundTeleportEntityPacket teleport) {
         PositionMoveRotation change = teleport.change();
-        if (positions.isOn() && !inWorld(change.position())) {
+        return move(teleport, change.position(), change.deltaMovement(),
+            () -> new ClientboundTeleportEntityPacket(teleport.id(), stilled(change), teleport.relatives(),
+                teleport.onGround()));
+    }
+
+    private Packet<?> move(Packet<?> packet, Vec3 position, Vec3 push, Supplier<Packet<?>> stilled) {
+        if (positions.isOn() && !inWorld(position)) {
             return outOfWorld();
         }
-        if (!velocity.isOn() || sane(change.deltaMovement())) {
-            return teleport;
+        if (!velocity.isOn() || sane(push)) {
+            return packet;
         }
         report(VELOCITY, TOO_FAST);
-        return new ClientboundTeleportEntityPacket(teleport.id(), stilled(change), teleport.relatives(),
-            teleport.onGround());
+        return stilled.get();
     }
 
     private Packet<?> minecart(ClientboundMoveMinecartPacket minecart) {
@@ -452,7 +443,6 @@ public final class AntiCrash extends Module {
         return new PositionMoveRotation(change.position(), Vec3.ZERO, change.yRot(), change.xRot());
     }
 
-    // Every point an entity passes on its way counts.
     private static boolean inWorld(PositionPath path) {
         if (!inWorld(path.endPosition())) {
             return false;

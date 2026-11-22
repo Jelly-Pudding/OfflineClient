@@ -16,13 +16,11 @@ public final class Sightings {
     private final Set<Long> places = Collections.newSetFromMap(new BoundedMap<>(MAX_REMEMBERED));
     private final WorldWatch world = new WorldWatch();
 
-    // True the first time the entity turns up in this world.
     public boolean firstTime(Entity entity) {
         followWorld();
         return seen.add(entity.getUUID());
     }
 
-    // True the first time something standing at this block turns up in this world.
     public boolean firstTime(BlockPos pos) {
         followWorld();
         return places.add(pos.asLong());

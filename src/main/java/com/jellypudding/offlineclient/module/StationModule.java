@@ -11,15 +11,11 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 
-// The shape shared by the modules that work a station such as a crafting table or an anvil.
-// Whilst its screen is open the module makes one round of clicks at a steady pace until the
-// job is done or the materials run out. A round only starts with nothing on the cursor.
+// A round only starts with nothing on the cursor.
 public abstract class StationModule<M extends AbstractContainerMenu> extends Module {
 
-    // Ticks a round waits at most for the server to answer the one before.
     private static final int PATIENCE = 20;
 
-    // Ticks the server gets to show what a module asked for before the module gives up.
     private static final int STALL_TICKS = 40;
 
     private final Class<M> menuType;
@@ -38,22 +34,18 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
         this.pace = pace;
     }
 
-    // One round of clicks on the open station.
     protected abstract void work(M menu);
 
-    // Drops progress tied to the last station. Runs when it closes or another opens and when
-    // the module is switched on.
+    // Runs when the station closes or another opens and when the module is switched on.
     protected void closed() {
     }
 
-    // Runs every tick whilst no station of the module's kind is open. A module that opens
-    // its station by itself reaches out for it here.
+    // A module that opens its station by itself reaches out for it here.
     protected void away() {
     }
 
-    // True whilst the module may reach out for a station by itself. A meal and ShulkerPacker
-    // and an item in use come first and nothing is opened over another screen. A fight comes
-    // first too unless the module is there to serve one.
+    // A meal and ShulkerPacker and an item in use come first and nothing is opened over another
+    // screen.
     protected final boolean handsFree(boolean inFights) {
         return inGame() && mc.gui.screen() == null && !Hands.tied() && !mc.player.isUsingItem()
             && !Hands.slotsTaken() && (inFights || !Modules.fighting());
@@ -65,29 +57,24 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
         closed();
     }
 
-    // Ticks the module has run for. Unlike the player's own count it survives a respawn.
+    // Unlike the player's own count it survives a respawn.
     protected final int ticks() {
         return ticks;
     }
 
-    // Skips rounds until the server sends the menu something new or the patience runs out.
     protected final void awaitServer(M menu) {
         awaitedState = menu.getStateId();
         awaitTicks = PATIENCE;
     }
 
-    // Starts the clock that stalled reads. Opening a station starts it too.
     protected final void startClock() {
         clockStart = ticks;
     }
 
-    // True once the server has had its time to show what the module last asked for.
     protected final boolean stalled() {
         return ticks - clockStart >= STALL_TICKS;
     }
 
-    // Shift clicks a station slot into the inventory. When nothing moves the module cannot go
-    // on and the message ends with what the move was for.
     protected final boolean moveOut(M menu, int slot, String what) {
         if (MenuClicks.quickMoved(menu, slot)) {
             return true;
@@ -96,14 +83,10 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
         return false;
     }
 
-    // The inventory had no room for a move. The module stops and says why unless it knows a
-    // better way to end its work.
     protected void outOfRoom(String reason) {
         disable(reason);
     }
 
-    // Takes a finished stack out of a station slot. It goes into the inventory or onto the
-    // ground whilst the module's Throw out row is ticked. False once the module could not go on.
     protected final boolean takeFinished(ThrowOut out, M menu, int slot, String what) {
         if (!out.isOn()) {
             return moveOut(menu, slot, what);
@@ -155,8 +138,8 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
         return null;
     }
 
-    // Counts what one shift click on a result made. The server crafts again and again whilst
-    // this side only predicts once. Settle it after the server has answered.
+    // The server crafts again and again whilst this side only predicts once. Settle it after the
+    // server has answered.
     public static final class Takings {
 
         private Item item;
@@ -167,7 +150,6 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
             before = InventoryUtil.count(item, InventoryUtil.WHOLE_INVENTORY);
         }
 
-        // How many arrived since the start. Nought when nothing was started.
         public int settle() {
             if (item == null) {
                 return 0;

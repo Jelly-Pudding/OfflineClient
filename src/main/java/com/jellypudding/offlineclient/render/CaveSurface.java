@@ -20,13 +20,10 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-// The cave air round the player drawn as one surface. Each chunk keeps its cave air packed as it
-// is scanned. The nearest chunks are taken whole until the limit is reached and only the last of
-// them is sorted block by block. The cut is worked out again when the player crosses into another
-// chunk or the limit changes and at most once a second as chunks come and go.
+// Each chunk keeps its cave air packed as it is scanned. The nearest chunks are taken whole until
+// the limit is reached and only the last of them is sorted block by block.
 public final class CaveSurface {
 
-    // The cave air of one chunk as packed block positions.
     private record Chunk(int x, int z, long[] cells) {
 
         // Measured flat from the eyes to the nearest edge of the chunk.
@@ -41,12 +38,10 @@ public final class CaveSurface {
         }
     }
 
-    // A drawn block that shows at least one face and the sides it hides behind its neighbours.
     private record Shown(AABB box, int hidden) {
     }
 
     private static final double HALF_CHUNK = SectionPos.SECTION_SIZE / 2.0;
-    // New scans wait this long before the cut is worked out again.
     private static final int RECUT_TICKS = 20;
     // A block hidden on every side lies inside the cave and shows nothing.
     private static final int ENCLOSED = (1 << Direction.values().length) - 1;
@@ -63,7 +58,6 @@ public final class CaveSurface {
         scanner.markChanged(packet);
     }
 
-    // Once a tick whilst the surface is shown.
     public void update(int radius, HeightBand.Rows rows, int limit) {
         scanner.update(radius, (view, out) -> {
             LongArrayList cells = new LongArrayList();
@@ -89,8 +83,6 @@ public final class CaveSurface {
         }
     }
 
-    // Whole chunks nearest first until the limit. The chunk that does not fit whole gives its
-    // nearest blocks.
     private void cut(List<Chunk> found, Vec3 eye, int limit) {
         List<Chunk> order = new ArrayList<>(found);
         order.sort(Comparator.comparingDouble(chunk -> chunk.distanceSqr(eye)));
@@ -109,8 +101,8 @@ public final class CaveSurface {
         join(picked);
     }
 
-    // As many of the nearest cells as there is room for. A distance and the place of its cell share
-    // one long with the distance on top and a plain sort puts the nearest first.
+    // A distance and the place of its cell share one long with the distance on top and a plain sort
+    // puts the nearest first.
     private static void nearest(long[] cells, int room, Vec3 eye, LongArrayList picked) {
         long[] keyed = new long[cells.length];
         for (int i = 0; i < cells.length; i++) {
@@ -125,7 +117,6 @@ public final class CaveSurface {
         }
     }
 
-    // Two picked blocks side by side hide the faces they share on all six sides.
     private void join(LongArrayList picked) {
         Long2ObjectOpenHashMap<Block> drawn = new Long2ObjectOpenHashMap<>(picked.size());
         for (int i = 0; i < picked.size(); i++) {

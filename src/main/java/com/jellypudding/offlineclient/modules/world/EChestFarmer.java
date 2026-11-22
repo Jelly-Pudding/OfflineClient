@@ -27,8 +27,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-// An ender chest breaks into eight obsidian without silk touch. The chest
-// goes on the block you look at and is mined straight back out.
+// An ender chest breaks into eight obsidian without silk touch.
 public final class EChestFarmer extends Module {
 
     private final BoolSetting stopAtAmount = new BoolSetting("Stop at amount",
@@ -84,7 +83,6 @@ public final class EChestFarmer extends Module {
         if (Hands.tied() || mc.gui.screen() != null) {
             return;
         }
-        // The chests take a hotbar slot and a turn and wait whilst something else has them.
         if (Hands.taken()) {
             BlockMiner.release();
             return;
@@ -114,7 +112,6 @@ public final class EChestFarmer extends Module {
         }
     }
 
-    // The block above whatever the crosshair rests on.
     private boolean pickTarget() {
         BlockHitResult hit = BlockUtil.aimedBlock();
         if (hit == null) {
@@ -122,7 +119,6 @@ public final class EChestFarmer extends Module {
         }
         BlockPos above = hit.getBlockPos().above();
         BlockState state = BlockUtil.state(above);
-        // A spot the player is standing in refuses every placement.
         if (BlockUtil.intersectsPlayer(above)) {
             return false;
         }
@@ -137,7 +133,7 @@ public final class EChestFarmer extends Module {
     }
 
     // A centre within reach keeps the block the chest is clicked onto within the server's reach as
-    // well. Chat says once that a spot is out of reach and again only after one in reach.
+    // well.
     private boolean reachable(BlockPos pos) {
         if (!BlockUtil.inReach(pos)) {
             outOfReach.say("The chest spot is out of reach.");

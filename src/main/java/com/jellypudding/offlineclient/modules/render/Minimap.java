@@ -13,17 +13,14 @@ import com.jellypudding.offlineclient.util.TerrainCache;
 import com.jellypudding.offlineclient.util.TerrainLayer;
 import net.minecraft.core.SectionPos;
 
-// The land around you in the colours of a held map. The Minimap element of the HUD draws it
-// whilst this is on. The land comes from the record of what you explored.
+// The Minimap element of the HUD draws it whilst this is on. The land comes from the record of what
+// you explored.
 public final class Minimap extends Module {
 
-    // The layer at your height reaches this many pixels of the map from you until it meets the
-    // most chunks it may read.
     private static final double CAVE_REACH = 72;
     private static final int MIN_CAVE_CHUNKS = 2;
     private static final int MAX_CAVE_CHUNKS = 8;
-    // The roof must be gone this long before the map shows the land from above again. Along the
-    // edge of a roof it would flip back and forth.
+    // Along the edge of a roof the map would flip back and forth.
     private static final int ROOF_HOLD_TICKS = 40;
 
     private final NumberSetting zoom = new NumberSetting("Zoom",
@@ -37,7 +34,6 @@ public final class Minimap extends Module {
     private final MapOverlay overlay = new MapOverlay();
 
     private boolean roofed;
-    // Ticks left before the map leaves the layer at your height.
     private int roofHold;
 
     public Minimap() {
@@ -72,8 +68,6 @@ public final class Minimap extends Module {
         ExploredLand.wantCave(roofed ? caveChunks() : 0);
     }
 
-    // How many chunks round you the layer at your height covers. It reaches as far on the map
-    // at any zoom until it meets the most it may read. The explored land shows past it.
     private int caveChunks() {
         int chunks = (int) Math.ceil(CAVE_REACH * zoom.getValue() / SectionPos.SECTION_SIZE) + 1;
         return Math.clamp(chunks, MIN_CAVE_CHUNKS, MAX_CAVE_CHUNKS);
@@ -92,13 +86,11 @@ public final class Minimap extends Module {
         return rotate.isOn() && northLetter.isOn();
     }
 
-    // The entities and waypoints and painted chunks drawn over the land.
     public MapOverlay overlay() {
         return overlay;
     }
 
-    // The land at your height whilst a roof is over you with Cave view on. The minimap draws it
-    // over the explored land. Null whilst there is no roof.
+    // Null whilst there is no roof over you.
     public TerrainLayer caveLand() {
         return roofed ? ExploredLand.cave() : null;
     }

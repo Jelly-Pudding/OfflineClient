@@ -12,13 +12,10 @@ public final class Rebreak {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // The block a stop went out for with the tick it went out on and the tick the server has
-    // answered by. Null whilst none waits.
     private BlockPos struck;
     private int struckAt;
     private int answerBy;
 
-    // True when a stop sent this tick breaks the block standing at the spot outright with the tool in hand.
     public static boolean stopBreaks(BlockPos pos) {
         return BreakSlots.standsOnTarget(pos) && BreakSlots.stopFinishes(progress(pos));
     }
@@ -34,11 +31,10 @@ public final class Rebreak {
         }
     }
 
-    // Sends the stop for the block standing at the spot once the server's count has run past its
-    // whole break time. A block set down on a spot mined before has that at once and the first
-    // block reaches it on the tick its own mining would finish. True from the stop until the
-    // server has had time to answer. The caller mines nothing meanwhile because a start would set
-    // the server's count back. False when the block has to be mined the usual way.
+    // Sends the stop once the server's count has run past the whole break time of the block. True
+    // from the stop until the server has had time to answer and the caller mines nothing meanwhile
+    // because a start would set the server's count back. False when the block has to be mined the
+    // usual way.
     public boolean strike(BlockPos pos) {
         int now = MC.player.tickCount;
         if (pos.equals(struck)) {
@@ -65,7 +61,6 @@ public final class Rebreak {
         struck = null;
     }
 
-    // What one tick of mining with the tool in hand does to the block at the spot.
     private static float progress(BlockPos pos) {
         return BlockUtil.state(pos).getDestroyProgress(MC.player, MC.level, pos);
     }

@@ -10,8 +10,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.function.Consumer;
 
-// The chunks the client holds around the player. The server sends a ring just past the
-// view distance as well. Game thread only.
+// The server sends a ring just past the view distance as well. Game thread only.
 public final class LoadedChunks {
 
     private static final int OUTER_RING = 1;

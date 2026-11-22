@@ -12,7 +12,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-// Where an end crystal may go and the click that puts it there.
 public final class Crystals {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -31,7 +30,6 @@ public final class Crystals {
             crystal.getX() + 1, crystal.getY() + 2, crystal.getZ() + 1);
     }
 
-    // The click on top of the base that places a crystal.
     public static BlockHitResult crystalClick(BlockPos base) {
         return new BlockHitResult(Vec3.atCenterOf(base).add(0, 0.5, 0), Direction.UP, base, false);
     }
@@ -41,8 +39,7 @@ public final class Crystals {
             || InventoryUtil.hotbarSlot(stack -> stack.is(Items.END_CRYSTAL)) != -1;
     }
 
-    // Places an end crystal on the base from the offhand or else from the hotbar. A hotbar
-    // slot stays selected for the caller to give back. False when no crystal is at hand or
+    // A hotbar slot stays selected for the caller to give back. False when no crystal is at hand or
     // the click was refused.
     public static boolean placeCrystal(InventoryUtil.SlotSwap slots, BlockPos base, SwingMode swing) {
         InteractionHand hand = InteractionHand.OFF_HAND;

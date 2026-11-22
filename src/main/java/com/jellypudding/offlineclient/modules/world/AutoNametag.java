@@ -27,10 +27,8 @@ import net.minecraft.world.item.Items;
 
 import java.util.List;
 
-// Puts the name tag in your hotbar on every chosen mob in reach.
 public final class AutoNametag extends Module {
 
-    // Ticks before the same mob is tried again.
     private static final int COOLDOWN = 20;
 
     private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
@@ -75,7 +73,6 @@ public final class AutoNametag extends Module {
         if (Hands.tied() || mc.gui.screen() != null) {
             return;
         }
-        // The tag takes a hotbar slot and waits whilst something else has the hands.
         if (Hands.taken()) {
             slots.standAside();
             return;

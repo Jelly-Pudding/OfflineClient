@@ -62,8 +62,6 @@ public final class PathFinder {
     // layer of snow lies under it and a stalk of bamboo or a cocoa pod stands over it.
     private static final double STEP_OVER = 0.5;
 
-    // The nodes a search may open before it settles for the closest it got. Then the
-    // radius in chunks it may search around the start.
     private static final int NODE_BUDGET = 20000;
     private static final int AREA_CHUNKS = 8;
 
@@ -74,15 +72,13 @@ public final class PathFinder {
     // Searching is heavy. One worker handles every module in turn.
     private static final ExecutorService POOL = Background.worker("OfflineClient PathFinder");
 
-    // Nodes from the player to the goal. A search that ran out goes only as close as it managed.
+    // A search that ran out goes only as close as it managed.
     public record Result(List<BlockPos> nodes) {
     }
 
     record Step(BlockPos to, double cost) {
     }
 
-    // What a walk may count on. The drop it may take and the drop that lands unhurt. The liquids
-    // Jesus holds the player up on and the blocks Step lifts them and whether the hotbar may lay a floor.
     record Means(int maxFall, int safeFall, boolean swim, boolean breakBlocks, boolean onWater, boolean onLava,
                  int stepUp, boolean bridge, boolean pillar) {
     }
@@ -145,13 +141,12 @@ public final class PathFinder {
             lays && pillar);
     }
 
-    // The block an entity counts as standing in.
     public static BlockPos standingAt(Entity entity) {
         double y = entity.onGround() ? entity.getY() + 0.5 : entity.getY();
         return BlockPos.containing(entity.getX(), y, entity.getZ());
     }
 
-    // Starts a search. False whilst one is already going or there is no world.
+    // False whilst a search is already going or there is no world.
     public boolean search(BlockPos start, PathGoal goal) {
         if (running != null || OfflineClient.MC.level == null) {
             return false;
@@ -166,7 +161,7 @@ public final class PathFinder {
         return running != null;
     }
 
-    // The finished path or null whilst the search is still going.
+    // Null whilst the search is still going.
     public Result poll() {
         if (running == null || !running.isDone()) {
             return null;
@@ -194,8 +189,7 @@ public final class PathFinder {
         }
     }
 
-    // What the player may walk into and what it costs. Shared by the search and
-    // by the walker. Both agree on where a step may go.
+    // Shared by the search and by the walker. Both agree on where a step may go.
     public static final class Rules {
 
         private final ChunkWindow view;
@@ -212,29 +206,24 @@ public final class PathFinder {
             return entryCost(pos) >= 0;
         }
 
-        // True when a slip into the spot ends in a fall that hurts. NoFall takes the hurt
-        // out of any fall that has somewhere to land.
+        // NoFall takes the hurt out of any fall that has somewhere to land.
         boolean deepDrop(BlockPos pos) {
             return landingBelow(pos, means.maxFall() == ANY_FALL ? ANY_FALL : means.safeFall()) == null;
         }
 
-        // True where the floor of a spot is a liquid Jesus holds the player up on.
         boolean afloat(BlockPos pos) {
             return holdsUp(view.get(pos.below()));
         }
 
-        // Blocks the player walks up without a jump.
         int stepUp() {
             return means.stepUp();
         }
 
-        // The floor a walk has to lay before the player can stand in the spot. Null when the
-        // spot has one or the walk lays none.
+        // Null when the spot has a floor or the walk lays none.
         BlockPos missingFloor(BlockPos pos) {
             return (means.bridge() || means.pillar()) && wantsFloor(pos) ? pos.below() : null;
         }
 
-        // Room to stand with nothing under it but a block from the hotbar can go there.
         private boolean wantsFloor(BlockPos pos) {
             BlockState floor = view.get(pos.below());
             return fitsAt(pos) && !canFloat(view.get(pos)) && !unknown(floor) && floor.canBeReplaced()
@@ -252,8 +241,7 @@ public final class PathFinder {
             return false;
         }
 
-        // The first block to dig out of the way of the step from prev to the node. Null when
-        // nothing is in the way or breaking is switched off.
+        // Null when nothing is in the way or breaking is switched off.
         BlockPos blocking(BlockPos prev, BlockPos node) {
             if (!means.breakBlocks()) {
                 return null;
@@ -276,12 +264,10 @@ public final class PathFinder {
             return mustDig(head) ? head : null;
         }
 
-        // True for a block that stops the player and may be broken.
         private boolean mustDig(BlockPos pos) {
             return spaceCost(pos, false) < 0 && spaceCost(pos, true) >= 0;
         }
 
-        // Every spot reachable from here in one move.
         void steps(BlockPos from, List<Step> out) {
             boolean firm = firm(from);
             for (int i = 0; i < STEP_X.length; i++) {
@@ -352,8 +338,6 @@ public final class PathFinder {
             out.add(new Step(landing, base + passed + entryCost(landing) + FALL * drop));
         }
 
-        // The first spot with a floor that a player who drops into the spot comes down to.
-        // Null when a block or the limit stops the fall before one.
         private BlockPos landingBelow(BlockPos side, int limit) {
             for (int drop = 1; drop <= limit; drop++) {
                 BlockPos landing = side.below(drop);
@@ -422,7 +406,6 @@ public final class PathFinder {
             return fitsAt(from.offset(dx, 0, 0)) && fitsAt(from.offset(0, 0, dz));
         }
 
-        // True when the player would fit in the spot whatever is under it.
         boolean fitsAt(BlockPos pos) {
             return spaceCost(pos, false) >= 0 && spaceCost(pos.above(), false) >= 0;
         }
@@ -449,7 +432,6 @@ public final class PathFinder {
             return floor.getBlock() == Blocks.SOUL_SAND ? extra + SOUL_SAND : extra;
         }
 
-        // A liquid Jesus makes a floor of.
         private boolean holdsUp(BlockState floor) {
             FluidState fluid = floor.getFluidState();
             return means.onWater() && fluid.is(FluidTags.WATER) || means.onLava() && fluid.is(FluidTags.LAVA);
@@ -475,8 +457,7 @@ public final class PathFinder {
         }
     }
 
-    // True for a block with a body the player cannot walk through. Bamboo and a cocoa pod are
-    // no solid blocks and stand in the way all the same.
+    // Bamboo and a cocoa pod are no solid blocks and stand in the way all the same.
     private static boolean stops(BlockState state) {
         if (state.isAir()) {
             return false;
@@ -512,10 +493,9 @@ public final class PathFinder {
     private record Node(long key, double score) {
     }
 
-    // One run of the search. Lives only on the worker thread.
+    // Lives only on the worker thread.
     private static final class Search {
 
-        // How often the worker looks to see whether it has been called off.
         private static final int CANCEL_CHECK = 512;
 
         private final Rules rules;

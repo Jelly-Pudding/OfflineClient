@@ -44,7 +44,6 @@ public final class LocalSocks implements AutoCloseable {
         return door.getLocalPort();
     }
 
-    // Connections handed on to where they asked to go.
     public int carried() {
         return carried.get();
     }

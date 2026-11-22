@@ -26,7 +26,6 @@ public final class RigConfig {
     private RigConfig() {
     }
 
-    // The folder every result of this run lands in.
     public static Path out() {
         return Path.of(System.getProperty(OUT_PROPERTY, DEFAULT_OUT)).toAbsolutePath();
     }
@@ -35,7 +34,6 @@ public final class RigConfig {
         return System.getProperty(FILTER_PROPERTY, "");
     }
 
-    // The GUI scales the Screens suite draws every screen at.
     public static List<Integer> scales() {
         List<Integer> scales = new ArrayList<>();
         for (String word : System.getProperty(SCALES_PROPERTY, DEFAULT_SCALES).split(SEPARATOR)) {
@@ -46,8 +44,7 @@ public final class RigConfig {
         return scales;
     }
 
-    // The folder of the Paper server the two player suites borrow. Null when the local settings
-    // name none and those suites are left out.
+    // Null when the local settings name no server and the two player suites are left out.
     public static Path server() {
         String folder = System.getProperty(SERVER_PROPERTY, "");
         return folder.isBlank() ? null : Path.of(folder);
@@ -58,8 +55,7 @@ public final class RigConfig {
         return Path.of(System.getProperty(PLUGINS_PROPERTY, ""));
     }
 
-    // The anti cheats the Guard suite runs under one after the other. Empty when the local
-    // settings name none.
+    // Empty when the local settings name no anti cheat.
     public static List<String> guard() {
         List<String> plugins = new ArrayList<>();
         for (String plugin : System.getProperty(GUARD_PROPERTY, "").split(SEPARATOR)) {
@@ -70,7 +66,6 @@ public final class RigConfig {
         return plugins;
     }
 
-    // The jar of the plugin that tells the rig what the server saw.
     public static Path probe() {
         return Path.of(System.getProperty(PROBE_PROPERTY, ""));
     }
@@ -84,7 +79,6 @@ public final class RigConfig {
         return "-D" + ROLE_PROPERTY + "=" + PARTNER;
     }
 
-    // The port on this machine the first player's game listens on for the second.
     public static int link() {
         return Integer.getInteger(LINK_PROPERTY, 0);
     }
@@ -103,7 +97,6 @@ public final class RigConfig {
         return Boolean.getBoolean(CONTROL_PROPERTY);
     }
 
-    // True when the run started with a copy of a player's own data folder.
     public static boolean ownerData() {
         return Boolean.getBoolean(OWNER_PROPERTY);
     }

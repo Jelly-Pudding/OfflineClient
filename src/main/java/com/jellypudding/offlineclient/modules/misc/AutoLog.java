@@ -27,8 +27,7 @@ public final class AutoLog extends Module {
     // The rearm waits as long with no reason holding and one escape takes one screenshot in it.
     private static final long GAP_MILLIS = TimeUnit.SECONDS.toMillis(5);
 
-    // The way each mode leaves. A command keeps you on the server and a blank one cannot. It falls
-    // back to a plain disconnect.
+    // A command keeps you on the server and a blank one falls back to a plain disconnect.
     public enum Mode {
         QUIT(Leave.QUIT), CHARS(Leave.CHAT), SELF_HURT(Leave.HURT), COMMAND(Leave.QUIT);
 
@@ -65,12 +64,10 @@ public final class AutoLog extends Module {
         "Turns AutoReconnect off as you leave to stop you rejoining the danger.", true)
         .visibleWhen(() -> !staying());
 
-    // When the command may run again and when the last screenshot was taken on the game clock.
     private long commandAt;
     private long pictureAt;
 
-    // Listens whilst the module is off to come back once no reason has held for a while. It
-    // gives up when the module is switched on by hand or the rearm is switched off. A dormant
+    // Listens whilst the module is off to come back once no reason has held for a while. A dormant
     // client stays as it is.
     private final Object safeWatcher = new Object() {
 
@@ -127,8 +124,6 @@ public final class AutoLog extends Module {
         return reasons.summary();
     }
 
-    // A command keeps you on the server. A blank one cannot and the mode falls back to a
-    // plain disconnect.
     private boolean staying() {
         return mode.is(Mode.COMMAND) && !command.isBlank();
     }
@@ -146,8 +141,6 @@ public final class AutoLog extends Module {
         }
     }
 
-    // The reasons are read on every tick. Something that happened whilst it sat a tick out is
-    // not kept for later.
     @Subscribe
     private void onTick(TickEvent event) {
         reasons.tick();
@@ -157,9 +150,7 @@ public final class AutoLog extends Module {
         }
     }
 
-    // Turning off first stops an instant logout after reconnecting. It can leave a watcher
-    // behind that turns the module back on. A command keeps you on the server and AutoReconnect
-    // has nothing to do.
+    // Turning off first stops an instant logout after reconnecting.
     private void act(String reason) {
         boolean staying = staying();
         String line = SentLine.asCommand(command.getValue());
@@ -197,10 +188,8 @@ public final class AutoLog extends Module {
         return false;
     }
 
-    // The copy of the last drawn frame is ordered at once and the file is written afterwards.
-    // The picture is of the game as it stood even when the disconnect follows straight away.
-    // One escape takes one picture however many ticks the kick takes to land and a picture
-    // that fails must never stand in the way of the escape.
+    // The copy of the last drawn frame is ordered at once and the file is written afterwards. A
+    // picture that fails must never stand in the way of the escape.
     private void takeScreenshot(long now) {
         if (!screenshot.isOn() || now < pictureAt) {
             return;

@@ -11,20 +11,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-// An alarm that players set off. It can listen for a few names only and a player who
-// set it off stays quiet for a while. The module decides when someone arrives.
+// The module decides when someone arrives.
 public final class PlayerAlarm {
 
-    // One time an alarm went off. The alarm is named by its prefix such as Join.
+    // The alarm is named by its prefix such as Join.
     public record Ring(String alarm, String player) {
     }
 
-    // Players remembered at once. The one heard from longest ago goes first.
     private static final int REMEMBERED = 512;
 
     private static final double MILLIS_PER_MINUTE = TimeUnit.MINUTES.toMillis(1);
 
-    // The rings of every alarm for the watchers.
     private static final Feed<Ring> RINGS = new Feed<>();
 
     private final String prefix;
@@ -32,7 +29,7 @@ public final class PlayerAlarm {
     private final TextLines names;
     private final NumberSetting quiet;
 
-    // When each player last set the alarm off on the wall clock. Names are in lower case.
+    // Wall clock times by lower case name.
     private final Map<String, Long> rungAt = new BoundedMap<>(REMEMBERED, true);
 
     // The prefix names every row such as Join alarm and Join name 1.
@@ -50,7 +47,6 @@ public final class PlayerAlarm {
             quietMinutes, 0, 60, 1, " minutes").under(sound.switchRow());
     }
 
-    // Who the alarm listens for comes straight under its switch and how it sounds after.
     public Setting<?>[] settings() {
         List<Setting<?>> all = new ArrayList<>();
         for (Setting<?> setting : sound.settings()) {
@@ -63,18 +59,16 @@ public final class PlayerAlarm {
         return all.toArray(new Setting<?>[0]);
     }
 
-    // Makes the whole alarm a sub option of a switch. It only rings whilst that switch is on.
+    // The alarm only rings whilst that switch is on.
     public PlayerAlarm under(BoolSetting parent) {
         sound.under(parent);
         return this;
     }
 
-    // True whilst the alarm and every switch above it are on.
     public boolean isOn() {
         return sound.switchRow().isOn() && sound.switchRow().isVisible();
     }
 
-    // Rings for a player the names take in unless the same player rang it too recently.
     public void ring(String name) {
         if (!isOn() || !listensFor(name)) {
             return;
@@ -90,8 +84,7 @@ public final class PlayerAlarm {
         RINGS.add(new Ring(prefix, name));
     }
 
-    // Adds a player to the names the alarm listens for. An alarm with every name blank hears
-    // them already. True when the name went in.
+    // An alarm with every name blank hears everyone already. True when the name went in.
     public boolean listenFor(String name) {
         return !names.isEmpty() && names.add(name);
     }
@@ -100,7 +93,6 @@ public final class PlayerAlarm {
         return names.isEmpty() || names.holds(name);
     }
 
-    // Every player can set the alarm off again at once.
     public void forget() {
         rungAt.clear();
     }
@@ -115,12 +107,10 @@ public final class PlayerAlarm {
 
         private final Feed.Reader<Ring> rings = RINGS.reader();
 
-        // The rings since the last call with the oldest first.
         public List<Ring> fresh() {
             return rings.fresh();
         }
 
-        // Forgets the rings that came whilst the reader was off.
         public void sync() {
             rings.sync();
         }

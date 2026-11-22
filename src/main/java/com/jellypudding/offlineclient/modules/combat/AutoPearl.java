@@ -21,7 +21,6 @@ import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectilePath.Aim;
 import com.jellypudding.offlineclient.util.ProjectilePath.Path;
@@ -56,36 +55,29 @@ public final class AutoPearl extends Module {
     // The landing hurts the thrower by this much before resistance and feather falling.
     private static final float PEARL_DAMAGE = 5;
 
-    // Ticks between two searches for a way out whilst none turns up.
     private static final int SEARCH_GAP = 5;
 
-    // Ticks of flight followed before a throw counts as lost.
     private static final int FLIGHT_TICKS = 100;
 
-    // The escape tries headings this many degrees apart and every pitch between the two in steps.
     private static final float HEADING_STEP = 15;
     private static final float HIGHEST_PITCH = -60;
     private static final float LOWEST_PITCH = 80;
     private static final float PITCH_STEP = 10;
 
-    // A chase tries every pitch along the bearing and then a finer net round the best of them.
     private static final float COARSE_PITCH = 2;
     private static final float FINE_YAW = 3;
     private static final float FINE_YAW_STEP = 0.5f;
     private static final float FINE_PITCH = 2;
     private static final float FINE_PITCH_STEP = 0.25f;
 
-    // Enemy pearls already judged for a chase. Each is chased once.
     private static final int MAX_JUDGED = 256;
 
-    // Blocks of your own remembered to tell your roof from an enemy's.
     private static final int MAX_PLACED = 256;
 
     // Ticks a block you placed may take to show whilst the server confirms it. A lag spike can hold
     // the answer back for seconds.
     private static final int CONFIRM_TICKS = 100;
 
-    // Enemies this far off still count against a landing.
     private static final double ENEMY_SEARCH = 64;
 
     // A pearl ends its first tick up to this far off its aim.
@@ -94,22 +86,18 @@ public final class AutoPearl extends Module {
     // A phase pearl has to strike on its second tick and land where it ended the first.
     private static final int STRIKE_TICK = 2;
 
-    // How far you may drift from the phase landing before the hold lets go.
     private static final double PHASE_SLACK = 0.1;
 
     // The server checks this share of your width around the eyes for suffocation.
     private static final double EYE_SHARE = 0.8;
 
-    // Ticks the landing stays drawn and a phase waits for the teleport.
     private static final int SHOW_TICKS = 40;
 
-    // Ticks to sit still after a fruit whilst its teleport lands.
     private static final int FRUIT_SETTLE = 10;
 
     private record Throw(float yaw, float pitch, Vec3 landing) {
     }
 
-    // Angles from one to another a step apart.
     private record Sweep(float from, float to, float step) {
 
         private static Sweep only(float angle) {
@@ -162,11 +150,9 @@ public final class AutoPearl extends Module {
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 290).under(render);
 
     private final HotbarLoan loan = new HotbarLoan();
-    private final Feeding feeding = new Feeding();
+    private final Feeding feeding = new Feeding(this);
     private final List<Player> enemies = new ArrayList<>();
     private final Set<Integer> judged = Collections.newSetFromMap(new BoundedMap<>(MAX_JUDGED));
-    // Blocks you placed in this world and the last tick each may stay missing. A roof among them is
-    // your own.
     private final Map<BlockPos, Integer> placed = new BoundedMap<>(MAX_PLACED);
     private final WorldWatch world = new WorldWatch();
     private int ticks;
@@ -212,14 +198,9 @@ public final class AutoPearl extends Module {
         landing = null;
     }
 
-    // True whilst you stand where a phase put you. The push out of blocks waits till you leave.
+    // The push out of blocks waits till you leave the phase spot.
     public boolean holdsPhase() {
         return isEnabled() && holdPhase.isOn() && phaseArrived;
-    }
-
-    // True whilst a chorus fruit is going down. Other feeders keep their hands off the use key.
-    public boolean isBusy() {
-        return isEnabled() && feeding.isActive();
     }
 
     @Subscribe
@@ -248,7 +229,6 @@ public final class AutoPearl extends Module {
         }
         ticks++;
         forgetLostBlocks();
-        // A death or the pause whilst a fruit's teleport lands.
         if (feeding.waiting()) {
             phaseAsked = false;
             forgetPhase();
@@ -274,7 +254,6 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // A pearl first. A pearl cooling down is waited for and the fruit only goes when no pearl will do.
     private void escape() {
         if (EntityUtil.nearestEnemy(enemyRange.getValue()) == null) {
             return;
@@ -305,7 +284,6 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // The throw whose landing ends up furthest from the nearest enemy. False when none is safe.
     private boolean throwEscape() {
         searchTimer = SEARCH_GAP;
         collectEnemies();
@@ -328,7 +306,6 @@ public final class AutoPearl extends Module {
         return null;
     }
 
-    // A block over the head keeps you from jumping and every side is shut at the feet or the head.
     // A roof you placed yourself is no trap.
     private boolean boxedIn() {
         BlockPos feet = mc.player.blockPosition();
@@ -345,15 +322,12 @@ public final class AutoPearl extends Module {
         return true;
     }
 
-    // A block of yours that has shown is forgotten the first tick it is gone and leaves its spot to
-    // whoever fills it next.
     private void forgetLostBlocks() {
         syncWorld();
         placed.replaceAll((spot, missingUntil) -> BlockUtil.isSolid(spot) ? ticks : missingUntil);
         placed.values().removeIf(missingUntil -> missingUntil < ticks);
     }
 
-    // Blocks placed in another world mean nothing here.
     private void syncWorld() {
         if (world.changed()) {
             placed.clear();
@@ -369,7 +343,6 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // Further from the nearest enemy is better. A landing short of the safe distance is no escape.
     private double escapeScore(Vec3 settled) {
         double gap = Double.MAX_VALUE;
         for (Player enemy : enemies) {
@@ -378,9 +351,8 @@ public final class AutoPearl extends Module {
         return gap < safeDistance.getValue() ? Double.NEGATIVE_INFINITY : gap;
     }
 
-    // The fruit can always be eaten and throws you somewhere close by at random.
     private void eatChorus() {
-        if (Modules.feeding(this) || !InventoryUtil.inventoryFree()
+        if (Feeding.busy(this) || !InventoryUtil.inventoryFree()
             || mc.player.getCooldowns().isOnCooldown(Items.CHORUS_FRUIT.getDefaultInstance())) {
             return;
         }
@@ -403,8 +375,7 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // Chases the first enemy pearl in sight that lands within range. A pearl is judged once
-    // unless your own pearl was not ready for it.
+    // A pearl is judged once unless your own pearl was not ready for it.
     private void counter() {
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof ThrownEnderpearl pearl) || judged.contains(pearl.getId())) {
@@ -431,8 +402,7 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // Where an enemy pearl puts its thrower. Null for a pearl nobody need chase or one landing
-    // within the spread of where you stand. A thrower out of sight is judged by name.
+    // A thrower out of sight is judged by name.
     private Vec3 enemyLanding(ThrownEnderpearl pearl) {
         Entity owner = pearl.getOwner();
         if (owner != null ? !EntityUtil.isEnemy(owner) : !enemyName(EntityUtil.knownThrower(pearl))) {
@@ -455,7 +425,6 @@ public final class AutoPearl extends Module {
             && !OfflineClient.INSTANCE.getFriendManager().isFriend(name);
     }
 
-    // Every pitch along the bearing first and then a finer net round the nearest landing.
     private Throw bestChase(Vec3 target) {
         float bearing = RotationManager.yawTo(target);
         ToDoubleFunction<Vec3> nearest = settled -> -settled.distanceTo(target);
@@ -469,8 +438,6 @@ public final class AutoPearl extends Module {
             settled -> settled.distanceTo(target) <= spread ? -settled.distanceTo(target) : Double.NEGATIVE_INFINITY);
     }
 
-    // The throw whose safe landing scores highest. Null when none lands safely or every landing
-    // is ruled out.
     private Throw search(Sweep yaws, Sweep pitches, ToDoubleFunction<Vec3> score) {
         Throw best = null;
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -552,7 +519,6 @@ public final class AutoPearl extends Module {
         return best;
     }
 
-    // The point inside your block that lies against the given sides with room for the spread.
     private Vec3 towards(BlockPos feet, Direction first, Direction second) {
         double x = inside(mc.player.getX(), feet.getX());
         double z = inside(mc.player.getZ(), feet.getZ());
@@ -570,8 +536,6 @@ public final class AutoPearl extends Module {
         return Math.clamp(coordinate, column + SPREAD, column + 1 - SPREAD);
     }
 
-    // The throw that ends its first tick over the target and strikes on the second.
-    // Null when the pearl would hit something sooner or land too low or leave you choking.
     private Throw phaseThrow(BlockPos feet, Vec3 target) {
         Aim aim = ProjectilePath.firstTickAim(mc.player, ProjectilePath.THROWABLE, target);
         if (aim == null) {
@@ -595,7 +559,6 @@ public final class AutoPearl extends Module {
         return new Throw(aim.yaw(), aim.pitch(), spot);
     }
 
-    // How far your body would reach into the solid blocks beside your feet from the spot.
     private double depthInWalls(BlockPos feet, Vec3 spot) {
         double half = mc.player.getBbWidth() / 2;
         double depth = 0;
@@ -607,7 +570,6 @@ public final class AutoPearl extends Module {
         return depth;
     }
 
-    // How far a body this wide sticks out of your block on the given side.
     private static double pastEdge(Direction side, BlockPos feet, Vec3 spot, double half) {
         return switch (side) {
             case EAST -> spot.x + half - (feet.getX() + 1);
@@ -617,7 +579,6 @@ public final class AutoPearl extends Module {
         };
     }
 
-    // Keeps the push out of blocks off whilst you stay on the phase spot.
     private void watchPhase() {
         if (phaseSpot == null) {
             return;
@@ -650,8 +611,6 @@ public final class AutoPearl extends Module {
         return true;
     }
 
-    // The offhand when it holds pearls and the main hand when a slot has some.
-    // Null when there are none to hand.
     private InteractionHand pearlHand() {
         if (mc.player.getOffhandItem().is(Items.ENDER_PEARL)) {
             return InteractionHand.OFF_HAND;

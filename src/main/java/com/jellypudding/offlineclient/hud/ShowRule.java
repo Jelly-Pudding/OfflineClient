@@ -8,8 +8,6 @@ import com.jellypudding.offlineclient.util.LiveText;
 import java.util.List;
 import java.util.OptionalDouble;
 
-// When a piece shows. The rule watches one live word and holds it against a value. A warning
-// then only comes up when it matters. Its settings are named after the piece.
 public final class ShowRule {
 
     public enum When { ALWAYS, BELOW, ABOVE, IS, IS_NOT }
@@ -18,8 +16,7 @@ public final class ShowRule {
     private static final String CLOSE = "}";
     private static final String PERCENT = "%";
 
-    // What the rule makes of the piece right now. The problem says why the rule cannot work and
-    // is null whilst it can. A rule that cannot work never shows the piece.
+    // A rule that cannot work never shows the piece.
     public record Verdict(boolean shows, String problem) {
 
         private static final Verdict SHOWN = new Verdict(true, null);
@@ -53,7 +50,6 @@ public final class ShowRule {
         return List.of(when, word, value);
     }
 
-    // Reads the watched word once and holds it against the value.
     public Verdict judge() {
         if (when.is(When.ALWAYS)) {
             return Verdict.SHOWN;
@@ -80,9 +76,8 @@ public final class ShowRule {
             : Verdict.HIDDEN;
     }
 
-    // Whether what a word shows and the number behind it stand to the wanted value as the
-    // comparison asks. A word with no number behind it is neither below nor above anything.
-    // Two readings are the same when they read alike or come to the same number.
+    // A word with no number behind it is neither below nor above anything. Two readings are the
+    // same when they read alike or come to the same number.
     public static boolean holds(When when, String shown, double number, String wanted) {
         OptionalDouble against = numberIn(wanted);
         boolean comparable = !Double.isNaN(number) && against.isPresent();
@@ -100,7 +95,6 @@ public final class ShowRule {
         return shown.trim().equalsIgnoreCase(wanted.trim()) || comparable && number == against.getAsDouble();
     }
 
-    // The watched word with any braces it was typed in taken off.
     private static String unbraced(String typed) {
         String word = typed.trim();
         if (word.startsWith(OPEN)) {
@@ -112,8 +106,7 @@ public final class ShowRule {
         return word.trim();
     }
 
-    // Empty for text that is no number. A share can be typed with its percent sign the way the
-    // piece shows it.
+    // A share can be typed with its percent sign the way the piece shows it.
     private static OptionalDouble numberIn(String text) {
         String typed = text.trim();
         if (typed.endsWith(PERCENT)) {

@@ -93,7 +93,6 @@ public final class TunnelEsp extends Module {
 
     private final JoinedCells<Find> joined = new JoinedCells<>(find -> BlockPos.asLong(find.x(), find.y(), find.z()));
 
-    // The rules the cached chunks were scanned with.
     private Rules rules;
 
     public TunnelEsp() {

@@ -29,11 +29,6 @@ public final class ServerInfoElement extends RowsElement {
         add(address, players, tps, ping, color);
     }
 
-    @Override
-    public boolean visible() {
-        return isActive() && !lines().isEmpty();
-    }
-
     private List<String> lines() {
         List<String> lines = new ArrayList<>(4);
         if (OfflineClient.MC.player == null) {

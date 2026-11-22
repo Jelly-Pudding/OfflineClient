@@ -19,7 +19,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-// Steps aside whilst AutoTotem has claimed the offhand for a totem.
 public final class Offhand extends Module {
 
     public enum Choice {
@@ -152,7 +151,6 @@ public final class Offhand extends Module {
         return extra != null ? extra : item.getValue().item;
     }
 
-    // True once the health line is crossed after the damage already on its way.
     private boolean totemNeeded() {
         if (!totemWanted()) {
             return false;
@@ -164,7 +162,6 @@ public final class Offhand extends Module {
             falling.isOn()) <= totemHealth.getValue() * EntityUtil.HEART;
     }
 
-    // The item the quick rule asks for right now. Null when it asks for nothing.
     private Item quickItem() {
         ItemStack held = mc.player.getInventory().getSelectedItem();
         boolean sword = held.is(ItemTags.SWORDS);
@@ -186,7 +183,6 @@ public final class Offhand extends Module {
             || held.has(DataComponents.FOOD);
     }
 
-    // A golden apple stands in whilst there is no enchanted one.
     private Item apple() {
         if (have(Items.ENCHANTED_GOLDEN_APPLE)) {
             return Items.ENCHANTED_GOLDEN_APPLE;
@@ -199,7 +195,6 @@ public final class Offhand extends Module {
         return mc.player.getOffhandItem().is(item) || findSlot(item) != -1;
     }
 
-    // Inventory index of the first stack of the item. Minus one when absent.
     private int findSlot(Item wanted) {
         int first = hotbar.isOn() ? 0 : InventoryUtil.HOTBAR_SIZE;
         for (int i = first; i < InventoryUtil.WHOLE_INVENTORY; i++) {

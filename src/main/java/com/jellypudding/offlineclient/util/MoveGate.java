@@ -45,7 +45,6 @@ public enum MoveGate {
 
     // A packet from the tick before can land in the same server tick. One is kept in hand.
     private static final int SLACK = 1;
-    // A hair is kept in hand of every allowance.
     private static final double MARGIN = 0.1;
 
     // A pull back this many ticks after a hop only Paper allows is blamed on that hop.
@@ -84,7 +83,6 @@ public enum MoveGate {
     private static PacketSendEvent ownEvent;
     private static boolean delivered;
 
-    // Movement packets the server counts this tick.
     private static int counted;
 
     // The packets of plain play that left this tick and in each of the two before it. The
@@ -93,7 +91,6 @@ public enum MoveGate {
     private static int plainLastTick = PLAY_PACKETS;
     private static int plainTickBefore = PLAY_PACKETS;
 
-    // The positions the server was last sent and where it held them as this tick began.
     private static Vec3 lastPlayer;
     private static Vec3 lastVehicle;
     private static Vec3 tickPlayer;
@@ -104,20 +101,15 @@ public enum MoveGate {
     private static int stretchedAt = NEVER;
     private static int strikes;
 
-    // When the last position left.
     private static long positionAt = System.nanoTime();
 
-    // The client tick in which the gate last dropped a position.
     private static volatile int droppedAt = NEVER;
 
-    // Whether the last packet left the player or the vehicle hanging in the air and for
-    // how many ticks the server has counted that.
     private static boolean playerFloating;
     private static boolean vehicleFloating;
     private static int playerFloatingTicks;
     private static int vehicleFloatingTicks;
 
-    // The input the server last took.
     private static Input told = Input.EMPTY;
 
     public static boolean free() {
@@ -136,12 +128,10 @@ public enum MoveGate {
         return System.nanoTime() - positionAt >= SERVER_TICK_NANOS - clientTick / 2;
     }
 
-    // Ticks the server has counted the player or the vehicle they steer hanging in the air.
     public static int floatingTicks(boolean vehicle) {
         return vehicle ? vehicleFloatingTicks : playerFloatingTicks;
     }
 
-    // Packets a burst may still add in the budget's window.
     public static int spare() {
         return budget.spare();
     }
@@ -180,7 +170,6 @@ public enum MoveGate {
         return !ServerInfo.runsPaper();
     }
 
-    // True whilst the server takes the player for one holding sneak.
     public static boolean crouching() {
         return told.shift();
     }
@@ -210,7 +199,6 @@ public enum MoveGate {
             spot.x, spot.y, spot.z, onGround, player.horizontalCollision));
     }
 
-    // The same with the player turned to face that way.
     public static boolean send(Vec3 spot, float yRot, float xRot, boolean onGround) {
         LocalPlayer player = OfflineClient.MC.player;
         return player != null && sendPosition(spot, new ServerboundMovePlayerPacket.PosRot(
@@ -319,7 +307,6 @@ public enum MoveGate {
         return Math.max(0, Math.min(PAPER_PACKETS - counted - 1, budget.spare() - HEADROOM));
     }
 
-    // The longest single hop a vehicle can make this tick.
     public static double vehicleReach() {
         double best = 0;
         for (int fillers = maxVehicleFillers(); fillers >= 0; fillers--) {
@@ -343,7 +330,6 @@ public enum MoveGate {
         return count + SLACK <= VANILLA_PACKETS ? vanillaAllowance(count) : FLOOR;
     }
 
-    // What vanilla lets a position cover once it has counted that many packets this tick.
     private static double vanillaAllowance(int count) {
         return count <= VANILLA_PACKETS ? Math.sqrt(VANILLA_SQUARED * count) : FLOOR;
     }

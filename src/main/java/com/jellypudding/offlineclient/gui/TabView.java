@@ -13,12 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-// What a tab opens. A box under the tabs holding one row per entry with a
-// field to add another. Drag an edge to resize it.
 public final class TabView {
 
-    // One row. The detail sits on the right and the tip explains the row. A warned detail stands
-    // out in the warning colour.
     public record Entry(String name, String detail, String tip, boolean warn) {
 
         public Entry(String name, String detail, String tip) {
@@ -26,26 +22,19 @@ public final class TabView {
         }
     }
 
-    // A short how to under the rows. Each example types itself into the field
-    // when clicked.
     public record Hint(String title, String how, List<String> examples) {
     }
 
-    // What the box is looking at. The client owns the data and this reads it.
     public interface Source {
-        // The field text narrows the rows and can offer more of them.
         List<Entry> entries(String query);
 
-        // Shown when there is nothing to list. With text in the field it says what
-        // enter would do with it.
         String emptyText(String query);
 
-        // A line along the bottom saying what the rows do.
         default String footer() {
             return "";
         }
 
-        // What the field at the top asks for. Empty hides the field.
+        // Empty hides the field.
         default String addHint() {
             return "";
         }
@@ -63,12 +52,10 @@ public final class TabView {
             return "Remove " + name;
         }
 
-        // True when clicking the detail listens for a key to put there.
         default boolean bindable() {
             return false;
         }
 
-        // Shown under the rows to teach a first time player. Empty hides it.
         default List<Hint> hints(String query) {
             return List.of();
         }
@@ -79,7 +66,6 @@ public final class TabView {
 
     private static final int DROP_ZONE = 14;
     private static final int DETAIL_PAD = 3;
-    // A long detail leaves the name this much of its row.
     private static final int NAME_ROOM = 40;
     private static final int EMPTY_HEIGHT = 18;
     private static final int LINE = 10;
@@ -89,7 +75,6 @@ public final class TabView {
     private static final int MIN_HEIGHT = 40;
     private static final int DEFAULT_WIDTH = 220;
     private static final int HINT_GAP = 6;
-    // How far the line along the bottom sits in from each end of the rows.
     private static final int FOOTER_INSET = GuiTheme.PAD - 2;
     private static final int CHIP_HEIGHT = 11;
     private static final int CHIP_STEP = CHIP_HEIGHT + 2;
@@ -121,14 +106,13 @@ public final class TabView {
     private String asked = "";
     private long read;
 
-    // Where each example landed this frame.
     private record Chip(int x, int y, int w, String text) {
     }
 
     private final List<Chip> chips = new ArrayList<>();
 
-    // Where the box landed this frame. The width and height above are what
-    // the user asked for and these are what the window had room for.
+    // The width and height above are what the user asked for and these are what the window had room
+    // for.
     private int left;
     private int top;
     private int wide = MIN_WIDTH;
@@ -171,7 +155,6 @@ public final class TabView {
         return entries;
     }
 
-    // Text broken into lines that fit the room. A word too wide for a line of its own is cut short.
     private static List<String> lines(Font font, String text, int room) {
         List<String> lines = new ArrayList<>();
         for (String line : RenderUtil.wrap(font, text, room)) {
@@ -180,8 +163,6 @@ public final class TabView {
         return lines;
     }
 
-    // What is shown in place of rows. It keeps the same gap to both ends of the rows and that
-    // clears a scrollbar as well.
     private List<String> emptyLines() {
         return lines(ClientFonts.gui(), source.emptyText(asked), rowRoom() - GuiTheme.PAD * 2);
     }
@@ -190,7 +171,6 @@ public final class TabView {
         return lines(ClientFonts.gui(), source.footer(), rowRoom() - FOOTER_INSET * 2);
     }
 
-    // A single line in place of rows takes the empty height and every further line adds its own.
     private int rowsHeight() {
         int count = entries().size();
         return count == 0 ? EMPTY_HEIGHT + Math.max(0, emptyLines().size() - 1) * LINE
@@ -201,7 +181,6 @@ public final class TabView {
         return rowsHeight() + hintsHeight();
     }
 
-    // Kept clear of a scrollbar that may appear beside the rows.
     private int hintRoom() {
         return rowRoom() - GuiTheme.SCROLL_GUTTER - GuiTheme.PAD * 2;
     }
@@ -219,7 +198,6 @@ public final class TabView {
         return height;
     }
 
-    // The strip the field sits in. Zero when this list cannot be added to.
     private int fieldHeight() {
         return source.addHint().isEmpty() ? 0 : SearchField.HEIGHT + PAD;
     }
@@ -228,8 +206,7 @@ public final class TabView {
         return footerLines().size() * LINE;
     }
 
-    // What the box is allowed to draw at right now. The size the user chose
-    // is kept whole even when the window is too small to show it.
+    // The size the user chose is kept whole even when the window is too small to show it.
     private int drawHeight(int viewH, int under) {
         int wanted = height > 0 ? height
             : PAD * 2 + fieldHeight() + footerHeight() + contentHeight();
@@ -256,7 +233,6 @@ public final class TabView {
         return adder.isFocused() || binding != null;
     }
 
-    // Where the box will land before it draws.
     public int[] bounds(int viewW, int viewH, int under) {
         int w = drawWidth(viewW);
         int h = drawHeight(viewH, under);
@@ -287,7 +263,6 @@ public final class TabView {
         adder.drag(mx);
     }
 
-    // True when the key belonged to this box.
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         if (binding != null) {
@@ -312,7 +287,6 @@ public final class TabView {
         return true;
     }
 
-    // True when the key let go was the one a listening row was waiting for.
     public boolean keyReleased(KeyEvent event) {
         if (binding == null || !capture.keyReleased(event, this::bind)) {
             return false;
@@ -377,7 +351,6 @@ public final class TabView {
             scrollBar.render(context, trackX, viewTop, view, full,
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, view));
         }
-        // A box too short for the whole of it shows the lines that fit.
         int footerY = viewTop + view;
         for (String line : footerLines()) {
             if (footerY + LINE > top + drawn) {
@@ -436,7 +409,6 @@ public final class TabView {
                 context.guiRenderState.up();
                 context.text(font, shown, x + CHIP_PAD, GuiTheme.textY(y, CHIP_HEIGHT),
                     over ? GuiTheme.text() : GuiTheme.accentText(), false);
-                // An example cut short reads whole under the pointer.
                 if (over) {
                     tooltips.accept(shown.equals(example) ? CHIP_TIP : example);
                 }
@@ -446,7 +418,6 @@ public final class TabView {
         }
     }
 
-    // The example goes into the field ready to be finished or sent with enter.
     private boolean clickChip(double mx, double my) {
         for (Chip chip : chips) {
             if (SettingWidget.isOver(mx, my, chip.x(), chip.y(), chip.w(), CHIP_HEIGHT)) {
@@ -459,12 +430,10 @@ public final class TabView {
         return false;
     }
 
-    // The detail as its row shows it. One too long for the row is cut short.
     private static String fitted(Font font, String detail, int rowW) {
         return SettingWidget.trimEnd(font, detail, rowW - DROP_ZONE - NAME_ROOM - DETAIL_PAD * 2);
     }
 
-    // How much of the row the detail takes with the gap on either side of it.
     private static int detailWidth(Font font, String detail) {
         return detail.isEmpty() ? 0 : font.width(detail) + DETAIL_PAD * 2;
     }
@@ -547,7 +516,6 @@ public final class TabView {
         }
     }
 
-    // True when the click belonged to the box.
     public boolean mouseClicked(double mx, double my, int button) {
         if (binding != null && capture.mouseClicked(button, this::bind)) {
             stopListening();

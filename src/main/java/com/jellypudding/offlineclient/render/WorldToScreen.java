@@ -23,7 +23,7 @@ public final class WorldToScreen {
     private WorldToScreen() {
     }
 
-    // Rebuilds the projection for this frame. False if there is no camera yet.
+    // False if there is no camera yet.
     public static boolean update() {
         GameRenderer renderer = MC.gameRenderer;
         CameraRenderState camera = renderer.gameRenderState().levelRenderState.cameraRenderState;
@@ -53,7 +53,6 @@ public final class WorldToScreen {
         return screen != null && screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height;
     }
 
-    // A unit direction across the screen from its centre towards a world point.
     // Points behind the camera still give the way round to them.
     public static Vec3 directionTo(Vec3 world) {
         Vector4f v = new Vector4f((float) (world.x - cameraPos.x), (float) (world.y - cameraPos.y),

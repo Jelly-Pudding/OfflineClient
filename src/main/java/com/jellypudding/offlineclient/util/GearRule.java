@@ -14,12 +14,10 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import java.util.ArrayList;
 import java.util.List;
 
-// Which gear counts by what it is enchanted with. Gear that takes enchantments may have to
-// carry at least one and a picked list names the ones it must carry. A picked enchantment
-// that cannot go on a piece is skipped for it. One list covers weapons and armour and tools.
+// Gear that takes enchantments may have to carry at least one and a picked list names the ones it
+// must carry. A picked enchantment that cannot go on a piece is skipped for it.
 public final class GearRule {
 
-    // One picked enchantment and the lowest level that counts.
     private record Wanted(Holder<Enchantment> enchantment, int level) {
     }
 
@@ -30,7 +28,6 @@ public final class GearRule {
     private final BoolSetting enchantedOnly;
     private final ChoiceListSetting picked;
 
-    // The picked list read against the enchantments of the world it was read in.
     private List<Wanted> wanted = List.of();
     private RegistryAccess readFor;
     private boolean stale = true;
@@ -58,7 +55,7 @@ public final class GearRule {
         return enchantedOnly == null ? new Setting<?>[] {picked} : new Setting<?>[] {enchantedOnly, picked};
     }
 
-    // True when the stack may be marked. Anything that is not gear passes the first row.
+    // Anything that is not gear passes the first row.
     public boolean passes(ItemStack stack) {
         ItemEnchantments on = stack.getEnchantments();
         if (enchantedOnly != null && enchantedOnly.isOn() && on.isEmpty() && isGear(stack)) {
@@ -72,8 +69,8 @@ public final class GearRule {
         return true;
     }
 
-    // The picked enchantments the stack carries in words such as Sharpness V and Mending. Null
-    // unless one of them can go on the stack and it carries every one that can.
+    // Null unless one of the picked enchantments can go on the stack and it carries every one that
+    // can.
     public String carried(ItemStack stack) {
         ItemEnchantments on = stack.getEnchantments();
         List<String> names = new ArrayList<>();

@@ -4,10 +4,8 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 
 import java.util.function.DoubleSupplier;
 
-// A number the player sets held against a reading such as hunger at or below six points.
 final class Threshold extends Condition {
 
-    // Which side of the line the reading has to be on.
     enum Side { AT_OR_BELOW, BELOW, AT_OR_ABOVE, ABOVE }
 
     private final NumberSetting line;
@@ -17,8 +15,7 @@ final class Threshold extends Condition {
     private Runnable restart = () -> {
     };
 
-    // The line is the one row and carries the name of the condition. The sentence for what
-    // was met takes the line where it says %s.
+    // The sentence for what was met takes the line where it says %s.
     Threshold(Frame frame, String name, NumberSetting line, Side side, DoubleSupplier reading, String met) {
         super(frame, name);
         this.line = add(line);
@@ -27,7 +24,6 @@ final class Threshold extends Condition {
         this.met = met;
     }
 
-    // For a reading that counts from the moment the watching begins such as a stopwatch.
     Threshold restarting(Runnable restart) {
         this.restart = restart;
         return this;

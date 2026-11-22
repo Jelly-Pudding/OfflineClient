@@ -39,13 +39,12 @@ public final class WorldSuite implements Suite {
     private static final int SEEN_TICKS = 10;
     private static final int WALK_TICKS = 20;
     private static final int WORK_TICKS = 200;
-    // Blocks of water each way from the middle of the pond. A cast lands a few blocks off its aim.
+    // A cast lands a few blocks off its aim.
     private static final int POND = 5;
     private static final int LONG_BREAK = 200;
     private static final int DIAMONDS = 5;
     private static final double LOOKED_AWAY = 8;
     private static final double ENDER_EYES = 2.55;
-    // The far corner of the map square as MapPrinter names it.
     private static final Pattern SQUARE = Pattern.compile("to (-?[0-9]+) (-?[0-9]+)");
 
     private BlockPos home;
@@ -119,7 +118,6 @@ public final class WorldSuite implements Suite {
         rig.note("Three blocks of dirt were gone after about " + took + " ticks");
     }
 
-    // The player stands on one block high in the air and walks off it.
     private void scaffold(Rig rig) {
         World world = rig.world();
         world.setBlock(home.above(PERCH - 1), STONE);
@@ -135,7 +133,6 @@ public final class WorldSuite implements Suite {
         rig.expect(Props.is(rig, BlockPos.containing(at).below(), COBBLESTONE), "No cobblestone lies under the player");
     }
 
-    // The module walks by itself. A wall three thick stands in its way.
     private void tunneller(Rig rig) {
         World world = rig.world();
         world.fill(home.offset(-1, 0, -4), home.offset(1, 2, -2), STONE);
@@ -180,11 +177,15 @@ public final class WorldSuite implements Suite {
         rig.client().enable("AutoTool");
         rig.controls().aimAtBlock(block, Direction.SOUTH);
         rig.controls().holdMouse(ATTACK);
-        rig.ticks(SEEN_TICKS);
-        String slot = world.facts().get("slot");
+        // The pickaxe is through stone in six ticks and the slot goes back the tick after.
+        String slot = "";
+        for (int tick = 0; tick < SEEN_TICKS && !Integer.toString(PICKAXE_SLOT).equals(slot); tick++) {
+            rig.ticks(1);
+            slot = world.facts().get("slot");
+        }
         rig.controls().releaseMouse(ATTACK);
         rig.expect(Integer.toString(PICKAXE_SLOT).equals(slot),
-            "The server has the player on slot " + slot + " and the pickaxe lies in slot " + PICKAXE_SLOT);
+            "The server never had the player on the slot of the pickaxe which is " + PICKAXE_SLOT);
     }
 
     // A log takes three seconds by hand. A server lets a block go a little sooner than that
@@ -198,7 +199,6 @@ public final class WorldSuite implements Suite {
         rig.expect(fast <= plain * 0.9, "FastBreak broke the log no sooner");
     }
 
-    // Ticks the player needs to break a log by hand. The server must agree it is gone.
     private int broken(Rig rig) {
         BlockPos block = home.north(2);
         rig.world().setBlock(block, "oak_log");
@@ -242,7 +242,6 @@ public final class WorldSuite implements Suite {
         Props.await(rig, "the spring to be filled", WORK_TICKS, () -> Props.is(rig, spring, COBBLESTONE));
     }
 
-    // Two cows that cannot walk off. Each one fed costs one wheat.
     private void autoBreed(Rig rig) {
         Props.summon(rig, "cow", home.north(2), Props.STILL_MOB);
         Props.summon(rig, "cow", home.east(2), Props.STILL_MOB);
@@ -285,7 +284,6 @@ public final class WorldSuite implements Suite {
         });
     }
 
-    // A chest two blocks ahead with five diamonds and three gold ingots in it.
     private BlockPos fullChest(Rig rig) {
         BlockPos chest = home.north(2);
         rig.world().command("setblock " + chest.getX() + " " + chest.getY() + " " + chest.getZ()
@@ -303,7 +301,6 @@ public final class WorldSuite implements Suite {
         rig.note("Everything was out of the chest after about " + took + " ticks");
     }
 
-    // The player looks straight ahead where nothing stands to place a block against.
     private void airPlace(Rig rig) {
         Props.hold(rig, 0, COBBLESTONE + " 8");
         rig.client().enable("AirPlace");
@@ -319,7 +316,6 @@ public final class WorldSuite implements Suite {
         });
     }
 
-    // One tap on the block and the hand is free again.
     private void packetMine(Rig rig) {
         BlockPos block = home.north(2);
         rig.world().setBlock(block, STONE);
@@ -332,7 +328,7 @@ public final class WorldSuite implements Suite {
         rig.note("The block was gone about " + took + " ticks after one tap");
     }
 
-    // Two posts of wood. The module leaves the level you stand on alone and lights what is higher.
+    // The module leaves the level you stand on alone and lights what is higher.
     private void arson(Rig rig) {
         World world = rig.world();
         List<BlockPos> wood = List.of(home.north(3).above(), home.east(3).above());
@@ -342,7 +338,6 @@ public final class WorldSuite implements Suite {
         Props.await(rig, "fire on the wood", WORK_TICKS, () -> wood.stream().anyMatch(pos -> burns(rig, pos)));
     }
 
-    // True when fire stands on the block or against one of its sides.
     private static boolean burns(Rig rig, BlockPos pos) {
         for (BlockPos beside : List.of(pos.above(), pos.north(), pos.east(), pos.south(), pos.west())) {
             if (Props.is(rig, beside, "fire")) {
@@ -385,7 +380,6 @@ public final class WorldSuite implements Suite {
         rig.note("The box was dug out after about " + took + " ticks");
     }
 
-    // One corner is ground and the other the top of a post. The box between them holds air.
     private void filler(Rig rig) {
         World world = rig.world();
         world.fill(home.offset(1, 0, -2), home.offset(1, 1, -2), STONE);
@@ -396,7 +390,6 @@ public final class WorldSuite implements Suite {
             && Props.is(rig, home.offset(-1, 1, -2), COBBLESTONE));
     }
 
-    // The first corner is clicked on the face named and the second on the face towards the player.
     private static void clickCorners(Rig rig, BlockPos first, Direction face, BlockPos second) {
         rig.ticks(SEEN_TICKS);
         rig.controls().aimAtBlock(first, face);
@@ -426,7 +419,6 @@ public final class WorldSuite implements Suite {
             && !rig.world().isAir(home.west(2)));
     }
 
-    // A web two blocks ahead. A walk ends in it or stops at its face.
     private void collisions(Rig rig) {
         double into = walkedAtWeb(rig);
         rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 180, 0);
@@ -482,8 +474,7 @@ public final class WorldSuite implements Suite {
         rig.expect(after >= LOOKED_AWAY, "The server still has the view on the enderman's eyes");
     }
 
-    // Degrees between the way the server has the player looking and the way to a point. An
-    // enderman is angered by what the server sees.
+    // An enderman is angered by what the server sees.
     private static double angleTo(Rig rig, Vec3 point) {
         Map<String, String> held = rig.world().facts();
         Vec3 view = Vec3.directionFromRotation(Float.parseFloat(held.get("pitch")), Float.parseFloat(held.get("yaw")));
@@ -601,8 +592,7 @@ public final class WorldSuite implements Suite {
         Props.await(rig, "milk in the bucket", WORK_TICKS, () -> Props.holds(rig, "weapon.mainhand", "milk_bucket"));
     }
 
-    // The chest goes on the block under the crosshair. It stands right beside the player. What a
-    // chest drops two blocks off lies out of the player's reach.
+    // What a chest drops two blocks off lies out of the player's reach.
     private void eChestFarmer(Rig rig) {
         Props.hold(rig, 0, "ender_chest 8");
         rig.world().hotbar(1, PICKAXE);
@@ -635,8 +625,6 @@ public final class WorldSuite implements Suite {
         }
     }
 
-    // Casts onto the water and hands back what the module writes beside its name. The line is
-    // reeled in again.
     private static String waterUnderBobber(Rig rig, BlockPos water) {
         Module esp = rig.client().module("OpenWaterESP");
         // Water takes no crosshair. The view is turned to its surface.
@@ -653,8 +641,7 @@ public final class WorldSuite implements Suite {
         }
     }
 
-    // The station is marked one right click at a time and stands outside the square the picture
-    // fills. A whole print takes hours and is not played here.
+    // A whole print takes hours and is not played here.
     private void mapPrinter(Rig rig) {
         World world = rig.world();
         Module printer = rig.client().module("MapPrinter");

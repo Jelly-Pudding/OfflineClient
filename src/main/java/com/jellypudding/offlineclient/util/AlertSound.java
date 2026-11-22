@@ -15,9 +15,8 @@ import net.minecraft.sounds.SoundEvent;
 import java.util.List;
 import java.util.Locale;
 
-// An alarm a module rings when something turns up. It owns its settings the way a box
-// style does and plays on the interface channel. Distance and the block sounds slider
-// never quieten it.
+// It owns its settings the way a box style does and plays on the interface channel. Distance and
+// the block sounds slider never quieten it.
 public final class AlertSound {
 
     // The settings hold volume and pitch in percent and the sound engine wants shares of one.
@@ -35,7 +34,6 @@ public final class AlertSound {
     private final NumberSetting gap;
     private final ActionSetting test;
 
-    // The sounds of the rings under way. Null whilst the alarm is quiet.
     private List<SoundEvent> playing;
     private int played;
     private int wait;
@@ -50,12 +48,10 @@ public final class AlertSound {
         this(prefix, description, defaultSound, 1);
     }
 
-    // An alarm meant to wake a player who stepped away starts with several rings.
     public AlertSound(String prefix, String description, SoundEvent defaultSound, int defaultRings) {
         this(prefix, description, defaultSound, defaultRings, false);
     }
 
-    // An alarm that is the whole point of its module starts switched on.
     public AlertSound(String prefix, String description, SoundEvent defaultSound, int defaultRings, boolean on) {
         enabled = new BoolSetting(Setting.prefixed(prefix, "alarm"), description, on);
         sounds = new RegistryListSetting<>(Setting.prefixed(prefix, "sounds"),
@@ -77,7 +73,7 @@ public final class AlertSound {
             .under(enabled);
     }
 
-    // Makes the whole alarm a sub option of a switch. It only rings whilst that switch is on.
+    // The alarm only rings whilst that switch is on.
     public AlertSound under(BoolSetting parent) {
         enabled.under(parent);
         return this;
@@ -87,13 +83,12 @@ public final class AlertSound {
         return new Setting<?>[] {enabled, sounds, volume, pitch, rings, gap, test};
     }
 
-    // The switch every other row hangs from. A holder can hang rows of its own there.
     public BoolSetting switchRow() {
         return enabled;
     }
 
-    // Starts the rings whilst the alarm and every switch above it are on. Rings still going
-    // are left to finish. Restarting them on every find would ring for as long as finds come.
+    // Rings still going are left to finish. Restarting them on every find would ring for as long as
+    // finds come.
     public void ring() {
         if (playing == null && enabled.isOn() && enabled.isVisible()) {
             start();
@@ -111,7 +106,7 @@ public final class AlertSound {
         return start() ? null : "Pick a sound first";
     }
 
-    // The first ring plays at once and the rest on the client tick. False with no sound picked.
+    // The first ring plays at once and the rest on the client tick.
     private boolean start() {
         List<SoundEvent> picked = List.copyOf(sounds.resolved());
         if (picked.isEmpty()) {

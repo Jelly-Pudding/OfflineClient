@@ -53,8 +53,7 @@ import java.util.concurrent.TimeUnit;
 // thrown in different places cross at the corner.
 public final class EyeTracker extends Module implements FindSource, Leak.Source {
 
-    // One eye in the air with where the server first and last placed it. The thrower is null
-    // when nobody stood where it appeared.
+    // The thrower is null when nobody stood where the eye appeared.
     private static final class Flight {
         private final Vec3 first;
         private final Player thrower;
@@ -67,7 +66,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // A stronghold the flights of one or more eyes point to.
     private static final class Target {
         private final BearingTrail trail = new BearingTrail(EYE, false);
         // The corner itself once an eye came down onto it or the lines met on one.
@@ -85,8 +83,7 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
             return trail.fix(MIN_SPREAD);
         }
 
-        // A line fits when it could point at the place or where the lines held point. Lines
-        // towards two strongholds cross as well but seldom on a chunk corner.
+        // Lines towards two strongholds cross as well but seldom on a chunk corner.
         private boolean fits(Bearing line) {
             BearingFix known = place();
             if (known != null ? known.missedBy(line, EYE) : !trail.isEmpty() && !trail.fits(line, MIN_SPREAD)) {
@@ -96,7 +93,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
             return crossing == null || onCorner(crossing);
         }
 
-        // A landing fits the corner already known or else every line held.
         private boolean fits(BlockPos landing) {
             return corner != null ? corner.equals(landing) : trail.pointsAt(landing.getX(), landing.getZ());
         }
@@ -144,7 +140,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
     private static final String KIND = "stronghold";
     private static final String WAYPOINT = "Stronghold";
 
-    // Where along a line its words sit.
     private static final double LABEL_ALONG = 24;
     private static final double LABEL_LIFT = 1.5;
 
@@ -162,7 +157,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
     private final Map<Integer, Flight> flights = new HashMap<>();
     // Oldest first.
     private final List<Target> targets = new ArrayList<>();
-    // What the targets give away. Rebuilt every tick.
     private final List<Leak> leaks = new ArrayList<>();
     private final WorldWatch world = new WorldWatch();
 
@@ -243,7 +237,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // The player standing where an eye appeared. Null when nobody did.
     private Player throwerAt(Vec3 at) {
         Player best = null;
         double bestDistance = THROWER_REACH;
@@ -257,8 +250,7 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         return best;
     }
 
-    // An eye that dropped or broke or went out of sight. Its flight gives a line and one that
-    // sank came down onto the corner itself.
+    // A flight gives a line and one that sank came down onto the corner itself.
     private void landed(Flight flight) {
         double across = Math.hypot(flight.last.x - flight.first.x, flight.last.z - flight.first.z);
         Bearing line = across < MIN_FLIGHT ? null : new Bearing(flight.first.x, flight.first.z,
@@ -293,14 +285,12 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         found(target, now);
     }
 
-    // The corner an eye came down onto. A server that moved the corner off the chunk grid has it
-    // where the eye stopped.
+    // A server that moved the corner off the chunk grid has it where the eye stopped.
     private static BlockPos landingOf(Flight flight) {
         BlockPos corner = nearCorner(flight.last.x, flight.last.z);
         return corner != null ? corner : BlockPos.containing(flight.last.x, 0, flight.last.z);
     }
 
-    // The stronghold the line and the landing could belong to or a new one.
     private Target targetFor(Bearing line, BlockPos landing) {
         for (Target target : targets) {
             if ((line == null || target.fits(line)) && (landing == null || target.fits(landing))) {
@@ -315,13 +305,11 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         return fresh;
     }
 
-    // The chunk corner close to a spot. Null when none is.
     private static BlockPos nearCorner(double x, double z) {
         BlockPos corner = cornerNearest(x, z);
         return Math.hypot(corner.getX() - x, corner.getZ() - z) <= CORNER_REACH ? corner : null;
     }
 
-    // True when the crossing could be the corner its lines run through.
     private static boolean onCorner(BearingFix crossing) {
         BlockPos corner = cornerNearest(crossing.x(), crossing.z());
         return Math.hypot(corner.getX() - crossing.x(), corner.getZ() - crossing.z())
@@ -333,7 +321,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
             (int) Math.round(z / SectionPos.SECTION_SIZE) * SectionPos.SECTION_SIZE);
     }
 
-    // A stronghold placed or placed better. It is posted when news and kept in the finds.
     private void found(Target target, long now) {
         BearingFix place = target.place();
         if (target.told.due(place.x(), place.z(), place.radius(), now)) {
@@ -365,7 +352,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
             .append("§7 give or take §f" + Math.round(place.radius()) + " §7blocks.");
     }
 
-    // The middle of the stairs once the corner is known and else the crossing.
     private static BlockPos spotOf(Target target, BearingFix place) {
         if (target.corner != null) {
             return new BlockPos(target.corner.getX() + STAIRS_IN, STAIRS_HEIGHT, target.corner.getZ() + STAIRS_IN);
@@ -377,7 +363,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         return target.corner != null ? "stairs down" : "give or take " + Math.round(place.radius()) + " blocks";
     }
 
-    // The find follows the place as it sharpens.
     private void log(Target target, BearingFix place, long now) {
         target.tracked.log(finds, ServerInfo.dimension(), spotOf(target, place), KIND, detailOf(target, place), now);
     }
@@ -450,8 +435,6 @@ public final class EyeTracker extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // What a stronghold without a place still needs. One line needs a second from the side and
-    // lines too close in angle need more spread.
     private static String progress(Target target, Bearing newest) {
         List<Bearing> lines = target.trail.bearings();
         String walk = " throw again " + newest.sideways();

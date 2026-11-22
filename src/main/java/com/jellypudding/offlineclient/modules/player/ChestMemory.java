@@ -44,17 +44,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-// Copies what a container you opened holds every tick it stays open. The chests command
-// searches the copies of the dimension you are in.
 public final class ChestMemory extends Module {
 
-    // A container that holds what was searched for and how many.
     public record Hit(BlockPos pos, int count, long seen) {
     }
 
-    // Ticks a clicked container gets to open before the click is forgotten.
     private static final int OPEN_WAIT = 20;
-    // How far from the middle of the screen the peek sits.
     private static final int PEEK_GAP = 12;
     private static final int PEEK_COLUMNS = 9;
     private static final int PEEK_TEXT = 0xFFAAAAAA;
@@ -75,19 +70,16 @@ public final class ChestMemory extends Module {
 
     private final RememberedContainers store = new RememberedContainers();
 
-    // The container last clicked and the menu open at the time. The click may come from the
-    // network thread. Null whilst no click waits for its screen.
+    // The click may come from the network thread.
     private volatile BlockPos clicked;
     private volatile int clickedMenu;
     private int waited;
-    // The container whose screen is open and the menu that shows it. Null whilst none is.
     private Spot watching;
     private int watchedMenu;
     // The container whose screen shut last. It is forgotten once its block is loaded and holds no
     // container such as a box you set down and mine back.
     private Spot left;
 
-    // Where the last search found the item and until when they stay outlined.
     private List<BlockPos> marked = List.of();
     private long markedUntil;
 
@@ -108,7 +100,6 @@ public final class ChestMemory extends Module {
         marked = List.of();
     }
 
-    // A click on a block that keeps items waits for its screen.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         BlockPos pos = OpenedContainers.clickedOn(event.getPacket(), ChestMemory::remembers);
@@ -164,8 +155,6 @@ public final class ChestMemory extends Module {
         store.opened(watching, MenuClicks.containerItems(menu));
     }
 
-    // The menu of the storage screen in front of you. Null for any other screen and for your
-    // ender chest which is no block of its own.
     private AbstractContainerMenu openStorage() {
         if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen) || InventoryUtil.isEnderChest(screen)) {
             return null;
@@ -214,16 +203,12 @@ public final class ChestMemory extends Module {
         }
     }
 
-    // A double chest is outlined whole.
     private AABB box(BlockPos pos) {
         AABB box = DrawBatch.blockBox(pos);
         BlockPos other = BlockUtil.otherChestHalf(pos, mc.level.getBlockState(pos));
         return other == null ? box : box.minmax(DrawBatch.blockBox(other));
     }
 
-    // The remembered containers of this dimension that hold the item with the nearest first.
-    // One whose block is loaded but holds no container is forgotten. The ones found
-    // are outlined for the mark time.
     public List<Hit> search(Item item) {
         List<Hit> hits = new ArrayList<>();
         for (RememberedContainers.Container container : store.here()) {
@@ -242,8 +227,6 @@ public final class ChestMemory extends Module {
         return hits;
     }
 
-    // How many of the item the stacks hold. With Count shulkers the boxes among them add what
-    // they hold.
     public int count(List<ItemStack> stacks, Item item) {
         int total = 0;
         for (ItemStack stack : stacks) {
@@ -260,7 +243,6 @@ public final class ChestMemory extends Module {
         return total;
     }
 
-    // True for a spot of the dimension you are in whose block is loaded and holds no container.
     private boolean gone(Spot spot) {
         BlockPos pos = spot.pos();
         return spot.dimension().equals(ServerInfo.dimension()) && mc.level.isLoaded(pos)

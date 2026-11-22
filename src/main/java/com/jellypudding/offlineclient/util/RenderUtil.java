@@ -11,10 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-// 2D drawing helpers on top of GuiGraphicsExtractor.
 public final class RenderUtil {
 
-    // Grey for text that should sit back from the main line.
     public static final int MUTED_TEXT = 0xFFB0B0C0;
 
     // Coloured letters take the alpha of this and the colour of their own style.
@@ -42,8 +40,7 @@ public final class RenderUtil {
             i -> ColorUtil.lerp(from, to, last <= 0 ? 0 : (float) i / last), alpha, shadow);
     }
 
-    // The text drawn in one piece with each letter in the colour its place gives. The game spaces the
-    // letters as it spaces any text. Alpha fades the whole text and every colour given is solid.
+    // Alpha fades the whole text and every colour given is solid.
     public static void colouredLetters(GuiGraphicsExtractor context, Font font, String text, int x, int y,
                                        IntUnaryOperator colorOf, float alpha, boolean shadow) {
         if (alpha < 0.05f) {
@@ -85,7 +82,6 @@ public final class RenderUtil {
         pose.popMatrix();
     }
 
-    // An animated rainbow wave with one colour per character.
     public static void rainbowText(GuiGraphicsExtractor context, Font font, String text,
                                    float x, float y, float scale, float alpha) {
         if (alpha < 0.05f) {
@@ -104,7 +100,6 @@ public final class RenderUtil {
         roundedRect(context, x, y, x2, y2, radius, color, true, true);
     }
 
-    // Each end can keep square corners.
     public static void roundedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
                                    int radius, int color, boolean roundTop, boolean roundBottom) {
         int r = radiusFor(x, y, x2, y2, radius);
@@ -124,8 +119,7 @@ public final class RenderUtil {
         }
     }
 
-    // A hairline following the same rounded shape. The middle is left alone and a see
-    // through panel stays see through.
+    // The middle is left alone and a see through panel stays see through.
     public static void roundedOutline(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
                                       int radius, int color) {
         int r = radiusFor(x, y, x2, y2, radius);
@@ -157,7 +151,6 @@ public final class RenderUtil {
         return Math.min(radius, Math.min((x2 - x) / 2, (y2 - y) / 2));
     }
 
-    // Corner inset taken from a circle of the same radius.
     private static int cornerInset(int r, int row) {
         double dy = r - row - 0.5;
         return (int) Math.ceil(r - Math.sqrt(r * r - dy * dy));
@@ -190,8 +183,6 @@ public final class RenderUtil {
         }
     }
 
-    // True when the pixel under the pointer is within reach of a pixel the chevron
-    // fills. The empty corners either side of its point stay out.
     public static boolean overChevron(int mx, int my, int x, int y, boolean down, double reach) {
         double px = mx + 0.5;
         double py = my + 0.5;
@@ -213,18 +204,15 @@ public final class RenderUtil {
 
     public static final int STAR_SIZE = 11;
 
-    // Sample points per pixel side.
     private static final int STAR_SAMPLES = 4;
     // Inner radius of a regular five point star as a share of the outer.
     private static final double STAR_INNER = 0.382;
-    // How much smaller the cut out of the hollow star is.
     private static final double STAR_HOLLOW = 0.6;
 
     private static final float[] STAR_FILL = rasteriseStar(1);
     private static final float[] STAR_RING = ring(STAR_FILL, rasteriseStar(STAR_HOLLOW));
 
-    // A five point star. Chosen is solid and not chosen is a hollow ring. Each pixel carries
-    // the share of its samples inside the shape and the edges come out smooth.
+    // Each pixel carries the share of its samples inside the shape and the edges come out smooth.
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
         float[] cover = filled ? STAR_FILL : STAR_RING;
         for (int row = 0; row < STAR_SIZE; row++) {
@@ -238,7 +226,6 @@ public final class RenderUtil {
         }
     }
 
-    // The outer shape with the inner one cut away.
     private static float[] ring(float[] outer, float[] inner) {
         float[] result = new float[outer.length];
         for (int i = 0; i < outer.length; i++) {
@@ -247,7 +234,6 @@ public final class RenderUtil {
         return result;
     }
 
-    // Coverage of every pixel by a star scaled about the middle of the cell.
     private static float[] rasteriseStar(double scale) {
         double centre = STAR_SIZE / 2.0;
         double outer = centre * scale;
@@ -291,7 +277,6 @@ public final class RenderUtil {
         return inside;
     }
 
-    // A filled triangle between three screen points drawn as one pixel rows.
     public static void triangle(GuiGraphicsExtractor context, double ax, double ay, double bx, double by,
                                 double cx, double cy, int color) {
         int top = (int) Math.floor(Math.min(ay, Math.min(by, cy)));
@@ -332,7 +317,6 @@ public final class RenderUtil {
     // round to the right. The forward arrow is its mirror image.
     private static final int[][] HOOK = {{1, 0, 2, 1}, {0, 1, 5, 2}, {1, 2, 2, 3}, {5, 2, 6, 4}, {3, 4, 5, 5}};
 
-    // A hooked arrow that says a value goes back. The forward one says it comes back.
     public static void hookArrow(GuiGraphicsExtractor context, int x, int y, boolean forward, int color) {
         for (int[] span : HOOK) {
             int left = forward ? HOOK_WIDTH - span[2] : span[0];
@@ -341,10 +325,8 @@ public final class RenderUtil {
         }
     }
 
-    // Behind a world label. Text over bright terrain is unreadable without it.
     public static final int LABEL_BACKGROUND = 0x90000000;
 
-    // How far the background of a label reaches past its text.
     private static final int LABEL_PAD = 2;
     // A world label loses this share of its size for every block away and keeps at least half.
     private static final double LABEL_SHRINK_PER_BLOCK = 0.01;
@@ -352,14 +334,11 @@ public final class RenderUtil {
 
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
 
-    // A scaled label centred on a screen point. Each part carries its own
-    // colour and they run left to right on one line.
     public static void label(GuiGraphicsExtractor context, Font font, double screenX, double screenY,
                              float scale, List<String> parts, List<Integer> colors) {
         label(context, font, screenX, screenY, scale, parts, colors, LABEL_BACKGROUND);
     }
 
-    // The same label over a background of the module's own colour.
     public static void label(GuiGraphicsExtractor context, Font font, double screenX, double screenY,
                              float scale, List<String> parts, List<Integer> colors, int background) {
         int width = 0;
@@ -382,21 +361,16 @@ public final class RenderUtil {
         pose.popMatrix();
     }
 
-    // Where a label of the given scale sits to rest right on top of a label anchored at y.
     public static double labelAbove(Font font, double y, float belowScale, float scale) {
         return y - LABEL_PAD * belowScale - font.lineHeight * scale;
     }
 
-    // The share of its size a world label keeps that many blocks from the camera. Labels stacked on
-    // one another shrink alike.
     public static double labelShrink(double distance) {
         return Math.clamp(1 - distance * LABEL_SHRINK_PER_BLOCK, SMALLEST_LABEL, 1);
     }
 
-    // Pixels below the middle of the screen a crosshair readout sits.
     private static final int CROSSHAIR_GAP = 12;
 
-    // One line of text centred just under the crosshair in the overlay font.
     public static void underCrosshair(GuiGraphicsExtractor context, String text, int color) {
         Font font = ClientFonts.hud();
         int x = (context.guiWidth() - font.width(text)) / 2;
@@ -445,14 +419,12 @@ public final class RenderUtil {
         return lines;
     }
 
-    // A rectangle in screen pixels moved into a view drawn at the given scale.
     // Rounded outwards to still cover every pixel it did.
     public static int[] scaled(int left, int top, int right, int bottom, float scale) {
         return new int[] {(int) (left / scale), (int) (top / scale),
             (int) Math.ceil(right / scale), (int) Math.ceil(bottom / scale)};
     }
 
-    // Sits beside the cursor and stays inside the screen.
     public static void tooltip(GuiGraphicsExtractor context, Font font, List<String> lines,
                                int mouseX, int mouseY, int screenWidth, int screenHeight,
                                int fill, int ink) {

@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.Modules;
@@ -30,7 +31,6 @@ import java.util.List;
 
 public final class AutoClicker extends Module {
 
-    // Marked blocks are outlined in this hue unless the colour is changed.
     private static final float MARKED_HUE = 50;
 
     public enum Left { OFF, HOLD, PRESS, CROSSHAIR }
@@ -80,8 +80,7 @@ public final class AutoClicker extends Module {
     private final HeldKey useKey = new HeldKey(options -> options.keyUse);
     private int clicks;
 
-    // The marked blocks in the order they were marked and the one clicked next. They belong to
-    // the world they were marked in.
+    // They belong to the world they were marked in.
     private final List<BlockPos> marked = new ArrayList<>();
     private int nextMarked;
     private final WorldWatch world = new WorldWatch();
@@ -183,13 +182,11 @@ public final class AutoClicker extends Module {
         }
     }
 
-    // Swings on every full cooldown whilst the button is held and lands the hit
-    // only on a living target that is not a friend or a bot.
     private void hitCrosshair() {
         if (!mc.options.keyAttack.isDown()) {
             return;
         }
-        if (mc.player.isUsingItem() || BlockMiner.handMines() || Modules.feedersPauseCombat()
+        if (mc.player.isUsingItem() || BlockMiner.handMines() || Feeding.pausingCombat()
             || Modules.maceComboAirborne()) {
             return;
         }
@@ -209,7 +206,6 @@ public final class AutoClicker extends Module {
         counted();
     }
 
-    // One tap of the use button on the crosshair or on the next marked block in reach.
     private void useOnce() {
         if (useTarget.is(Target.CROSSHAIR)) {
             mc.startUseItem();
@@ -227,7 +223,6 @@ public final class AutoClicker extends Module {
         }
     }
 
-    // Switches the clicker off once Stop after is reached.
     private void counted() {
         if (stopAfter.getInt() > 0 && ++clicks >= stopAfter.getInt()) {
             tell("stopped after §f" + clicks + "§7 clicks.");
@@ -240,7 +235,6 @@ public final class AutoClicker extends Module {
         return left.isAny(Left.PRESS, Left.CROSSHAIR) || right.is(Right.PRESS);
     }
 
-    // The use button taps the marked blocks. The Mark key and the outlines only work then.
     private boolean clicksMarked() {
         return right.is(Right.PRESS) && useTarget.is(Target.MARKED);
     }
@@ -260,7 +254,6 @@ public final class AutoClicker extends Module {
         }
     }
 
-    // Blocks marked in another world point at nothing here.
     private void syncWorld() {
         if (world.changed()) {
             marked.clear();

@@ -40,10 +40,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
-// Replays the ore step of world generation from the seed for every chunk that arrives.
-// Anti xray can hide an ore from the client but not from the seed. A chunk is worked out
-// once all eight of its neighbours have arrived because ore veins cross chunk edges. The
-// large veins are laid before the ore step and come from the seeded world.
+// Anti xray can hide an ore from the client but not from the seed. A chunk is worked out once all
+// eight of its neighbours have arrived because ore veins cross chunk edges. The large veins are
+// laid before the ore step and come from the seeded world.
 public final class OreSight extends Module {
 
     // Replaying a chunk takes a few milliseconds. One quiet thread keeps it off the game.
@@ -63,7 +62,6 @@ public final class OreSight extends Module {
     // Kept in access order. The chunks around the player stay whilst far ones drop out.
     private final Map<Long, List<Spot>> worked = new BoundedMap<>(REMEMBERED_CHUNKS, true);
     private final Map<Long, Future<List<Spot>>> pending = new HashMap<>();
-    // The seed the worked chunks came from. Empty whilst none is known.
     private OptionalLong seedInUse = OptionalLong.empty();
     // Null in a dimension without ores or whilst no seed is known.
     private OreSimulation simulation;
@@ -73,9 +71,7 @@ public final class OreSight extends Module {
     private OreVeins veins;
     // The missing seed is pointed out once on each server.
     private final ServerWatch told = new ServerWatch();
-    // Set whenever a chunk result or the ore list changes.
     private boolean stale;
-    // The chunk and radius the shown spots were picked around.
     private long shownCentre;
     private int shownRadius;
     private List<Spot> shown = List.of();
@@ -103,7 +99,6 @@ public final class OreSight extends Module {
         cancelPending();
     }
 
-    // Worked out chunks are kept until the world or the seed changes.
     private void forget() {
         cancelPending();
         worked.clear();

@@ -31,7 +31,6 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
     private static final int INGREDIENT_SLOT = 3;
     private static final int FUEL_SLOT = 4;
 
-    // Ticks between two actions. The server gets time to answer the last one.
     private static final int PACE = 6;
 
     // Water goes through at most three ingredients and then the two forms.
@@ -122,7 +121,6 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
     private Stage stage;
     private List<Item> plan;
     private int planIndex;
-    // The ingredient last put in whilst the stand has yet to show its brew.
     private Item added;
     private int brewed;
 
@@ -171,7 +169,6 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
         }
     }
 
-    // Whatever sits in the bottle slots goes to the inventory first.
     private void takeBottles(BrewingStandMenu stand) {
         for (int i = 0; i < BOTTLE_SLOTS; i++) {
             if (stand.slots.get(i).getItem().isEmpty()) {
@@ -248,7 +245,7 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
         planIndex++;
     }
 
-    // Breadth first from a water bottle. Null when no chain leads to the potion.
+    // Breadth first from a water bottle.
     private List<Item> buildPlan() {
         Potion wanted = potion.resolved().stream().findFirst().orElse(null);
         if (wanted == null || mc.level == null) {

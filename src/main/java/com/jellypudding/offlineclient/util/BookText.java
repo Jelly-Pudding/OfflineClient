@@ -6,20 +6,17 @@ import net.minecraft.world.item.component.WritableBookContent;
 import java.util.ArrayList;
 import java.util.List;
 
-// The pages of a book as one piece of text for the clipboard and such text cut back into pages.
 // A paste never makes a book the game cannot send or a Paper server kicks for.
 public final class BookText {
 
     // A line holding only this starts a new page.
     public static final String PAGE_MARK = "<page>";
 
-    // Lines of text on one page of the book and quill screen.
     public static final int PAGE_LINES = 14;
 
     // The most a copy holds. A written book can carry far more than anyone reads.
     private static final int MOST_COPIED = 1 << 20;
 
-    // The most text a book has room for with a mark line for every page. Nothing past it is read.
     private static final int MOST_READ = WritableBookContent.MAX_PAGES
         * (WritableBookContent.PAGE_EDIT_LENGTH + PAGE_MARK.length() + 2);
 
@@ -35,12 +32,10 @@ public final class BookText {
         List<int[]> lines(String text);
     }
 
-    // A book after a paste. First is the page the pasted text starts on. Taken is how many of
-    // the offered pages went in.
+    // First is the page the pasted text starts on. Taken is how many of the offered pages went in.
     public record Pasted(List<String> pages, int first, int taken, int offered) {
     }
 
-    // Every page with a mark line between one and the next.
     public static String joined(List<String> pages) {
         StringBuilder text = new StringBuilder();
         for (String page : pages) {
@@ -55,9 +50,8 @@ public final class BookText {
         return text.toString();
     }
 
-    // The text as pages. A mark line starts a new page and a stretch too long for one page runs
-    // on to the next. No page is longer than the edit packet allows and no more pages come back
-    // than a book holds. Blank pages at the end are dropped.
+    // A mark line starts a new page and a stretch too long for one page runs on to the next. Blank
+    // pages at the end are dropped.
     public static List<String> pages(String text, Wrap wrap) {
         List<String> pages = new ArrayList<>();
         StringBuilder stretch = new StringBuilder();
@@ -76,8 +70,7 @@ public final class BookText {
         return pages;
     }
 
-    // Line breaks of every kind become one kind. A tab becomes a space and anything else the
-    // font cannot draw goes. The section sign stays because it colours the text after it.
+    // The section sign stays because it colours the text after it.
     private static String clean(String text) {
         if (text == null) {
             return "";
@@ -92,8 +85,6 @@ public final class BookText {
         return kept.toString();
     }
 
-    // Cuts one stretch into pages at line ends. A page is full at its last line or at the most
-    // letters a page may hold. A single line longer than that is cut where the room ends.
     private static void flow(String stretch, Wrap wrap, List<String> pages) {
         List<int[]> lines = new ArrayList<>(wrap.lines(stretch));
         if (lines.isEmpty()) {
@@ -124,9 +115,9 @@ public final class BookText {
         }
     }
 
-    // Puts the text into the book from the page the player is on. That page goes only when it
-    // is blank and every page after it moves back. Pasted pages the book has no room for and
-    // pages that would make the book too heavy for Paper are left off the end of the paste.
+    // The page the player is on goes only when it is blank and every page after it moves back.
+    // Pages the book has no room for or that would make it too heavy for Paper are left off the end
+    // of the paste.
     public static Pasted paste(List<String> book, int current, String text, Wrap wrap) {
         List<String> offered = pages(text, wrap);
         List<String> before = new ArrayList<>(book.subList(0, current));

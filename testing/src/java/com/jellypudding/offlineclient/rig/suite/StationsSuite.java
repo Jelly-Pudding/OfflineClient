@@ -63,7 +63,6 @@ public final class StationsSuite implements Suite {
         return plays;
     }
 
-    // Stands the block two ahead and opens it the way a player does.
     private void open(Rig rig, String block) {
         rig.world().setBlock(station, block);
         rig.ticks(SEEN_TICKS);
@@ -83,7 +82,6 @@ public final class StationsSuite implements Suite {
         rig.ticks(SEEN_TICKS);
     }
 
-    // Waits until the server counts that many of an item on the player and shuts the screen.
     private static void awaitGoods(Rig rig, String item, int count, int ticks) {
         try {
             int took = Props.await(rig, count + " " + item + " in the backpack", ticks,
@@ -94,7 +92,6 @@ public final class StationsSuite implements Suite {
         }
     }
 
-    // The same for something only the game can tell apart such as a name or an enchantment.
     private static void awaitStack(Rig rig, String what, Predicate<ItemStack> wanted) {
         try {
             rig.until(what, WORK_TICKS, mc -> Props.has(mc.player.getInventory(), wanted));
@@ -212,7 +209,6 @@ public final class StationsSuite implements Suite {
         awaitStack(rig, "a sword with the book on it", stack -> stack.is(Items.DIAMOND_SWORD) && stack.isEnchanted());
     }
 
-    // A farmer who buys twenty wheat for an emerald.
     private void autoTrade(Rig rig) {
         Props.summon(rig, "villager", station, "{NoAI:1b,PersistenceRequired:1b,VillagerData:{profession:"
             + "\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Offers:{Recipes:[{buy:{id:\"minecraft:wheat\","

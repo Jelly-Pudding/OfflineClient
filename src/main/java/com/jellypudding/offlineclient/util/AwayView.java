@@ -14,8 +14,8 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-// A view that has left the player's eyes. Freecam flies one about and RemoteView rides one.
-// The hooks for the camera and the hand and the crosshair ask here for whichever is on.
+// Freecam flies one about and RemoteView rides one. The hooks for the camera and the hand and the
+// crosshair ask here for whichever is on.
 public interface AwayView {
 
     enum InteractFrom { PLAYER, CAMERA }
@@ -33,14 +33,12 @@ public interface AwayView {
             "Hides the held item whilst the camera is away.", true);
     }
 
-    // The view that is away. Null whilst you look out of your own eyes. Asked several times
-    // a frame.
+    // Null whilst you look out of your own eyes. Asked several times a frame.
     static AwayView active() {
         Freecam freecam = Modules.active(Freecam.class);
         return freecam != null ? freecam : Modules.active(RemoteView.class);
     }
 
-    // The player's own model is only on screen in third person or whilst a view is away.
     static boolean ownBodyVisible() {
         return active() != null || !OfflineClient.MC.options.getCameraType().isFirstPerson();
     }

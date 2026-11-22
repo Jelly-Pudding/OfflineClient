@@ -36,7 +36,6 @@ public final class GotoSuite implements Suite {
     private static final WorldCreationUiState.SelectedGameMode CREATIVE =
         WorldCreationUiState.SelectedGameMode.CREATIVE;
 
-    // The courses stand east of the stage a blanket run plays on.
     private static final int ARENA_EAST = 24;
     private static final int ARENA_NORTH = 12;
     private static final int ARENA = 24;
@@ -61,7 +60,6 @@ public final class GotoSuite implements Suite {
     private record Course(String name, BiConsumer<World, BlockPos> build, BlockPos start, BlockPos goal) {
     }
 
-    // The modules a walk is made with and the rows set before it.
     private record Kit(String name, List<String> modules, List<String[]> rows) {
     }
 
@@ -467,7 +465,6 @@ public final class GotoSuite implements Suite {
         }
     }
 
-    // The blocks round the feet of a player whose walk ended before it began.
     private static String where(Rig rig) {
         return rig.ask(mc -> {
             BlockPos feet = mc.player.blockPosition();
@@ -477,7 +474,6 @@ public final class GotoSuite implements Suite {
         });
     }
 
-    // Where a walk that no longer moves stands and what it holds down.
     private static String standing(Rig rig) {
         return rig.ask(mc -> {
             try {
@@ -527,7 +523,6 @@ public final class GotoSuite implements Suite {
         return home.offset(ARENA_EAST, 0, -ARENA_NORTH);
     }
 
-    // A flat yard with a wall round it and nothing in it.
     private static void build(World world, BlockPos origin) {
         BlockPos low = origin.offset(-1, 0, -1);
         BlockPos high = origin.offset(ARENA, 0, ARENA);

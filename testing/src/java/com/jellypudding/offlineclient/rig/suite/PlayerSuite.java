@@ -45,7 +45,6 @@ public final class PlayerSuite implements Suite {
     private static final double TURN_NEAR = 2;
 
     private static final int SEEN_TICKS = 10;
-    // The hotbar slot the key 3 picks counted from nought.
     private static final int THIRD_SLOT = 2;
     private static final int WALK_TICKS = 40;
     private static final int ACT_TICKS = 100;
@@ -63,7 +62,6 @@ public final class PlayerSuite implements Suite {
     private static final int RUN_TICKS = 120;
     private static final int MINE_TICKS = 50;
     private static final int SNOWBALLS = 16;
-    // Where the first hotbar slot lies in the inventory screen measured from its corner.
     private static final int SLOT_X = 8 + 8;
     private static final int SLOT_Y = 142 + 8;
     private static final int INVENTORY_WIDTH = 176;
@@ -230,7 +228,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(Math.abs(held - plain) < 0.01, "The view still widened under Speed");
     }
 
-    // The factor the game widens the field of view by for the pace of the player.
     private static double viewWidening(Rig rig) {
         return rig.ask(mc -> (double) mc.player.getFieldOfViewModifier(true, 1));
     }
@@ -256,7 +253,6 @@ public final class PlayerSuite implements Suite {
         }
     }
 
-    // A door in a wall right ahead. The walk gets through it or stops at it.
     private void autoDoors(Rig rig) {
         World world = rig.world();
         double stopped = walkedAtDoor(rig);
@@ -278,7 +274,6 @@ public final class PlayerSuite implements Suite {
         return Math.round(moved.across() * 10) / 10.0;
     }
 
-    // A cactus on sand right ahead and half a second of walking into it.
     private void antiCactus(Rig rig) {
         World world = rig.world();
         world.setBlock(home.offset(0, -1, -1), "sand");
@@ -352,7 +347,6 @@ public final class PlayerSuite implements Suite {
         rig.note("The first bottle was thrown after about " + took + " ticks");
     }
 
-    // A run with jumps for six seconds. What it costs is read off the server in hundredths.
     private void antiHunger(Rig rig) {
         int plain = runCost(rig);
         rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, NORTH, 0);
@@ -403,7 +397,6 @@ public final class PlayerSuite implements Suite {
         return Props.is(rig, block, "air");
     }
 
-    // A husk stands between the player and a block of stone.
     private void noMiningTrace(Rig rig) {
         World world = rig.world();
         BlockPos block = home.north(3).above();
@@ -570,7 +563,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(rose, "The respawn key did not bring the player back");
     }
 
-    // A stack of blocks grows down from a ceiling as fast as the game lets one follow the next.
     private void fastPlace(Rig rig) {
         int plain = ticksToPlaceThree(rig);
         rig.client().enable("FastPlace");
@@ -598,7 +590,6 @@ public final class PlayerSuite implements Suite {
         }
     }
 
-    // One block of the floor is water. The crosshair goes through it onto the block below.
     private void liquidInteract(Rig rig) {
         BlockPos pool = home.offset(0, -1, -2);
         rig.world().setBlock(pool, "water");
@@ -644,7 +635,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(listed, "No list beside the chest names the enchanted sword");
     }
 
-    // Opens the chest and says whether its screen writes the words.
     private static boolean opensWith(Rig rig, BlockPos chest, String words) {
         rig.controls().aimAt(Vec3.atCenterOf(chest));
         rig.ticks(2);
@@ -668,8 +658,7 @@ public final class PlayerSuite implements Suite {
         rig.expect(kept, "The portal shut the inventory");
     }
 
-    // Steps into the portal and opens the inventory there. The stay is far shorter than the four
-    // seconds a portal takes to send a player on.
+    // The stay is far shorter than the four seconds a portal takes to send a player on.
     private boolean staysOpenInPortal(Rig rig) {
         World world = rig.world();
         world.teleport(home.getX() + 0.5, home.getY(), home.getZ() - 2.5, NORTH, 0);
@@ -683,7 +672,6 @@ public final class PlayerSuite implements Suite {
         return open;
     }
 
-    // Two part stacks of one item lie side by side in the backpack.
     private void inventoryTweaks(Rig rig) {
         Props.pack(rig, 0, "cobblestone 20");
         Props.pack(rig, 1, "cobblestone 30");
@@ -727,7 +715,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(open > 2, "The forward key did nothing behind the inventory");
     }
 
-    // How far the server has the player gone after the forward key was held behind the inventory.
     private static double walkedBehindInventory(Rig rig) {
         rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
         rig.ticks(2);
@@ -748,7 +735,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(turned >= 20, "The arrow key turned the view by " + Math.round(turned) + " degrees");
     }
 
-    // Degrees the view turned whilst the right arrow was held behind the inventory.
     private static double turnedBehindInventory(Rig rig) {
         rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
         rig.ticks(2);
@@ -808,8 +794,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(slot == THIRD_SLOT, "The key for the third slot left slot " + slot + " in the hand");
     }
 
-    // Takes the first slot in the hand and presses the key of the third. Hands back the slot in
-    // the hand as the tick after the press ends.
     private static int slotAsTickEnds(Rig rig) {
         Props.hold(rig, 0);
         int[] seen = {-1};
@@ -863,7 +847,6 @@ public final class PlayerSuite implements Suite {
         rig.note("The box was packed and back in the backpack after about " + took + " ticks");
     }
 
-    // Escape puts the screen away and the menu stays. The inventory key brings the screen back.
     private void chestLink(Rig rig) {
         BlockPos chest = home.north(2);
         rig.world().setBlock(chest, "ender_chest[facing=south]");
@@ -921,7 +904,6 @@ public final class PlayerSuite implements Suite {
         rig.expect(told, "The tooltip of the food says nothing about hunger and saturation");
     }
 
-    // Rests the pointer on the first hotbar slot of the inventory and reads what the screen writes.
     private static boolean tooltipSays(Rig rig, String words) {
         rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
         rig.ticks(2);

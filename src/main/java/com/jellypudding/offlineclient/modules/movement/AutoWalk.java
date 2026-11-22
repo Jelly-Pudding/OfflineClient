@@ -31,22 +31,17 @@ public final class AutoWalk extends Module {
 
     public enum Direction { FORWARDS, BACKWARDS, LEFT, RIGHT }
 
-    // How far ahead the smart walk aims and how often it aims again.
     private static final int LOOK_AHEAD = 16;
     private static final int RETARGET_TICKS = 40;
     private static final double GOAL_RADIUS = 3;
 
-    // A boat looks this many ticks of its speed ahead for a wall and never less than the
-    // least. It tests its own box a block at a time shifted to either side.
     private static final double BOAT_LOOK_TICKS = 10;
     private static final double BOAT_LEAST_LOOK = 2;
     private static final double BOAT_LOOK_STEP = 1;
     private static final double BOAT_SIDE = 0.5;
 
-    // Degrees a boat turns away from a wall each tick.
     private static final float BOAT_TURN = 4;
 
-    // The look ahead starts this far above the floor the boat rests on.
     private static final double BOAT_CLEARANCE = 0.1;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -68,13 +63,11 @@ public final class AutoWalk extends Module {
         "A boat you row forwards holds its heading and turns away from a wall that comes close."
             + " It keeps an ice road by itself.", true);
 
-    // Whether each movement key was physically down last tick.
     private final boolean[] wasHeld = new boolean[6];
     private KeyMapping held;
 
     private final Trip trip = new Trip();
     private int retarget;
-    // The yaw a rowed boat is held on. Not a number until one is taken.
     private float heading = Float.NaN;
 
     public AutoWalk() {
@@ -158,9 +151,8 @@ public final class AutoWalk extends Module {
         return steerBoats.isOn() && mc.player.getControlledVehicle() instanceof AbstractBoat;
     }
 
-    // The heading is the one the boat had as the row began. Steering by hand takes a
-    // fresh one. A wall nearer on one side turns the heading away from it for good and
-    // the boat follows a bend.
+    // A wall nearer on one side turns the heading away from it for good and the boat follows a
+    // bend.
     @Subscribe
     private void onVehicleTick(VehicleTickEvent event) {
         boolean byHand = InputUtil.physicallyHeld(mc.options.keyLeft)
@@ -184,8 +176,6 @@ public final class AutoWalk extends Module {
         boat.setYRot(heading);
     }
 
-    // How far ahead the first wall lies for the boat shifted towards one side. Infinite
-    // when the look ahead is clear.
     private double wallAhead(AbstractBoat boat, float side, double reach) {
         AABB box = boat.getBoundingBox();
         AABB shifted = box.setMinY(box.minY + BOAT_CLEARANCE).move(Vec3.directionFromRotation(0, side).scale(BOAT_SIDE));
@@ -198,8 +188,6 @@ public final class AutoWalk extends Module {
         return Double.POSITIVE_INFINITY;
     }
 
-    // Aims a little way off in the chosen direction and lets the pathfinder get there.
-    // The aim moves on as you turn. A blocked way just gets a new aim.
     private void smartTick() {
         if (--retarget <= 0 || !trip.active()) {
             retarget = RETARGET_TICKS;
@@ -247,8 +235,6 @@ public final class AutoWalk extends Module {
         }
     }
 
-    // True on the tick a movement key or button goes down. A screen only counts
-    // whilst InvWalk lets the keys through it.
     private boolean pressedMovementKey() {
         Screen screen = mc.gui.screen();
         InvWalk invWalk = Modules.active(InvWalk.class);
@@ -270,8 +256,6 @@ public final class AutoWalk extends Module {
             mc.options.keyRight, mc.options.keyShift, mc.options.keyJump);
     }
 
-    // Looks two ticks of travel ahead. The stop comes before the border. A ride carries
-    // the speed of a rider.
     private boolean chunkAheadMissing() {
         Entity mover = mc.player.getRootVehicle();
         Vec3 motion = mover.getDeltaMovement();

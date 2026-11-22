@@ -17,8 +17,7 @@ import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 
-// PlayerTabOverlayMixin calls into this for the ping column and the names
-// and the row limit and the column height.
+// PlayerTabOverlayMixin calls into this.
 public final class BetterTab extends Module {
 
     private static final long VANILLA_LIMIT = 80;
@@ -59,7 +58,7 @@ public final class BetterTab extends Module {
         return isEnabled() && ping.isOn();
     }
 
-    // Read by PlayerTabOverlayMixin. Vanilla only draws heads on a server in online mode.
+    // Vanilla only draws heads on a server in online mode.
     public boolean showsHeads() {
         return isEnabled() && heads.isOn();
     }
@@ -88,7 +87,6 @@ public final class BetterTab extends Module {
         context.text(font, text, x + width - font.width(text) - 1, y, ColorUtil.ping(latency), false);
     }
 
-    // Anyone who is not you or a friend or a listed enemy keeps the server's styling.
     public Component decorate(Component original, PlayerInfo info) {
         if (!isEnabled() || original == null) {
             return original;
@@ -106,7 +104,6 @@ public final class BetterTab extends Module {
         return name;
     }
 
-    // Zero when the name keeps its server colour.
     private int highlightColor(PlayerInfo info) {
         if (self.isOn() && mc.player != null && info.getProfile().id().equals(mc.player.getUUID())) {
             return selfColor.getColor();

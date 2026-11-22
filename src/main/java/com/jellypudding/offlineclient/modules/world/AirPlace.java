@@ -135,7 +135,6 @@ public final class AirPlace extends Module {
         return null;
     }
 
-    // Blocks and the few items that stand in a clicked spot on their own.
     // A rocket whilst gliding is a boost and not a placement.
     private boolean placeable(ItemStack stack) {
         Item item = stack.getItem();

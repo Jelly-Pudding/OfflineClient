@@ -12,7 +12,6 @@ public final class TrailScan {
 
     public enum Side { EITHER, LEFT, RIGHT }
 
-    // What one chunk says about a way through it. Old chunks count for it and new ones against.
     @FunctionalInterface
     public interface Weights {
         double of(int chunkX, int chunkZ);
@@ -23,12 +22,10 @@ public final class TrailScan {
     private static final double PARTING_SHARE = 0.25;
     private static final double BRANCH_SHARE = 0.5;
     private static final int CHUNK = SectionPos.SECTION_SIZE;
-    // The way is read every half chunk.
     private static final double READ_STEP = CHUNK / 2.0;
 
     private final Weights weights;
     private final Side side;
-    // The heading the trail was found on and how far a way may turn from it.
     private final float firstYaw;
     private final float widest;
 
@@ -39,9 +36,7 @@ public final class TrailScan {
         this.widest = widest;
     }
 
-    // The heading down the middle of the branch to follow out of a fan of ways round the given
-    // one. The ways are read from the near chunk to the far one. NaN when no way scores above the
-    // floor.
+    // The ways are read from the near chunk to the far one. NaN when no way scores above the floor.
     public float way(Vec3 from, float around, float spread, float step, int near, int far, double floor) {
         int count = (int) (spread / step);
         double[] scores = new double[2 * count + 1];
@@ -61,7 +56,7 @@ public final class TrailScan {
         return Mth.wrapDegrees(around + (pick - count) * step);
     }
 
-    // Old chunks along the way count for it and new ones against it. Each chunk counts once.
+    // Each chunk counts once.
     private double score(Vec3 from, float yaw, int near, int far) {
         Vec3 way = Vec3.directionFromRotation(0, yaw);
         double score = 0;
@@ -83,7 +78,6 @@ public final class TrailScan {
         return Math.abs(Mth.wrapDegrees(yaw - firstYaw)) > widest;
     }
 
-    // A way inside the first branch from the preferred side that is strong enough to take.
     // Left turns to a lower yaw and starts the fan.
     private int preferred(double[] scores, int best) {
         double parting = scores[best] * PARTING_SHARE;

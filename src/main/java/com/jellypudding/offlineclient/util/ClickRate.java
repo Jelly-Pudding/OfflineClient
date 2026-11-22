@@ -7,13 +7,12 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 
-// Clicks a second on each mouse button. MouseHandlerMixin hands over every real press. A held
-// button is one click however long it stays down. Both sides run on the game thread.
+// MouseHandlerMixin hands over every real press. A held button is one click however long it stays
+// down. Both sides run on the game thread.
 public final class ClickRate {
 
     private static final long WINDOW_MILLIS = 1000;
 
-    // The press times of each button within the last second with the oldest first.
     private static final Map<Integer, Deque<Long>> PRESSES = new HashMap<>();
 
     private ClickRate() {
@@ -27,7 +26,6 @@ public final class ClickRate {
         forgetOld(times, now);
     }
 
-    // How many times the button went down in the last second.
     public static int perSecond(int button) {
         Deque<Long> times = PRESSES.get(button);
         if (times == null) {

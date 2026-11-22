@@ -21,17 +21,14 @@ import java.util.function.Supplier;
 // left to NoFall.
 public final class CrashGuard {
 
-    // Ticks of travel swept ahead at the least.
     private static final double MIN_TICKS = 4;
 
-    // How far apart the sweep tests the body and the most tests one sweep makes.
     private static final double SWEEP_STEP = 0.5;
     private static final int MAX_STEPS = 64;
 
     // Share of the safe speed kept after a brake. Leaves room to add some back.
     private static final double KEEP = 0.6;
 
-    // A flight slower than this is going nowhere.
     private static final double STILL = 0.01;
 
     // A flight along the ground is held this far short of the first place that would hurt.
@@ -50,12 +47,8 @@ public final class CrashGuard {
     // to lose.
     private static final double PINNED = GlideMirror.FREE_LOSS;
 
-    // How often a velocity that would end the tick in a place that hurts is halved before
-    // it is stopped.
     private static final int HALVINGS = 3;
 
-    // What one tick of the guard comes to. The velocity to fly and whether the flight was
-    // stopped dead or turned back.
     private record Verdict(Vec3 velocity, boolean stopped) {
 
         private static Verdict onward(Vec3 velocity) {
@@ -158,18 +151,16 @@ public final class CrashGuard {
         "The least distance along your flight path to check.", 5, 1, 15, 1, " blocks")
         .under(enabled);
 
-    // The settings in the order a module should show them.
     public Setting<?>[] settings() {
         return new Setting<?>[] {enabled, lookAhead};
     }
 
-    // Shows the settings only whilst the module asks the guard.
     public CrashGuard shownWhen(Supplier<Boolean> asked) {
         enabled.visibleWhen(asked);
         return this;
     }
 
-    // Brakes or turns the flight of this tick. True when it was stopped dead or turned back.
+    // True when the flight was stopped dead or turned back.
     public boolean brake(LocalPlayer player) {
         // The server takes no glide step from a landed position. The glide flag stays up
         // for some ticks after a touchdown and there is nothing to guard in them.
@@ -246,8 +237,6 @@ public final class CrashGuard {
         return Math.max(lookAhead.getValue(), pace * MIN_TICKS);
     }
 
-    // The share of a flight that may be flown. All of it with a clear path and none of it
-    // with a place the copy hurts from too near ahead.
     private double share(Tick tick, Vec3 flight) {
         double pace = flight.length();
         Vec3 heading = flight.scale(1 / pace);

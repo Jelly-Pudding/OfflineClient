@@ -27,14 +27,12 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 
-// Plays a list of clicks the player wrote each time a menu opens that the rules below pick out.
 // A server names its menus as it likes and a title is only ever read as plain words.
 public final class MenuClicker extends Module {
 
-    // Ticks a menu gets for its items to arrive before the rules are checked without them.
     private static final int CONTENTS_WAIT = 20;
 
-    // Letters of a title that are read. A server can send a far longer one.
+    // A server can send a far longer title.
     private static final int MOST_TITLE = 256;
 
     private final RegistryListSetting<MenuType<?>> menus = new RegistryListSetting<>("Menus",
@@ -63,18 +61,13 @@ public final class MenuClicker extends Module {
         "A matching menu that opens within this many seconds of the last click is passed over."
             + " Many shops open their menu again after each click.", 3, 0, 30, 1, " seconds");
 
-    // The menu the steps were last decided for. Null whilst none is open.
     private AbstractContainerMenu seen;
     private boolean decided;
     private int waited;
-    // What is left to play in the open menu. Null when its steps are done or it was passed over.
     private Deque<MenuScript.Action> queue;
     private int wait;
-    // Ticks the module has run for and the tick of the last click the steps made. Minus one
-    // until the steps click.
     private int ticks;
     private int lastClick;
-    // True once the player heard why a menu was passed over. The next click clears it.
     private boolean toldPause;
 
     public MenuClicker() {
@@ -113,8 +106,7 @@ public final class MenuClicker extends Module {
         return menus.size() == 0 && title.isBlank() && !checkSlot.isOn();
     }
 
-    // The steps as they are written this moment. Null after telling the player which one
-    // cannot be read.
+    // Null after telling the player which step cannot be read.
     private MenuScript script() {
         MenuScript script = MenuScript.parse(steps.all());
         if (script.unread() == null) {
@@ -154,7 +146,6 @@ public final class MenuClicker extends Module {
         play(menu);
     }
 
-    // The menu of a container screen. Your own inventory is no menu a server opens.
     private AbstractContainerMenu openMenu() {
         if (!inGame() || !InventoryUtil.containerOpen()) {
             return null;
@@ -178,8 +169,6 @@ public final class MenuClicker extends Module {
         return index < menu.slots.size() && holds.contains(menu.slots.get(index).getItem().getItem());
     }
 
-    // True whilst the last click is too recent for the steps to play in a new menu. The player
-    // hears of it once until the steps click again.
     private boolean tooSoon() {
         if (lastClick < 0 || ticks - lastClick > pauseTicks()) {
             return false;
@@ -196,14 +185,12 @@ public final class MenuClicker extends Module {
         return (int) Math.round(pause.getValue() * SharedConstants.TICKS_PER_SECOND);
     }
 
-    // Null when a step cannot be read or there is nothing to play.
     private Deque<MenuScript.Action> fresh(AbstractContainerMenu menu) {
         MenuScript script = script();
         List<MenuScript.Action> actions = script == null ? List.of() : script.actionsFor(menu.slots.size());
         return actions.isEmpty() ? null : new ArrayDeque<>(actions);
     }
 
-    // One step a tick. A click is followed by the delay and a wait by its own ticks.
     private void play(AbstractContainerMenu menu) {
         switch (queue.poll()) {
             case MenuScript.Click click -> {

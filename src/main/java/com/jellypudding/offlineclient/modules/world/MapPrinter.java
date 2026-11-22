@@ -75,24 +75,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-// Prints map art from a folder of files with nobody at the keyboard. Each file is laid on the map
-// square the station was marked in and printed strip by strip by the printer's own worker with
-// materials from the marked chests. The finished picture is checked against its file. A map of
-// it is made and locked and stored and the square is cleared for the next file. How far it has
-// got outlasts a disconnect and a restart and it carries on only in the world of its station.
+// Each file is laid on the map square the station was marked in and printed strip by strip with
+// materials from the marked chests. How far it has got outlasts a disconnect and a restart and it
+// carries on only in the world of its station.
 public final class MapPrinter extends Module implements Printer {
 
     private static final int SIDE = MapPicture.SIDE;
 
-    // Clicks on a block the server turns down before it waits a minute.
     private static final int ATTEMPTS = 3;
-    // Ticks the walk waits for one row before the blocks it is stuck on are left for later.
     private static final int ROW_STALL_TICKS = 200;
-    // Ticks between looks over the whole picture whilst nothing can be done but wait.
     private static final int PLAN_TICKS = 20;
-    // Rounds over the blocks left behind before the printer gives up on them.
     private static final int REPAIR_ROUNDS = 3;
-    // A walk counts as there this close to the middle of the spot.
     private static final double AT_SPOT = 1;
     // A player stands in a cell this far either side of its middle. The walk along a strip counts
     // as there up to this far past the middle of its stand cell. That is the far edge of the row
@@ -119,8 +112,6 @@ public final class MapPrinter extends Module implements Printer {
         "Outlines where the picture goes and the station and the blocks still to come near you.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.LINES, 280).under(show);
 
-    // The first row of a strip that has a block to come and an item that row needs and none is
-    // carried of. Null when every one of them is carried.
     private record Frontier(int row, Item lacking) {
     }
 
@@ -159,39 +150,28 @@ public final class MapPrinter extends Module implements Printer {
     private final MapMaking mapMaking = new MapMaking(this, stock, trip, loan);
     private final SquareClearing clearing = new SquareClearing(this, stock, visit, miner, tools);
 
-    // The station of the world you are in. Null until one is found or marked and whilst the
-    // printer waits for the world of its station.
     private Station station;
-    // Set once you were told the printer waits for the world of its station.
     private boolean away;
-    // The marking under way. Null whilst none runs.
     private StationMarking marking;
     private boolean useHeld;
-    // Set whilst the Mark station row switches the module on. The marking starts afresh then.
     private boolean markOnEnable;
 
-    // The file under way. Null whilst it is being read.
     private String reading;
     private MapPicture picture;
     private BuildSite site;
     private int[] walk;
-    // The cells of the map square the picture covers in walk order. The map draws these.
     private int[] covered;
     private int width;
     private double standHeight;
     private final Set<Item> pictureItems = new HashSet<>();
-    // Files that could not be printed. They are passed over until the module is switched on again.
     private final Set<String> skipped = new HashSet<>();
 
     private int ticks;
 
-    // The trip under way. Null until it is planned.
     private Map<Item, Integer> needs;
     private int strip;
-    // The row of the strip in walk order the look for the next row to fill starts from.
     private int frontierFrom;
     private boolean repairing;
-    // The blocks still to come as the round over them began and the one being walked to.
     private final IntArrayList repairCells = new IntArrayList();
     private int repairCell = -1;
     private int repairRounds;
@@ -272,7 +252,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // The parts stop the printer with a reason too.
     @Override
     public void disable(String reason) {
         super.disable(reason);
@@ -310,9 +289,6 @@ public final class MapPrinter extends Module implements Printer {
         return "Right click the cartography table";
     }
 
-    // Takes up the station of the world the player is in. Switched on by hand the printer works
-    // for that station and marks one where there is none. After a change of world it carries on
-    // only in the world of its station and waits quietly anywhere else.
     private void attach(boolean switchedOn) {
         worker.forget();
         forgetFile();
@@ -394,7 +370,6 @@ public final class MapPrinter extends Module implements Printer {
         afterVisit = null;
     }
 
-    // Lets go of every walk and click and the slots borrowed for them.
     private void stopWork() {
         visit.stop();
         trip.stop();
@@ -405,8 +380,6 @@ public final class MapPrinter extends Module implements Printer {
         walkGoal = null;
         afterVisit = null;
     }
-
-    // Marking
 
     private void beginMarking() {
         stopWork();
@@ -425,6 +398,9 @@ public final class MapPrinter extends Module implements Printer {
     // Runs after Freecam and anything else that holds clicks back. Only a fresh press marks.
     @Subscribe(priority = -5)
     private void onRightClick(RightClickEvent event) {
+        if (event.byModule()) {
+            return;
+        }
         boolean fresh = !useHeld;
         useHeld = true;
         if (marking == null || !inGame()) {
@@ -455,8 +431,6 @@ public final class MapPrinter extends Module implements Printer {
         return new BoundingBox(corner.getX(), corner.getY(), corner.getZ() - 1, corner.getX() + SIDE - 1,
             corner.getY(), corner.getZ() + SIDE - 1);
     }
-
-    // The tick
 
     @Subscribe
     private void onTick(TickEvent event) {
@@ -503,7 +477,6 @@ public final class MapPrinter extends Module implements Printer {
         return ticks;
     }
 
-    // A pop is acted on as it is heard of.
     @Subscribe
     private void onTotemPop(TotemPopEvent event) {
         Condition pop = stopOn.popped(event);
@@ -512,7 +485,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // The player walking or jumping or hitting with no screen up takes over from the printer.
     private boolean tookOver() {
         if (mc.gui.screen() != null) {
             return false;
@@ -528,8 +500,6 @@ public final class MapPrinter extends Module implements Printer {
         return Hands.taken() || PlacedBox.anyAtWork() || mc.gui.screen() != null && !visit.ownsScreen();
     }
 
-    // Makes room for whatever has the hand. Every errand starts afresh from what the world
-    // and the inventory hold once the hand is free again.
     private void standAside() {
         visit.stop();
         trip.stop();
@@ -570,8 +540,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // Files
-
     private void nextFile() {
         List<String> waiting = new ArrayList<>(MapFiles.waiting());
         waiting.removeAll(skipped);
@@ -593,9 +561,8 @@ public final class MapPrinter extends Module implements Printer {
         MapFiles.read(name, result -> fileRead(name, result));
     }
 
-    // Comes on the game thread. A module switched off or another file meanwhile drops it. A file
-    // laid on the square before is never passed over for the next one because part of its picture
-    // may stand there. One that cannot be read then stops the printer.
+    // Comes on the game thread. A file laid on the square before is never passed over for the next
+    // one because part of its picture may stand there.
     private void fileRead(String name, BuildFiles.Result result) {
         if (!isEnabled() || station == null || !name.equals(reading) || !name.equals(station.file())
             || !inGame()) {
@@ -674,8 +641,6 @@ public final class MapPrinter extends Module implements Printer {
         forgetFile();
     }
 
-    // The picture
-
     private SiteWorker.Rules workRules() {
         StatePlacer.Rules clicks = new StatePlacer.Rules(range.getValue(), false, false, faceTarget.getValue(),
             SwingMode.PACKET);
@@ -708,7 +673,6 @@ public final class MapPrinter extends Module implements Printer {
         return pictureItems;
     }
 
-    // Cuts the picture into strips of that width and lists the cells of the square it covers.
     private void cutStrips(int wide) {
         width = wide;
         walk = picture.walk(width);
@@ -721,8 +685,6 @@ public final class MapPrinter extends Module implements Printer {
         covered = inside.toIntArray();
     }
 
-    // Columns a strip spans from the range and the server's limit and how high the picture lets
-    // the feet stand.
     private int stripWidth() {
         return MapPicture.stripWidth(range.getValue(), BlockUtil.serverReachLimit(), standHeight);
     }
@@ -747,8 +709,6 @@ public final class MapPrinter extends Module implements Printer {
         return MapPicture.inSquare(cell % SIDE, cell / SIDE + picture.firstRow());
     }
 
-    // A cell whose block is still to come or wrong. One out of view that was not last seen right
-    // counts too and the walk goes to it. The position is where the cell lies.
     private boolean pending(int cell, BlockPos pos) {
         if (kindOf(cell) == Blueprint.NO_SAY) {
             return false;
@@ -793,8 +753,6 @@ public final class MapPrinter extends Module implements Printer {
         return -1;
     }
 
-    // Building
-
     private void build() {
         if (visiting()) {
             return;
@@ -819,8 +777,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // All that is left are blocks the server kept turning down. They get fresh attempts a minute
-    // after their last click and turned down round after round they stop the printer.
     private void waitForRefused() {
         trip.stop();
         worker.standAside();
@@ -835,7 +791,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // Where the first block not known to be right lies as the end of a sentence. Empty when none is.
     private String firstLeft() {
         int first = firstCell(IntArrayList.wrap(walk),
             (cell, pos) -> kindOf(cell) != Blueprint.NO_SAY && !station.right().get(cell));
@@ -850,8 +805,6 @@ public final class MapPrinter extends Module implements Printer {
         MapStations.save();
     }
 
-    // Goes along the walk as far as the slots carry the blocks for. A trip that placed nothing
-    // time after time means the inventory cannot take what the next block needs.
     private void planTrip() {
         if (waitingForgive && ticks % PLAN_TICKS != 0) {
             return;
@@ -895,9 +848,6 @@ public final class MapPrinter extends Module implements Printer {
         MapStations.save();
     }
 
-    // Walks the strips in turn and stands one row behind the first row with a block to come.
-    // The worker places whatever comes in reach. The trip ends at a block the inventory has
-    // none of.
     private void walkStrips() {
         Frontier front = frontier(strip);
         while (front == null) {
@@ -930,9 +880,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // The first row of the strip in walk order with a block to come that is neither under the
-    // player nor passed over. Null once there is none. Rows the walk has left behind are not
-    // looked at again. The worker fills what it passes and the round at the end the rest.
     private Frontier frontier(int strip) {
         boolean south = MapPicture.southward(strip);
         int rows = picture.rows();
@@ -960,7 +907,6 @@ public final class MapPrinter extends Module implements Printer {
         return null;
     }
 
-    // The blocks of a row the walk is stuck on wait for the round over what is left.
     private void passRow(int strip, int row) {
         for (int x = MapPicture.stripWest(strip, width); x < MapPicture.stripEast(strip, width); x++) {
             int cell = row * SIDE + x;
@@ -970,8 +916,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // Goes to each block still to come in turn and stands beside it. A round in which every one
-    // was passed over starts another and a few such rounds stop the printer.
     private void repair() {
         if (repairCell == -1 || !pending(repairCell, cellPos(repairCell)) || passed.contains(repairCell)) {
             repairCell = nearestPending();
@@ -1006,7 +950,6 @@ public final class MapPrinter extends Module implements Printer {
         }
     }
 
-    // The nearest block of the round still to come. A round starts with a look over the whole picture.
     private int nearestPending() {
         if (repairCells.isEmpty()) {
             for (int cell : walk) {
@@ -1025,13 +968,9 @@ public final class MapPrinter extends Module implements Printer {
         walkGoal = null;
     }
 
-    // Walking
-
-    // Walks along the middle column of a strip towards the row it waits for and stops once past
-    // the middle of the stand cell. The player is there from that middle up to the far edge of
-    // the row waited for. At the start of a strip the walk goes into the row itself and the
-    // player is there anywhere in it. That is where the width of the strip was worked out for. A
-    // walk that got as near as it can counts as there as well.
+    // The player counts as there from the middle of the stand cell up to the far edge of the row
+    // waited for. At the start of a strip the walk goes into the row itself. A walk that got as
+    // near as it can counts as there as well.
     private Walk standAt(int stand, int middle, int dir, boolean start) {
         Vec3 centre = Vec3.atBottomCenterOf(cellPos(stand * SIDE + middle));
         Vec3 at = mc.player.position();
@@ -1054,8 +993,6 @@ public final class MapPrinter extends Module implements Printer {
         return walkTo(spot);
     }
 
-    // Walks towards the column of the spot at whatever height the ground there lies. A walk
-    // that keeps failing stops the printer.
     private Walk walkTo(BlockPos spot) {
         Trip.State state = pathTo(spot, new PathGoal.Column(spot.getX(), spot.getZ()));
         if (state == Trip.State.FAILED) {
@@ -1070,8 +1007,6 @@ public final class MapPrinter extends Module implements Printer {
         return state == Trip.State.ARRIVED ? Walk.THERE : Walk.ON_WAY;
     }
 
-    // One tick of the walk to a goal. A walk to another goal or one a visit or a pause let go of
-    // starts afresh.
     private Trip.State pathTo(BlockPos key, PathGoal goal) {
         Trip.State state = key.equals(walkGoal) ? trip.tick() : Trip.State.IDLE;
         if (state == Trip.State.IDLE) {
@@ -1098,8 +1033,6 @@ public final class MapPrinter extends Module implements Printer {
         }
         disable(reason);
     }
-
-    // Visits
 
     @Override
     public void openVisit(BlockPos pos, String name, Predicate<BlockState> fits, StationVisit.Work work) {
@@ -1144,12 +1077,9 @@ public final class MapPrinter extends Module implements Printer {
         return visit.busy() || stopped();
     }
 
-    // True once a stop part way through the tick has switched the printer off.
     private boolean stopped() {
         return !isEnabled();
     }
-
-    // Drawing
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {

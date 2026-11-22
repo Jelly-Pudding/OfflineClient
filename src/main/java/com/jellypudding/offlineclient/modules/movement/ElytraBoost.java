@@ -47,19 +47,16 @@ public final class ElytraBoost extends Module {
 
     private enum Jump { NONE, OPENING, LIFTING }
 
-    // The chest piece a rocket jump took off and the inventory slot it went to. Swapping the
-    // same two slots again puts it back.
+    // Swapping the same two slots again puts it back.
     private record ChestLoan(int slot, ItemStack piece) {
     }
 
     // A rocket jump asks for its look before the modules that fight ask for theirs.
     private static final int JUMP_FIRST = 100;
 
-    // Ticks the glide may take to open after the jump before the leap is given up.
     private static final int OPEN_TICKS = 10;
 
-    // Ticks a rocket may take to push once the glide is open before the leap is given up. A real
-    // rocket only pushes once the server has sent it back.
+    // A real rocket only pushes once the server has sent it back.
     private static final int PUSH_TICKS = 10;
 
     private static final float STRAIGHT_UP = -RotationManager.STRAIGHT_DOWN;
@@ -97,19 +94,16 @@ public final class ElytraBoost extends Module {
 
     private Jump jump = Jump.NONE;
     private boolean jumpAsked;
-    // Owed from the jump that took the chest piece off until it is back on. Null whilst nothing is owed.
     private ChestLoan chestLoan;
     private double jumpFrom;
     private float pitchBefore;
     private int jumpTicks;
-    // The tick of the jump the glide opened on and whether a rocket has sped the climb since.
     private int openedAt;
     private boolean pushed;
     private double lastRise;
     private final ChatWarning fallWarning = new ChatWarning();
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
-    // The client side rockets still alive. FireworkRocketEntityMixin asks after them.
     private final Set<FireworkRocketEntity> fakes = new HashSet<>();
 
     // Runs on whilst the module is off and ElytraFly fires through it. A spent rocket still
@@ -168,18 +162,15 @@ public final class ElytraBoost extends Module {
         fakes.clear();
     }
 
-    // True from the press of the rocket jump key until the chestplate is back on.
     public boolean jumping() {
         return jump != Jump.NONE || chestLoan != null;
     }
 
-    // True for a client side rocket this module launched.
     public boolean isFake(FireworkRocketEntity rocket) {
         return fakes.contains(rocket);
     }
 
     // MultiPlayerGameModeMixin asks before a right click uses an item.
-    // A real rocket about to be spent whilst gliding is replaced by a client side one.
     public boolean interceptsUse(ItemStack held) {
         if (!antiConsume.isOn() || !held.is(Items.FIREWORK_ROCKET) || !inGame()
             || !mc.player.isFallFlying()) {
@@ -234,8 +225,7 @@ public final class ElytraBoost extends Module {
         }
     }
 
-    // The elytra goes on and the jump goes off. The glide opens on a later tick once the server has
-    // heard that you left the ground.
+    // The glide opens on a later tick once the server has heard that you left the ground.
     private void startJump() {
         if (jump != Jump.NONE || !inGame() || Hands.tied()) {
             return;
@@ -260,8 +250,7 @@ public final class ElytraBoost extends Module {
         }
     }
 
-    // Swaps the first elytra that can open into the chest slot. A chest piece that comes off is
-    // owed back. False with the reason told when no elytra went on.
+    // A chest piece that comes off is owed back. False with the reason told when no elytra went on.
     private boolean wearGlider() {
         int glider = InventoryUtil.findSlot(stack -> LivingEntity.canGlideUsing(stack, EquipmentSlot.CHEST),
             InventoryUtil.WHOLE_INVENTORY);
@@ -281,7 +270,6 @@ public final class ElytraBoost extends Module {
         return true;
     }
 
-    // Why a jump cannot start now. Null when it can.
     private String jumpProblem() {
         if (mc.player.isFallFlying()) {
             return "You are already gliding.";
@@ -334,7 +322,6 @@ public final class ElytraBoost extends Module {
         lookUp();
     }
 
-    // The glide opens once you are off the ground and the rocket goes as it opens.
     private void openGlide() {
         if (!mc.player.isFallFlying() && !mc.player.onGround()) {
             GlideSwitch.get().open();
@@ -354,8 +341,8 @@ public final class ElytraBoost extends Module {
         fire();
     }
 
-    // How far above the start the climb carries you once the push stops. With the glide shut it runs on
-    // as plain air where gravity comes off first and then the drag.
+    // With the glide shut the climb runs on as plain air where gravity comes off first and then the
+    // drag.
     private double climbLeft() {
         double top = mc.player.getY();
         double speed = mc.player.getDeltaMovement().y;
@@ -372,7 +359,6 @@ public final class ElytraBoost extends Module {
         RotationManager.requestExact(mc.player.getYRot(), STRAIGHT_UP, RotationPriority.AURA);
     }
 
-    // The view drops back to where it was. The chest piece goes back on straight after.
     private void endJump() {
         if (jump == Jump.NONE) {
             return;
@@ -384,10 +370,9 @@ public final class ElytraBoost extends Module {
         }
     }
 
-    // Swaps the chest piece back once the jump is over and the server shuts the glide by itself as
-    // it does on a landing. NoFall takes the glide's fall back on the next packet and the drop after
-    // it as usual. The swap waits whilst clicks would be thrown away and is let go once a death or
-    // ElytraFly or anything that moved either piece has made it wrong.
+    // The server shuts the glide by itself once the chest piece is swapped back. NoFall takes the
+    // glide's fall back on the next packet. The swap waits whilst clicks would be thrown away and
+    // is let go once a death or ElytraFly or anything that moved either piece has made it wrong.
     private void settleChest() {
         if (chestLoan == null || jump != Jump.NONE || mc.player == null) {
             return;
@@ -414,7 +399,6 @@ public final class ElytraBoost extends Module {
             || InventoryUtil.findSlot(Items.FIREWORK_ROCKET, rocketReach()) != -1;
     }
 
-    // The slots a rocket is taken from. Take from inventory reaches past the hotbar.
     private int rocketReach() {
         return fromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
     }
@@ -435,7 +419,7 @@ public final class ElytraBoost extends Module {
         fire();
     }
 
-    // Clears away what the rockets left behind. True whilst the player glides.
+    // True whilst the player glides.
     private boolean tidy() {
         // A rocket from a world since left is never marked as removed.
         fakes.removeIf(rocket -> rocket.isRemoved() || rocket.level() != mc.level);
@@ -443,7 +427,6 @@ public final class ElytraBoost extends Module {
             return false;
         }
         if (!mc.player.isFallFlying()) {
-            // Borrowed rockets go home once the glide is over.
             loan.giveBack();
             return false;
         }
@@ -503,8 +486,8 @@ public final class ElytraBoost extends Module {
         }
     }
 
-    // A rocket that exists on this client alone. It rides the player the way a
-    // real one does and the vanilla entity tick supplies the push.
+    // The rocket rides the player the way a real one does and the vanilla entity tick supplies the
+    // push.
     private void launchFake() {
         if (!mc.player.isFallFlying() || mc.gui.screen() != null) {
             return;
@@ -521,7 +504,6 @@ public final class ElytraBoost extends Module {
         mc.level.addEntity(rocket);
     }
 
-    // Moves a stack of rockets into the hotbar. The slot it landed in or minus one.
     private int borrowRockets() {
         for (int i = InventoryUtil.HOTBAR_SIZE; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             if (mc.player.getInventory().getItem(i).is(Items.FIREWORK_ROCKET)) {

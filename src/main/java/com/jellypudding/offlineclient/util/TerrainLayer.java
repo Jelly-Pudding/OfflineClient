@@ -14,11 +14,10 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.Arrays;
 import java.util.BitSet;
 
-// The map tiles of one dimension. A tile holds the packed map colour of every block of a chunk
-// and tiles are kept in square regions. Each region also keeps one colour for each chunk and a
-// wide view reads those instead. A stored tile is never changed and a new one takes its place.
-// Only the regions a view shows block by block keep their tiles. The rest keep the colour of
-// each chunk and read their tiles back from their file when a view needs them. Game thread only.
+// A tile holds the packed map colour of every block of a chunk and tiles are kept in square
+// regions. Each region also keeps one colour for each chunk and a wide view reads those. A stored
+// tile is never changed and a new one takes its place. Only the regions a view shows block by block
+// keep their tiles. Game thread only.
 public final class TerrainLayer {
 
     // The side of a region in chunks as a power of two.
@@ -31,7 +30,6 @@ public final class TerrainLayer {
     public static final byte VOID = 1;
 
     private static final int CHUNK_MASK = REGION_SIDE - 1;
-    // A block coordinate moved this far right gives its region.
     private static final int REGION_BLOCK_SHIFT = SectionPos.SECTION_BITS + REGION_SHIFT;
     // The block whose colour stands for its whole chunk in a wide view.
     private static final int MIDDLE = cell(SectionPos.SECTION_HALF_SIZE, SectionPos.SECTION_HALF_SIZE);
@@ -48,7 +46,6 @@ public final class TerrainLayer {
         private boolean filed;
         private boolean reading;
         private boolean holdsTiles;
-        // When a view last needed the blocks of the region.
         private long wantedAt;
 
         private void set(int index, byte[] tile) {
@@ -59,7 +56,6 @@ public final class TerrainLayer {
     }
 
     private final Long2ObjectOpenHashMap<Region> regions = new Long2ObjectOpenHashMap<>();
-    // Regions a view needs whose file waits to be read. The first asked for come first.
     private final LongLinkedOpenHashSet wanted = new LongLinkedOpenHashSet();
     private int revision;
     // The region the last read landed in. Reads across a picture mostly stay in one.
@@ -73,8 +69,8 @@ public final class TerrainLayer {
         return revision;
     }
 
-    // The packed map colour at a block. Nought where no chunk was read. A coarse read and a
-    // chunk whose tile is not held give the colour that stands for the whole chunk.
+    // Nought where no chunk was read. A coarse read and a chunk whose tile is not held give the
+    // colour that stands for the whole chunk.
     public int packed(int x, int z, boolean coarse) {
         int regionX = x >> REGION_BLOCK_SHIFT;
         int regionZ = z >> REGION_BLOCK_SHIFT;
@@ -92,8 +88,7 @@ public final class TerrainLayer {
         return (tile == null ? last.overview[index] : tile[cell(x, z)]) & 0xFF;
     }
 
-    // Keeps the tiles of every region under an area of blocks and reads back the ones that are
-    // saved. A view that shows each block asks every frame.
+    // A view that shows each block asks every frame.
     public void want(int minX, int minZ, int maxX, int maxZ) {
         long now = System.currentTimeMillis();
         for (int regionZ = minZ >> REGION_BLOCK_SHIFT; regionZ <= maxZ >> REGION_BLOCK_SHIFT; regionZ++) {
@@ -111,7 +106,6 @@ public final class TerrainLayer {
         }
     }
 
-    // A tile read this session. It waits to be written when it differs from the one held.
     void put(int chunkX, int chunkZ, byte[] tile) {
         Region region = region(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
         int index = index(chunkX, chunkZ);
@@ -124,8 +118,6 @@ public final class TerrainLayer {
         revision++;
     }
 
-    // Takes in the colour of each chunk earlier visits saved. The tiles of a region are read from
-    // its file once a view needs them.
     void absorbOverviews(Long2ObjectMap<byte[]> overviews) {
         boolean changed = false;
         for (Long2ObjectMap.Entry<byte[]> entry : Long2ObjectMaps.fastIterable(overviews)) {
@@ -139,8 +131,7 @@ public final class TerrainLayer {
         }
     }
 
-    // Up to this many regions whose file a view needs. Each counts as being read until its
-    // answer comes back.
+    // Each region counts as being read until its answer comes back.
     LongList takeWanted(int most) {
         long now = System.currentTimeMillis();
         LongList taken = new LongArrayList();
@@ -155,8 +146,7 @@ public final class TerrainLayer {
         return taken;
     }
 
-    // The tiles the file of a region held. Null when it could not be read. Tiles read this
-    // session stay as they are.
+    // Null tiles mean the file could not be read. Tiles read this session stay as they are.
     void absorbRead(long key, byte[][] tiles) {
         Region region = regions.get(key);
         if (region == null) {
@@ -169,8 +159,6 @@ public final class TerrainLayer {
         }
     }
 
-    // Takes in each region as a write left its file. A region that holds its tiles takes every
-    // tile and the rest take the colour of each chunk.
     void absorbSaved(Long2ObjectMap<byte[][]> saved) {
         boolean changed = false;
         for (Long2ObjectMap.Entry<byte[][]> entry : Long2ObjectMaps.fastIterable(saved)) {
@@ -185,7 +173,6 @@ public final class TerrainLayer {
         }
     }
 
-    // True when a chunk not read this session took a different colour.
     private static boolean takeOverview(Region region, byte[] overview) {
         boolean changed = false;
         for (int index = 0; index < TILES; index++) {
@@ -197,7 +184,6 @@ public final class TerrainLayer {
         return changed;
     }
 
-    // True when a chunk not read this session took a different tile.
     private static boolean takeTiles(Region region, byte[][] tiles) {
         boolean changed = false;
         for (int index = 0; index < TILES; index++) {
@@ -210,7 +196,7 @@ public final class TerrainLayer {
         return changed;
     }
 
-    // The tiles waiting to be written by region. They count as written from here on.
+    // The tiles count as written from here on.
     Long2ObjectMap<byte[][]> takeUnsaved() {
         Long2ObjectMap<byte[][]> taken = new Long2ObjectOpenHashMap<>();
         Long2ObjectMaps.fastForEach(regions, entry -> {
@@ -249,12 +235,10 @@ public final class TerrainLayer {
         }
     }
 
-    // Every tile read this session waits to be written. For saving switched on part way through.
     void unsaveSeen() {
         regions.values().forEach(region -> region.unsaved.or(region.seen));
     }
 
-    // Lets go of the tiles of every region no view wanted for this long once they are all saved.
     // The colour of each chunk stays and the file gives the tiles back.
     void letGo(long idleMs) {
         long now = System.currentTimeMillis();
@@ -269,7 +253,6 @@ public final class TerrainLayer {
         }
     }
 
-    // Forgets the tiles of every chunk further than the radius from the given one.
     void keepNear(int chunkX, int chunkZ, int radius) {
         boolean changed = false;
         for (ObjectIterator<Long2ObjectMap.Entry<Region>> regionsLeft = regions.long2ObjectEntrySet().fastIterator();
@@ -314,7 +297,6 @@ public final class TerrainLayer {
         cached = false;
     }
 
-    // The colour that stands for each chunk of a region in a wide view. Nought where no tile is.
     public static byte[] overviewOf(byte[][] tiles) {
         byte[] overview = new byte[TILES];
         for (int index = 0; index < TILES; index++) {
@@ -336,12 +318,10 @@ public final class TerrainLayer {
         return region;
     }
 
-    // Where a chunk sits within its region.
     private static int index(int chunkX, int chunkZ) {
         return (chunkZ & CHUNK_MASK) << REGION_SHIFT | (chunkX & CHUNK_MASK);
     }
 
-    // Where a block sits within the tile of its chunk.
     static int cell(int x, int z) {
         return SectionPos.sectionRelative(z) * SectionPos.SECTION_SIZE + SectionPos.sectionRelative(x);
     }

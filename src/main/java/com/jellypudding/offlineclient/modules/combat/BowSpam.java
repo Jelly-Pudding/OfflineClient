@@ -21,7 +21,6 @@ import net.minecraft.world.item.Items;
 
 public final class BowSpam extends Module {
 
-    // Stands in for an item in hand that is not being drawn at all.
     private static final int NOT_DRAWN = Integer.MAX_VALUE;
 
     // A bow discards anything under power 0.1 which is everything below three ticks.
@@ -150,9 +149,7 @@ public final class BowSpam extends Module {
         crossbowTimer = rapidInterval.getInt();
     }
 
-    // True whilst a drawn crossbow is held up for rapid fire. Past a full draw the server
-    // loads it again on every tick and each use fires it. Vanilla keeps the draw up for
-    // exactly as long as use is down which a toggled use key counts as.
+    // Past a full draw the server loads the crossbow again on every tick and each use fires it.
     private boolean rapidFiring() {
         return crossbows.isOn() && rapidFire.isOn() && mc.player.isUsingItem()
             && mc.player.getUseItem().getItem() instanceof CrossbowItem
@@ -160,7 +157,6 @@ public final class BowSpam extends Module {
             && hasAmmo(mc.player.getUsedItemHand());
     }
 
-    // Ticks the item in hand has to be held before letting go.
     private int drawTicks() {
         ItemStack using = mc.player.getUseItem();
         if (using.getItem() instanceof BowItem) {
@@ -177,8 +173,6 @@ public final class BowSpam extends Module {
             || !mc.player.getProjectile(mc.player.getItemInHand(hand)).isEmpty();
     }
 
-    // Fires the first loaded crossbow in either hand or the hotbar or the inventory.
-    // True when a shot went out.
     private boolean fireLoadedCrossbow() {
         InteractionHand loaded = handWithCrossbow(true);
         if (loaded != null) {
@@ -198,8 +192,6 @@ public final class BowSpam extends Module {
         return true;
     }
 
-    // Swaps a loaded crossbow from the inventory into a hotbar slot that can spare
-    // the room. The hotbar slot it landed in or minus one.
     private int fetchLoadedCrossbow() {
         int from = InventoryUtil.findSlot(BowSpam::isLoaded, InventoryUtil.WHOLE_INVENTORY);
         if (from < InventoryUtil.HOTBAR_SIZE || !InventoryUtil.cursorFree()) {

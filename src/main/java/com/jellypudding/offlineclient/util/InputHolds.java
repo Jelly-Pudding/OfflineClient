@@ -17,7 +17,6 @@ import java.util.function.Function;
 public enum InputHolds {
     INSTANCE;
 
-    // The game's own controls that can be held. Use and attack work the hands.
     public enum Key {
         FORWARD(options -> options.keyUp, false),
         BACK(options -> options.keyDown, false),
@@ -37,12 +36,10 @@ public enum InputHolds {
             this.hands = hands;
         }
 
-        // The word a command knows the key by.
         public String word() {
             return name().toLowerCase(Locale.ROOT);
         }
 
-        // Null for a word that names no key.
         public static Key named(String word) {
             for (Key key : values()) {
                 if (key.word().equalsIgnoreCase(word)) {
@@ -53,11 +50,10 @@ public enum InputHolds {
         }
     }
 
-    // Ticks each held key still has to go.
     private static final Map<Key, Integer> left = new EnumMap<>(Key.class);
 
-    // Holds the key down for that many ticks. A hold already running on it starts over.
-    // The game only swings at a mob on the press itself and a held attack gets that one swing.
+    // A hold already running on the key starts over. The game only swings at a mob on the press
+    // itself and a held attack gets that one swing.
     public static void hold(Key key, int ticks) {
         if (left.isEmpty()) {
             OfflineClient.INSTANCE.getEventBus().register(INSTANCE);
@@ -79,7 +75,6 @@ public enum InputHolds {
         hold(Key.JUMP, 1);
     }
 
-    // The keys held and the ticks each has left.
     public static Map<Key, Integer> running() {
         return Map.copyOf(left);
     }
@@ -89,7 +84,6 @@ public enum InputHolds {
         return left.getOrDefault(key, -1) == 0 && aside(key);
     }
 
-    // Lets go of one key. False when it was not held.
     public static boolean letGo(Key key) {
         if (left.remove(key) == null) {
             return false;
@@ -99,7 +93,6 @@ public enum InputHolds {
         return true;
     }
 
-    // Lets go of every key and hands back how many were held.
     public static int letGoAll() {
         int held = left.size();
         left.keySet().forEach(InputHolds::release);

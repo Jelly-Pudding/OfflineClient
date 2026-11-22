@@ -17,8 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-// Adds and removes the bodies of the FakePlayer module one at a time. The module name alone
-// still switches the module and its ring of copies on and off.
 public final class FakePlayerCommand extends Command {
 
     private static final String ADD = "add";
@@ -51,7 +49,6 @@ public final class FakePlayerCommand extends Command {
         }
     }
 
-    // No name copies you. A name the game would refuse for a real player is refused here too.
     private static void add(FakePlayer module, String name) {
         if (!StringUtil.isValidPlayerName(name)) {
             ChatUtil.error("A player name is at most 16 characters with no spaces.");

@@ -5,18 +5,15 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
-// Leaves marks out below one height or above another. Whilst it is switched off every height
-// counts. The top of the highest slider sets no ceiling and a player flying over the build limit
-// is never hidden by a default.
+// The top of the highest slider sets no ceiling and a player flying over the build limit is never
+// hidden by a default.
 public final class HeightBand {
 
-    // The whole block heights a scan reads. Every height whilst the band is off.
     public record Rows(int from, int to) {
     }
 
     // No world reaches lower.
     private static final double DEEPEST = -2048;
-    // The overworld from its floor to its roof.
     private static final double FLOOR = -64;
     private static final double ROOF = 320;
 

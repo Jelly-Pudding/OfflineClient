@@ -31,11 +31,8 @@ import java.util.UUID;
 
 public final class Breadcrumbs extends Module {
 
-    // Ticks between disk writes.
     private static final int SAVE_INTERVAL = 600;
-    // Points sit a little above the feet and clear of the floor.
     private static final double LIFT = 0.1;
-    // The other players whose trails are kept. The one seen longest ago drops first.
     private static final int MAX_OTHERS = 64;
     // Further than anyone moves in one tick. A glide reaches about 17.3 blocks.
     private static final double JUMP = 20;
@@ -48,8 +45,8 @@ public final class Breadcrumbs extends Module {
     // ground up to about half as far again past the far plane into the corners of the screen.
     private static final double TILT_MARGIN = 1.5;
 
-    // What this frame can show. A segment with both ends further along the view than the far plane
-    // is never drawn by the game.
+    // A segment with both ends further along the view than the far plane is never drawn by the
+    // game.
     private record Sight(Vec3 eye, Vector3fc ahead, double far) {
 
         // False for a break whose position is not a number.
@@ -82,9 +79,7 @@ public final class Breadcrumbs extends Module {
 
     private final Deque<Vec3> trail = new ArrayDeque<>();
     private final Map<UUID, Deque<Vec3>> otherTrails = new BoundedMap<>(MAX_OTHERS, true);
-    // The other players followed on the last tick.
     private Set<UUID> wasInView = Set.of();
-    // The server and dimension the trail belongs to. Null until the first tick in a world.
     private String world;
     private int sinceSave;
 
@@ -178,8 +173,6 @@ public final class Breadcrumbs extends Module {
         wasInView = inView;
     }
 
-    // A new point once the walker is a spacing away from the last one. A jump further than one
-    // tick of movement breaks the trail.
     private void extend(Deque<Vec3> points, Vec3 feet) {
         Vec3 pos = feet.add(0, LIFT, 0);
         if (!points.isEmpty()) {
@@ -272,7 +265,6 @@ public final class Breadcrumbs extends Module {
         }
     }
 
-    // A line that is not three numbers is left out.
     private void loadPoint(String line) {
         String[] parts = line.split(" ");
         if (parts.length != 3) {

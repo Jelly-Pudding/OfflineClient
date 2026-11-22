@@ -27,7 +27,6 @@ public final class Conceal extends Module {
         searchTags("hide client", "streamer", "stream", "recording", "screenshot", "clean screen");
     }
 
-    // True whilst Conceal is on and hides that part. Whatever draws a part asks before it draws.
     // A dormant client hides every part. A panorama shot shows the world as the game draws it.
     public static boolean hides(Part part) {
         if (Modules.dormant()) {

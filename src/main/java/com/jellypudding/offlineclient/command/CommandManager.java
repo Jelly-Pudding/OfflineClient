@@ -176,13 +176,12 @@ public final class CommandManager {
     // About as many links as a long chat history holds.
     private static final int MOST_OFFERED = 4096;
 
-    // How much of a refused click the chat shows.
     private static final int LONGEST_SHOWN = 120;
 
     private String prefix = DEFAULT_PREFIX;
 
-    // Client commands behind the links the client wrote. Anyone can put text behind a link in
-    // chat or in a book and only these run when clicked.
+    // Only links the client wrote run when clicked. Anyone can put text behind a link in chat or a
+    // book.
     private final Set<String> offered = Collections.synchronizedSet(
         Collections.newSetFromMap(new BoundedMap<>(MOST_OFFERED, true)));
 
@@ -194,7 +193,6 @@ public final class CommandManager {
         return prefix;
     }
 
-    // False when the prefix is blank or would collide with server commands.
     public boolean setPrefix(String prefix) {
         String trimmed = prefix.trim();
         if (trimmed.isEmpty() || trimmed.startsWith("/")) {
@@ -208,13 +206,11 @@ public final class CommandManager {
         return commands;
     }
 
-    // False when the message is not a command. The replies to a command stay in the chat.
     public boolean run(String message) {
         if (!message.startsWith(prefix) || message.length() <= prefix.length()) {
             return false;
         }
-        // A dormant client runs no command and sends none. A line with the prefix may hold a
-        // password and never leaves the machine. It is thrown away without a word.
+        // A line with the prefix may hold a password and never leaves the machine.
         if (Modules.dormant()) {
             return true;
         }
@@ -223,16 +219,12 @@ public final class CommandManager {
         return true;
     }
 
-    // The command with the prefix in front for a link the client writes. A click on that link
-    // runs it. The command is written without the prefix.
     public String offer(String command) {
         String typed = prefix + command;
         offered.add(typed);
         return typed;
     }
 
-    // Runs a clicked client command when the client wrote the link and refuses any other with a
-    // line saying why. False when the text is no client command and goes on to the server.
     public boolean runClicked(String command) {
         if (!command.startsWith(prefix) || command.length() <= prefix.length()) {
             return false;
@@ -246,11 +238,8 @@ public final class CommandManager {
         return true;
     }
 
-    // A bare module name like .fastfall toggles the module even where a command shares the
-    // name. Anything after it reads as a setting and .step height 5 is short for .set step
-    // height 5. A word naming one of the module's settings wins over a command of the same
-    // name unless it stands alone and the command takes that word itself. The bare name of a
-    // module that cannot be switched is answered as the toggle command answers it.
+    // A bare module name toggles the module even where a command shares the name. Anything after it
+    // reads as a setting.
     private void dispatch(String[] parts) {
         String name = parts[0];
         String[] args = Arrays.copyOfRange(parts, 1, parts.length);
@@ -260,7 +249,6 @@ public final class CommandManager {
             ChatUtil.toggled(module);
             return;
         }
-        // On or off after a module name switches the module and never a lone setting.
         Boolean state = module != null && args.length == 1 ? ToggleCommand.stateNamed(args[0]) : null;
         if (state != null) {
             ToggleCommand.switchTo(module, state);
@@ -280,7 +268,6 @@ public final class CommandManager {
         }
     }
 
-    // Whether the command offers the first word after its name as one it takes.
     private static boolean takesWord(Command command, String[] tokens) {
         String word = tokens[1];
         for (String option : command.complete(tokens, 1, word.toLowerCase(Locale.ROOT))) {
@@ -298,7 +285,6 @@ public final class CommandManager {
         execute(find("set"), setArgs);
     }
 
-    // A command that throws tells the player why and the log where.
     private static void execute(Command command, String[] args) {
         try {
             command.execute(args);
@@ -308,7 +294,6 @@ public final class CommandManager {
         }
     }
 
-    // Null when nothing answers to the name or one of its aliases.
     public Command find(String name) {
         for (Command command : commands) {
             if (command.matches(name)) {
@@ -325,7 +310,6 @@ public final class CommandManager {
         }
     }
 
-    // Completions for the last token of the chat text as typed.
     public List<String> complete(String text) {
         if (!text.startsWith(prefix)) {
             return List.of();
@@ -338,7 +322,6 @@ public final class CommandManager {
         String current = tokens[index].toLowerCase(Locale.ROOT);
 
         if (index == 0) {
-            // A module that shares a command's name is offered once.
             Set<String> names = new LinkedHashSet<>();
             for (Command command : commands) {
                 names.add(command.getName());
@@ -352,8 +335,6 @@ public final class CommandManager {
         if (module == null) {
             return command == null ? List.of() : command.complete(tokens, index, current);
         }
-        // A module name in front reads like the set command without the word set. A command of
-        // the same name offers its own first words too and completes the rest unless a setting is named.
         if (command != null && index == 1) {
             Set<String> words = new LinkedHashSet<>(command.complete(tokens, index, current));
             words.addAll(module.settingIds());
@@ -376,13 +357,11 @@ public final class CommandManager {
         return ids;
     }
 
-    // The entry a player typed with or without its namespace. Null for none.
     public static <T> T registryEntry(Registry<T> registry, String text) {
         Identifier id = Identifier.tryParse(text.toLowerCase(Locale.ROOT));
         return id == null ? null : registry.getOptional(id).orElse(null);
     }
 
-    // The path of every entry such as oak_log.
     public static List<String> registryPaths(Registry<?> registry) {
         List<String> paths = new ArrayList<>();
         for (Identifier id : registry.keySet()) {
@@ -391,7 +370,6 @@ public final class CommandManager {
         return paths;
     }
 
-    // The options that carry on from what has been typed.
     public static List<String> filter(String current, List<String> options) {
         List<String> result = new ArrayList<>();
         for (String option : options) {

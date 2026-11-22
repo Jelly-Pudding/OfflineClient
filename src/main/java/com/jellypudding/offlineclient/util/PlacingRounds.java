@@ -9,9 +9,8 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.List;
 
-// Fills spots from the hotbar a round at a time. A round is as many blocks as its row allows and
-// the server's limiter still takes. The delay runs between rounds. The rows are the same in every
-// module that walls somebody in or seals a hole.
+// A round is as many blocks as its row allows and the server's limiter still takes. The delay runs
+// between rounds.
 public final class PlacingRounds {
 
     private final NumberSetting perRound = new NumberSetting("Blocks per round",
@@ -44,14 +43,12 @@ public final class PlacingRounds {
         slots.forget();
     }
 
-    // Hands the hotbar slot back to the player.
     public void restore() {
         slots.restore();
     }
 
-    // Places one round of the spots from the best of the blocks and hands back how many went
-    // down. The view turns for the first of them alone because the rotation manager keeps the
-    // first turn of a tick.
+    // The view turns for the first spot alone because the rotation manager keeps the first turn of
+    // a tick. Hands back how many went down.
     public int place(List<BlockPos> spots, RegistryListSetting<Block> blocks, SwingMode swing) {
         if (spots.isEmpty()) {
             slots.restore();

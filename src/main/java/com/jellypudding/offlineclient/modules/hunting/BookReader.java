@@ -62,18 +62,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-// Reads the books other players carry or show or drop. Held items and the items of frames and
-// dropped stacks arrive with their pages. Paper only hides the pages of what other players carry
-// when its item obfuscation is on and never those of frames and dropped stacks. Every book goes
-// in the finds once with its pages and can be read again or copied into a book and quill.
+// Held items and the items of frames and dropped stacks arrive with their pages. Paper only hides
+// the pages of what other players carry when its item obfuscation is on and never those of frames
+// and dropped stacks.
 public final class BookReader extends Module implements FindSource {
 
-    // A book as the finds keep it. Where says who held it or what showed it. A book and quill
-    // has no title and no author.
+    // Where says who held it or what showed it. A book and quill has no title and no author.
     private record Book(boolean signed, String title, String author, String where, List<String> pages) {
 
-        // Null for anything but a book with its pages. A server can send pages far longer than a
-        // book shows and they are cut.
+        // A server can send pages far longer than a book shows and they are cut.
         private static Book of(ItemStack stack, String where) {
             WrittenBookContent written = stack.get(DataComponents.WRITTEN_BOOK_CONTENT);
             if (written != null) {
@@ -96,7 +93,6 @@ public final class BookReader extends Module implements FindSource {
             return new Book(false, "", "", where, pages);
         }
 
-        // Null for a find that holds no book.
         private static Book of(FindLog.Find find) {
             List<String> content = find.content();
             if (content.size() < HEADER) {
@@ -106,7 +102,6 @@ public final class BookReader extends Module implements FindSource {
                 content.subList(HEADER, content.size()));
         }
 
-        // The title and author and where it was and then the pages.
         private List<String> content() {
             List<String> content = new ArrayList<>(HEADER + pages.size());
             content.add(title);
@@ -132,17 +127,14 @@ public final class BookReader extends Module implements FindSource {
             return pages.stream().mapToInt(String::length).sum();
         }
 
-        // Such as Diary by Steve or a book and quill.
         private String name() {
             return signed ? title + " by " + author : "a book and quill";
         }
 
-        // Such as the written book Diary by Steve.
         private String words() {
             return signed ? "the written book §f" + title + " §7by §f" + author : "a book and quill";
         }
 
-        // Such as Diary by Steve · 12 pages · Dear diary today I found...
         private String detail() {
             String first = pages.isEmpty() ? "" : pages.getFirst().replace('\n', ' ').strip();
             return name() + SEPARATOR + Tally.counted(pages.size(), "page")
@@ -150,7 +142,7 @@ public final class BookReader extends Module implements FindSource {
         }
     }
 
-    // A book in view and what shows it. The entity is null for a book on a shelf.
+    // The entity is null for a book on a shelf.
     private record Sighting(Entity entity, BlockPos shelf, Book book) {
 
         private AABB box(float partialTicks) {
@@ -164,16 +156,13 @@ public final class BookReader extends Module implements FindSource {
     private static final int HEADER = 3;
     // Longer than any title or name the game lets a player give.
     private static final int MAX_NAME = 64;
-    // The first words of a book that its find quotes.
     private static final int QUOTE = 40;
     private static final String SEPARATOR = " · ";
 
-    // Twice a second is quick enough for a book that was just framed or dropped.
     private static final int SCAN_TICKS = 10;
-    // The pages of the books kept for one server hold at most this many characters together. A
-    // server that shows endless books fills neither memory nor the finds file.
+    // A server that shows endless books fills neither memory nor the finds file.
     private static final long KEPT_TEXT = 2_000_000;
-    // Far more books than one session puts in the finds. It only bounds the memory.
+    // It only bounds the memory.
     private static final int KEPT_TOLD = 4096;
     // A shelf holds three books and a few can lie on one block. Each takes the next free block up.
     private static final int SPOTS_UP = 8;
@@ -198,13 +187,12 @@ public final class BookReader extends Module implements FindSource {
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
     private final FindLog finds = new FindLog(this);
 
-    // The text of every book in the finds and how many characters their pages hold. Worked out
-    // again whenever the finds change in a way this module did not.
+    // The text of every book in the finds. Worked out again whenever the finds change in a way this
+    // module did not.
     private final Set<List<String>> known = new HashSet<>();
     private long knownText;
     private int knownRevision = -1;
-    // The books met in the finds or put there since the module was switched on. One taken out by
-    // hand stays out until the next toggle.
+    // A book taken out of the finds by hand stays out until the next toggle.
     private final Set<List<String>> told = Collections.newSetFromMap(new BoundedMap<>(KEPT_TOLD));
     // What each stack in view held at the last scan. A stack the server did not replace is read once.
     private Map<ItemStack, Book> read = new IdentityHashMap<>();
@@ -330,7 +318,6 @@ public final class BookReader extends Module implements FindSource {
         log(book, entity == null ? shelf : entity.blockPosition());
     }
 
-    // A book not in the finds goes there whilst the books kept for this server leave room for it.
     private void log(Book book, BlockPos at) {
         List<String> text = book.text();
         if (told.contains(text)) {
@@ -357,8 +344,6 @@ public final class BookReader extends Module implements FindSource {
         tell(book, pos);
     }
 
-    // The text of every book in the finds of this server. A book an earlier visit or the other game
-    // on this computer put there counts as well.
     private Set<List<String>> known() {
         if (finds.revision() != knownRevision) {
             known.clear();
@@ -375,7 +360,6 @@ public final class BookReader extends Module implements FindSource {
         return known;
     }
 
-    // The block itself or the first one above it that holds no find. Null when all are taken.
     private BlockPos freeSpot(BlockPos pos) {
         for (int up = 0; up < SPOTS_UP; up++) {
             if (finds.at(pos.above(up)) == null) {
@@ -395,7 +379,6 @@ public final class BookReader extends Module implements FindSource {
                 "Click to copy it into an empty book and quill you carry")));
     }
 
-    // The book of that id in the finds of this server. Null when there is none.
     private Book bookById(String id) {
         for (FindLog.Find find : finds.all()) {
             Book book = Book.of(find);
@@ -406,7 +389,7 @@ public final class BookReader extends Module implements FindSource {
         return null;
     }
 
-    // Opens the book on its pages. Null when it opened and else why not.
+    // Null when it opened and else why not.
     public String read(String id) {
         Book book = bookById(id);
         if (book == null) {
@@ -418,8 +401,7 @@ public final class BookReader extends Module implements FindSource {
         return null;
     }
 
-    // Writes the book into an empty book and quill in your hotbar or offhand with a first page
-    // that says whose it was. What the edit cannot carry is left off the end. Gives what happened.
+    // What the edit cannot carry is left off the end. Hands back what happened.
     public String copy(String id) {
         if (mc.player == null) {
             return "Join a world first.";
@@ -446,7 +428,7 @@ public final class BookReader extends Module implements FindSource {
         return left == 0 ? copied : copied + " The last " + Tally.counted(left, "page") + " did not fit in one book.";
     }
 
-    // An empty book and quill in the hotbar or the offhand. The server only writes a book there.
+    // The server only writes a book in the hotbar or the offhand.
     private int emptyQuill() {
         Inventory inventory = mc.player.getInventory();
         int selected = inventory.getSelectedSlot();
@@ -467,7 +449,6 @@ public final class BookReader extends Module implements FindSource {
         return stack.is(Items.WRITABLE_BOOK) && (content == null || content.pages().isEmpty());
     }
 
-    // The first page of a copy. It says what was copied and whose it was.
     private static String cover(Book book) {
         String what = book.signed() ? book.title() + "\nby " + book.author() : "a book and quill";
         return "Copy of\n" + what + "\n\n" + book.where();

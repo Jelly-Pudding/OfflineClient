@@ -83,12 +83,11 @@ public final class Sprint extends Module {
         return isEnabled() && (rage() || whilstHungry.isOn());
     }
 
-    // Read by LocalPlayerMixin. True whilst the vanilla start and stop rules are replaced.
+    // Read by LocalPlayerMixin.
     public boolean rage() {
         return isEnabled() && mode.is(Mode.RAGE);
     }
 
-    // What Rage mode answers in place of every vanilla sprint check.
     public boolean rageWantsSprint(LocalPlayer player) {
         if (stopInWater.isOn() && player.isInWater()) {
             return false;
@@ -96,7 +95,7 @@ public final class Sprint extends Module {
         return whilstStill.isOn() || MovementUtil.hasInput(player);
     }
 
-    // Read by PlayerMixin. True whilst a landed hit must not cost the client its sprint or speed.
+    // Read by PlayerMixin.
     public boolean keepsSprintOnHit() {
         return isEnabled() && !onHit.is(OnHit.VANILLA);
     }
@@ -162,7 +161,6 @@ public final class Sprint extends Module {
         }
     }
 
-    // A screen only keeps the sprint whilst InvWalk lets the sprint key through.
     private boolean screenAllowsSprint() {
         InvWalk invWalk = Modules.active(InvWalk.class);
         return invWalk != null && invWalk.allowsSprint();

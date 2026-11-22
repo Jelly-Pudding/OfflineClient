@@ -6,13 +6,12 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-// The clock of your computer reading a time of day. It holds for the whole of that minute.
+// It holds for the whole of that minute.
 final class Clock extends Condition {
 
     private static final int HOURS = 24;
     private static final int MINUTES = 60;
 
-    // Minus one for text that is no time of day.
     private static final int NO_TIME = -1;
 
     private final TextSetting time;
@@ -24,9 +23,8 @@ final class Clock extends Condition {
                 + " 23:30.", "06:00"));
     }
 
-    // The minute of the day the text names. A sign or a space may stand between the hours and
-    // the minutes and four digits in a row are read as both. Text with a letter in it is no
-    // time. An am or pm would be dropped without a word.
+    // Four digits in a row are read as hours and minutes. Text with a letter in it is no time
+    // because an am or pm would be dropped without a word.
     private int minuteOfDay() {
         String text = time.getValue();
         if (text.chars().anyMatch(Character::isLetter)) {

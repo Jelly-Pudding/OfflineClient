@@ -42,18 +42,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 
-// The shape shared by the auras that place a respawn block beside an enemy and set it off.
-// A subclass supplies the block and how it is placed and fired.
 public abstract class RespawnBlockAura extends Module implements Targeting {
 
-    // Ticks between attempts to pull ammunition up from the backpack.
     private static final int MOVE_DELAY = 4;
 
-    // Ticks before a search for a block worth mining that found none runs again. Each search
-    // is a whole spot search for every block in the way.
+    // Each search is a whole spot search for every block in the way.
     private static final int SEARCH_DELAY = 10;
 
-    // Where a module is allowed to take its blocks from.
     public enum TakeFrom { HOTBAR, INVENTORY }
 
     protected final NumberSetting targetRange;
@@ -100,8 +95,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     private LivingEntity target;
     protected String status;
 
-    // Each aura brings options of its own. Those for placing sit under Place and the delays
-    // under Break. The escape is safe because addSettings is final and never hands the module out.
+    // The escape is safe because addSettings is final and never hands the module out.
     @SuppressWarnings("this-escape")
     protected RespawnBlockAura(String name, String description, String noun, float hue,
                                List<? extends Setting<?>> placeOptions, List<NumberSetting> breakDelays) {
@@ -194,13 +188,10 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
 
     protected abstract boolean isAmmo(ItemStack stack);
 
-    // Sets off the best block already down. True whenever one worth using is there.
     protected abstract boolean detonateBest(LivingEntity target);
 
-    // Places on the best spot. False when no spot is worth a block.
     protected abstract boolean placeBest(LivingEntity target);
 
-    // True when a spot worth a block would open up with this block mined out.
     protected abstract boolean spotWithout(LivingEntity target, BlockPos gone);
 
     @Override
@@ -208,7 +199,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return suffix(target == null ? null : EntityUtil.displayNameOf(target), status);
     }
 
-    // The enemy picked this tick. Null whilst there is none.
     @Override
     public LivingEntity getFought() {
         return target;
@@ -283,8 +273,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         }
     }
 
-    // Works on the block in the way. A feeder or the packer has the hand first and another
-    // miner the server's break.
+    // A feeder or the packer has the hand first and another miner the server's break.
     private void mineObstacle(LivingEntity target) {
         if (Hands.slotsTaken()) {
             miner.rest();
@@ -305,9 +294,8 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         miner.drive(obstacle, true, () -> { });
     }
 
-    // The first block in the way whose loss opens a spot. The blocks of their own body come
-    // first and then the ones beside their head from the nearest on. One already being
-    // mined is kept whilst it stands there.
+    // The blocks of their own body come first and then the ones beside their head from the nearest
+    // on.
     private BlockPos obstacle(LivingEntity target) {
         BlockPos head = Holes.headBlock(target);
         List<BlockPos> candidates = new ArrayList<>();
@@ -336,7 +324,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return null;
     }
 
-    // Something that can be mined and that a placement cannot simply replace.
     private boolean inTheWay(BlockPos pos) {
         return BlockUtil.isBreakable(pos) && !BlockUtil.isReplaceable(pos) && inReach(pos, false);
     }
@@ -346,7 +333,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return InventoryUtil.findSlot(this::isAmmo, limit) != -1;
     }
 
-    // Any living thing the filter allows that is not a friend.
     @Override
     public boolean wouldFight(Entity entity) {
         return entity instanceof LivingEntity && !EntityUtil.isFriend(entity)
@@ -397,7 +383,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         }
     }
 
-    // The reach allowed for a spot depending on whether it can be seen.
     protected double reach(Vec3 point, boolean placing) {
         return placing ? BlockUtil.reachFor(point, placeRange.getValue(), placeWallsRange.getValue())
             : BlockUtil.reachFor(point, breakRange.getValue(), breakWallsRange.getValue());
@@ -411,8 +396,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return BlockUtil.distanceTo(pos) <= reach(centre, placing);
     }
 
-    // What a blast at the block would deal the target. Nought unless it beats the best yet
-    // and the minimum and spares you and your friends. The ignored blocks are gone by then.
+    // Nought unless it beats the best yet and the minimum and spares you and your friends.
     protected float damageBeating(float best, LivingEntity target, BlockPos blastAt, BlockPos... ignored) {
         Vec3 centre = Vec3.atCenterOf(blastAt);
         float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
@@ -429,14 +413,12 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return BlockUtil.positionsAround(target.blockPosition(), (int) Math.ceil(furthest));
     }
 
-    // True when the spot may be placed on given the air place setting. The block named as
-    // gone counts as mined out. Null names none.
     protected boolean placeable(BlockPos pos, BlockPos gone) {
         return (pos.equals(gone) || BlockUtil.isReplaceable(pos))
             && (airPlace.isOn() || BlockUtil.findPlaceSupport(pos) != null);
     }
 
-    // Turns towards the point when asked to. False whilst the turn is still on its way.
+    // False whilst the turn is still on its way.
     protected boolean look(Vec3 point) {
         if (faceTarget.getValue().face(point, RotationPriority.AURA)) {
             return true;
@@ -445,12 +427,10 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return false;
     }
 
-    // Puts ammunition in hand. Minus one with a status set when it cannot.
     protected int armAmmo(String none) {
         return armItem(this::isAmmo, none);
     }
 
-    // Puts a matching hotbar item in hand and pulls one up when that is allowed.
     protected int armItem(Predicate<ItemStack> test, String none) {
         int slot = InventoryUtil.hotbarSlot(test);
         if (slot == -1 && takeFrom.is(TakeFrom.INVENTORY)) {
@@ -464,7 +444,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return armSlot(slot);
     }
 
-    // Puts the hotbar slot in hand when the switch setting allows. Minus one when it does not.
     protected int armSlot(int slot) {
         if (slot != InventoryUtil.selectedSlot() && !autoSwitch.isOn()) {
             status = "(hold them)";
@@ -487,7 +466,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
             InventoryUtil.networkSlot(moveSlot.getInt() - 1));
     }
 
-    // Any hotbar slot that is not ammunition. Minus one when there is none.
     protected int armOther(String none) {
         int slot = InventoryUtil.hotbarSlot(stack -> !isAmmo(stack));
         if (slot == -1) {
@@ -501,7 +479,6 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         placeTimer = placeDelay.getInt();
     }
 
-    // Keeps the next charge or detonation back for this many ticks.
     protected void holdBreak(int ticks) {
         breakTimer = ticks;
     }

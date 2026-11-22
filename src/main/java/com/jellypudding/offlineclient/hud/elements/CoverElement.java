@@ -12,13 +12,10 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// A solid box over part of the screen. On top it goes on after everything else the game draws.
 public final class CoverElement extends HudElement {
 
-    // How many covers the HUD offers.
     public static final int COUNT = 3;
 
-    // Before any stretch a cover is about one line of text.
     private static final int WIDTH = 64;
     private static final int HEIGHT = 16;
 
@@ -26,7 +23,6 @@ public final class CoverElement extends HudElement {
     // stays full.
     private static final double MOST_STRETCH = 512;
 
-    // Where the covers start out. Each one sits a quarter of the screen further across.
     private static final double START_STEP = 25;
     private static final double START_Y = 30;
 
@@ -64,8 +60,6 @@ public final class CoverElement extends HudElement {
         return true;
     }
 
-    // With on top switched off the box draws under the tab list and the debug screen and any
-    // open screen.
     @Override
     public boolean drawsOnTop() {
         return onTop.isOn();
@@ -86,8 +80,6 @@ public final class CoverElement extends HudElement {
         }
     }
 
-    // Centred in the box at its normal size however far the box is stretched. Lines that
-    // do not fit inside the box are left off.
     private void label(GuiGraphicsExtractor context, Font font) {
         float across = (float) scaleX();
         float down = (float) scaleY();

@@ -23,7 +23,6 @@ import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
 
-// Sets fire to the food walking about. It drops cooked.
 public final class Flamethrower extends Module {
 
     // Health at which the drops would burn up with the animal.

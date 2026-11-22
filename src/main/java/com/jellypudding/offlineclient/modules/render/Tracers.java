@@ -37,7 +37,6 @@ public final class Tracers extends Module {
 
     public enum Target { HEAD, BODY, FEET }
 
-    // How solid the block face a player looks at is filled.
     private static final int FACE_ALPHA = 70;
 
     private final EnumSetting<Style> style = new EnumSetting<>("Style", "How entities are pointed out.", Style.LINES)
@@ -145,7 +144,6 @@ public final class Tracers extends Module {
         }
     }
 
-    // The line ends at the first block in its way and the face it meets is filled in.
     private void drawView(DrawBatch batch, Player player, float partial, int color) {
         BlockHitResult hit = (BlockHitResult) player.pick(viewLength.getValue(), partial, false);
         batch.line(player.getEyePosition(partial), hit.getLocation(), color, true);
@@ -188,7 +186,6 @@ public final class Tracers extends Module {
         }
     }
 
-    // A pulse from a quarter to full strength.
     private float blinkStrength() {
         if (!blink.isOn()) {
             return 1;
@@ -218,12 +215,10 @@ public final class Tracers extends Module {
         }
     }
 
-    // A triangle pointing along the direction with its tip furthest from the centre.
     private void drawArrow(GuiGraphicsExtractor context, double x, double y, Vec3 direction, int color) {
         double size = arrowSize.getValue();
         double dx = direction.x;
         double dy = direction.y;
-        // The tip leads and the two tail corners sit back and to either side.
         double tipX = x + dx * size;
         double tipY = y + dy * size;
         double backX = x - dx * size;

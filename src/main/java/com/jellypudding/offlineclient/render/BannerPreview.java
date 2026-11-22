@@ -9,7 +9,6 @@ import net.minecraft.client.model.object.banner.BannerFlagModel;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 
-// A banner flag with its patterns drawn inside a tooltip.
 public final class BannerPreview implements ClientTooltipComponent {
 
     private static final int WIDTH = 40;

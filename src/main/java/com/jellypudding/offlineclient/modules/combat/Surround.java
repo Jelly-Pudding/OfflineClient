@@ -35,7 +35,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
-// Missing support under a side is filled first.
 public final class Surround extends Module {
 
     public enum Centre { NEVER, ON_ENABLE, INCOMPLETE, ALWAYS }
@@ -44,7 +43,6 @@ public final class Surround extends Module {
     private static final Set<Block> NEVER = Set.of(
         Blocks.ANCIENT_DEBRIS, Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK);
 
-    // How far off an enemy still decides which side is walled first.
     private static final double THREAT_RANGE = 12;
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
@@ -216,7 +214,6 @@ public final class Surround extends Module {
         slots.restore();
     }
 
-    // Keeps the wall on the block the player stands in.
     // False once the module has switched off.
     private boolean keepAnchor(BlockPos feet) {
         // Null on the first tick after enabling from the GUI with no world loaded.
@@ -265,8 +262,7 @@ public final class Surround extends Module {
         return placed;
     }
 
-    // Every open spot of the wall round the blocks the body stands in. Off the ground the
-    // floor of the pocket comes first.
+    // Off the ground the floor of the pocket comes first.
     private List<BlockPos> missing(List<BlockPos> body) {
         List<BlockPos> missing = missingSides(body);
         if (!mc.player.onGround()) {

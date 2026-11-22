@@ -30,8 +30,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Pours lava or lights fire on players and mobs and dropped items near you. A pour whose flow
-// could run into you before it is scooped never happens. Only fire this aura lit is put out.
 public final class LavaAura extends Module {
 
     public enum Method { LAVA, FIRE }
@@ -90,7 +88,6 @@ public final class LavaAura extends Module {
     private final SlotSwap slots = new SlotSwap();
     private final ChatWarning warning = new ChatWarning();
 
-    // Fire this aura lit and the tick it did.
     private final SpotLedger lit = new SpotLedger();
 
     private int timer;
@@ -143,6 +140,9 @@ public final class LavaAura extends Module {
             return;
         }
         putOutFires();
+        if (Hands.slotsTaken()) {
+            return;
+        }
         // A scoop takes the tick. Lava poured before a switch to fire is still taken back.
         if (UseBudget.remaining() > 0 && pours.scoopDue(loan)) {
             return;
@@ -177,7 +177,6 @@ public final class LavaAura extends Module {
         }
     }
 
-    // What the method needs and the inventory lacks. Null when it is all there.
     private String missing() {
         if (method.is(Method.FIRE)) {
             return ignition.atHand() ? null : Ignition.NO_LIGHTER;
@@ -211,7 +210,6 @@ public final class LavaAura extends Module {
         return pour != null && pours.pour(loan, pour);
     }
 
-    // Null unless the lava can go down on this target without any risk of reaching you.
     private LavaPours.Pour pourFor(Entity target) {
         BlockPos feet = target.blockPosition();
         if (!mc.level.getFluidState(feet).isEmpty()) {
@@ -227,7 +225,6 @@ public final class LavaAura extends Module {
         return pours.plan(feet);
     }
 
-    // Fire goes into the space the target stands in with a click on the top of the block below.
     // Grass in the way is broken first and that counts as the target's turn.
     private boolean setAlight(Entity target) {
         BlockPos cell = target.blockPosition();
@@ -248,7 +245,6 @@ public final class LavaAura extends Module {
         return true;
     }
 
-    // Clear of you and near enough for the server to take a click on the block under it.
     private boolean fireReaches(BlockPos cell) {
         if (mc.player.position().distanceTo(Vec3.atBottomCenterOf(cell)) < keepAway.getValue()) {
             return false;
@@ -257,7 +253,6 @@ public final class LavaAura extends Module {
             && (BlockUtil.distanceTo(cell) <= wallsRange.getValue() || BlockUtil.canSee(cell));
     }
 
-    // Punches out the oldest fire this aura lit once it has burnt for the set time. One goes out a tick.
     private void putOutFires() {
         if (!putOut.isOn()) {
             lit.clear();

@@ -16,11 +16,8 @@ import net.minecraft.client.input.KeyEvent;
 
 import java.util.function.Consumer;
 
-// Typing into a setting and listening for a bind. Any screen that draws
-// settings keeps one of these and hands it the keys it does not want.
 public final class SettingHost implements SettingWidget.Host {
 
-    // The mark and the digits of a colour code.
     private static final TextField.Filter HEX_CODE =
         c -> ColorSetting.HEX_MARK.indexOf(c) >= 0 || Character.digit(c, 16) >= 0;
 
@@ -31,7 +28,7 @@ public final class SettingHost implements SettingWidget.Host {
     private final BindCapture capture = new BindCapture();
     private KeybindSetting bindingTarget;
     private Setting<?> editingSetting;
-    // What the box held as it opened. A colour is only read back from a code the player edited.
+    // A colour is only read back from a code the player edited.
     private String editingFrom = "";
 
     // The character of the key just bound arrives right after the key event
@@ -84,7 +81,6 @@ public final class SettingHost implements SettingWidget.Host {
         editField.set(setting.getValue());
     }
 
-    // The code comes picked. One copy carries the colour to another row.
     @Override
     public void startEditing(ColorSetting setting) {
         commitEditing();
@@ -104,8 +100,7 @@ public final class SettingHost implements SettingWidget.Host {
         return editField;
     }
 
-    // True whilst a field is taking characters. A bind listens for raw keys
-    // and wants none.
+    // A bind listens for raw keys and wants none.
     public boolean isEditing() {
         return editingSetting != null;
     }
@@ -143,14 +138,12 @@ public final class SettingHost implements SettingWidget.Host {
         editField.clear();
     }
 
-    // Every click starts by putting away whatever was open.
     public void beginClick() {
         commitEditing();
         bindingTarget = null;
     }
 
-    // True when the click was the mouse button a listening bind row was waiting for. A screen
-    // asks before it does anything else with the click.
+    // A screen asks before it does anything else with the click.
     public boolean takeClick(int button) {
         if (bindingTarget == null || !capture.mouseClicked(button, this::bind)) {
             return false;
@@ -159,7 +152,6 @@ public final class SettingHost implements SettingWidget.Host {
         return true;
     }
 
-    // True when the key let go was the one a listening bind row was waiting for.
     public boolean keyReleased(KeyEvent event) {
         if (bindingTarget == null || !capture.keyReleased(event, this::bind)) {
             return false;
@@ -176,7 +168,6 @@ public final class SettingHost implements SettingWidget.Host {
         eatNextChar = bind.typesCharacter();
     }
 
-    // True when the key belonged to a field or a bind.
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         eatNextChar = false;

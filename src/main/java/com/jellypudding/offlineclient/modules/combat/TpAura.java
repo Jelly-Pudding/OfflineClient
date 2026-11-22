@@ -27,8 +27,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-// Hops to a new spot beside the target before every hit. Hard to fight back against.
-// A target with no clear spot beside it is hit from where you stand whilst it is in reach.
 public final class TpAura extends Module implements Targeting {
 
     // The hop lands two blocks off the target on either axis or right on it.
@@ -57,7 +55,6 @@ public final class TpAura extends Module implements Targeting {
         searchTags("tp aura", "ender aura", "teleport aura");
     }
 
-    // What the hops go round. Null between fights and once it has died.
     @Override
     public Entity getFought() {
         return fought != null && fought.isAlive() ? fought : null;
@@ -73,8 +70,6 @@ public final class TpAura extends Module implements Targeting {
         fought = null;
     }
 
-    // The hops go on whilst the attack cooldown fills. The target stays picked through a hop and
-    // through the wait for the next hit. A fresh pick in that wait takes its place.
     @Subscribe
     private void onTick(TickEvent event) {
         if (Hands.tied() || pauseInContainers.isOn() && InventoryUtil.containerOpen()) {
@@ -111,8 +106,6 @@ public final class TpAura extends Module implements Targeting {
         }
     }
 
-    // One straight hop to the first spot round the target the server takes whole. The spots are
-    // tried in a random order. Null when none of them will do.
     private static Hop.Plan hopBeside(Entity target) {
         List<Vec3> spots = new ArrayList<>();
         for (int x = -HOP; x <= HOP; x += HOP) {

@@ -45,11 +45,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Flies every projectile in range forward and takes the first sidestep that clears them all or
-// raises a shield. Fireballs and wind charges and shulker bullets can be hit instead.
 public final class ArrowDodge extends Module {
 
-    // Each axis of a sidestep at forty five degrees.
     private static final double DIAGONAL = Math.sqrt(0.5);
 
     private static final Vec3[] DIRECTIONS = {
@@ -116,12 +113,10 @@ public final class ArrowDodge extends Module {
     private final BoolSetting draw = new BoolSetting("Draw paths",
         "Shows the predicted flight of every watched projectile.", false);
 
-    // Every watched flight for drawing and the ones a sidestep has to clear.
     private final List<Segment> paths = new ArrayList<>();
     private final List<Segment> threats = new ArrayList<>();
     private final Cooldowns<Integer> struck = new Cooldowns<>();
     private boolean dodging;
-    // True whilst this module holds the use key for a shield. Ticks it stays up for nothing.
     private boolean raised;
     private int holdFor;
     // True once Face it asked for a turn this tick. The angle the server heard shows on the next
@@ -186,7 +181,6 @@ public final class ArrowDodge extends Module {
             List<Segment> flight = predict(projectile);
             paths.addAll(flight);
             if (punches && hittable(projectile)) {
-                // One that can be hit is never dodged.
                 if (incoming(projectile, flight, body) && !struck.contains(projectile.getId())
                     && EntityUtil.reachDistance(mc.player, projectile) <= hitRange.getValue()) {
                     strike(projectile);
@@ -303,7 +297,6 @@ public final class ArrowDodge extends Module {
         return flight;
     }
 
-    // The tick of the flight on which it meets the box. Minus one when it never does.
     private static int impactTick(List<Segment> flight, AABB box) {
         for (int tick = 0; tick < flight.size(); tick++) {
             Segment segment = flight.get(tick);
@@ -314,10 +307,8 @@ public final class ArrowDodge extends Module {
         return -1;
     }
 
-    // Raises a shield against the projectile or keeps it up. True whilst the shield is up in time
-    // for it and no sidestep is wanted. The server only counts a shield as up once it has been held
-    // for its delay and the trip there and back comes on top. The point is where the shot will be
-    // as it lands.
+    // The server only counts a shield as up once it has been held for its delay and the trip there
+    // and back comes on top.
     private boolean block(Projectile shot, int impactTick, Vec3 from, boolean turnedBefore) {
         InteractionHand hand = shield.isOn() ? shieldHand() : null;
         BlocksAttacks blocks = hand == null ? null : mc.player.getItemInHand(hand).get(DataComponents.BLOCKS_ATTACKS);
@@ -337,8 +328,7 @@ public final class ArrowDodge extends Module {
     }
 
     // The server holds a shield up only against what comes within its widest angle of the yaw it
-    // holds for you. Face it asks for that yaw first. A turn that a stronger module wins this tick
-    // or that a module asking later takes over is not counted on.
+    // holds for you.
     private boolean faces(BlocksAttacks blocks, Vec3 from, boolean turnedBefore) {
         float yaw = RotationManager.yawTo(from);
         if (faceIt.isOn()) {
@@ -360,8 +350,7 @@ public final class ArrowDodge extends Module {
             && !(shot instanceof AbstractThrownPotion);
     }
 
-    // The offhand goes first and keeps the main hand free. A shield cooling down after an axe hit
-    // cannot be raised.
+    // A shield cooling down after an axe hit cannot be raised.
     private InteractionHand shieldHand() {
         for (InteractionHand hand : new InteractionHand[] {InteractionHand.OFF_HAND, InteractionHand.MAIN_HAND}) {
             ItemStack held = mc.player.getItemInHand(hand);
@@ -375,7 +364,7 @@ public final class ArrowDodge extends Module {
     // The use key stays down for the shield. Held down it would use the main hand item the moment
     // the shield goes down under it unless the right click delay still runs.
     private void holdUp() {
-        InputUtil.hold(mc.options.keyUse);
+        InputUtil.holdUse();
         mc.rightClickDelay = InputUtil.USE_DELAY;
     }
 
@@ -388,7 +377,6 @@ public final class ArrowDodge extends Module {
         }
     }
 
-    // A meal or ShulkerPacker or an item of your own in use keeps the use key.
     private boolean mayRaise() {
         return mc.gui.screen() == null && !Hands.slotsTaken() && (raised || !mc.player.isUsingItem());
     }
@@ -399,7 +387,7 @@ public final class ArrowDodge extends Module {
             return;
         }
         raised = false;
-        InputUtil.release(mc.options.keyUse);
+        InputUtil.releaseUse();
         if (mc.player != null && mc.player.isUsingItem() && mc.player.getUseItem().has(DataComponents.BLOCKS_ATTACKS)
             && !InputUtil.physicallyHeld(mc.options.keyUse)) {
             mc.gameMode.releaseUsingItem(mc.player);

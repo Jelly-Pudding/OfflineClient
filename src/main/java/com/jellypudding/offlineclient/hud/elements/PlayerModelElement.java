@@ -12,7 +12,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import org.joml.Vector3f;
 
-// Your own body drawn the way the inventory screen draws it.
 public final class PlayerModelElement extends HudElement {
 
     // The inventory screen fits a body of thirty into a box seventy tall.
@@ -21,7 +20,6 @@ public final class PlayerModelElement extends HudElement {
     private static final float NARROW = 49f / 70f;
     // Lifts the feet clear of the bottom edge the way the inventory does.
     private static final float FOOTING = 0.0625f;
-    // The height of the box before any stretch.
     private static final int SIZE = 60;
 
     private final BoolSetting follow = new BoolSetting("Model follows you",

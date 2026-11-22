@@ -30,8 +30,8 @@ public final class InputUtil {
     // Key codes for letters are the lower case character.
     private static final int UNDO_LETTER = 'z';
 
-    // The mouse buttons that are down by their numbers.
     private static final BitSet HELD_BUTTONS = new BitSet();
+    private static boolean ownUse;
 
     // The game sets the right click delay on every use and counts it down once a tick.
     public static void capUseDelay(int ticks) {
@@ -60,20 +60,16 @@ public final class InputUtil {
             && !event.hasShiftDown() && !event.hasAltDown();
     }
 
-    // The undo keys as the player reads them.
     public static String undoKeys() {
         return InputQuirks.REPLACE_CTRL_KEY_WITH_CMD_KEY ? "Cmd Z" : "Ctrl Z";
     }
 
-    // True for a press the game takes as a debug combo. Only a key one of its debug keys sits on
-    // counts whilst the debug key is held.
     public static boolean isDebugCombo(KeyEvent event) {
         Options options = OfflineClient.MC.options;
         return options.keyDebugModifier.isDown()
             && Arrays.stream(options.debugKeys).anyMatch(combo -> combo.matches(event));
     }
 
-    // True when the control sits on the key or button of the input. An unbound control sits on none.
     public static boolean isOn(KeyMapping mapping, Bind input) {
         return mapping.matches(input.gameKey());
     }
@@ -86,7 +82,6 @@ public final class InputUtil {
         }
     }
 
-    // True whilst the button is really down with or without a screen open.
     public static boolean buttonDown(int button) {
         return HELD_BUTTONS.get(button);
     }
@@ -96,20 +91,36 @@ public final class InputUtil {
         HELD_BUTTONS.clear();
     }
 
-    // Holds a key down on behalf of a module. Use and attack are toggles under
-    // the accessibility options where setting them down flips them instead.
+    // Use and attack are toggles under the accessibility options where setting them down flips them
+    // instead.
     public static void hold(KeyMapping mapping) {
         if (!mapping.isDown()) {
             mapping.setDown(true);
         }
     }
 
-    // Lets go of a key a module was holding without really lifting a finger off it.
     public static void release(KeyMapping mapping) {
         setHeld(mapping, physicallyHeld(mapping));
     }
 
-    // Sets a mapping up or down. A toggle bound key throws away a plain false and flips on a true.
+    // Holds the use key for an item a module uses of its own accord such as a meal or a bow. A
+    // module that presses the key in the player's place holds it the plain way.
+    public static void holdUse() {
+        ownUse = true;
+        hold(OfflineClient.MC.options.keyUse);
+    }
+
+    public static void releaseUse() {
+        ownUse = false;
+        release(OfflineClient.MC.options.keyUse);
+    }
+
+    // True whilst a module uses an item of its own accord and the player does not hold the key.
+    public static boolean usesForItself() {
+        return ownUse && !physicallyHeld(OfflineClient.MC.options.keyUse);
+    }
+
+    // A toggle bound key throws away a plain false and flips on a true.
     public static void setHeld(KeyMapping mapping, boolean down) {
         mapping.setDown(down);
         if (mapping.isDown() != down) {
@@ -117,19 +128,16 @@ public final class InputUtil {
         }
     }
 
-    // True whilst the player really holds any of the four movement keys.
     public static boolean steering() {
         Options options = OfflineClient.MC.options;
         return physicallyHeld(options.keyUp) || physicallyHeld(options.keyDown) || physicallyHeld(options.keyLeft)
             || physicallyHeld(options.keyRight);
     }
 
-    // True only whilst the player really holds the bound key or button.
     public static boolean physicallyHeld(KeyMapping mapping) {
         InputConstants.Key key = mapping.key;
         return switch (key.getType()) {
             case KEYBOARD -> InputConstants.isKeyDown(key.getValue());
-            // Use and attack are mouse bound by default.
             case MOUSE -> buttonHeld(key.getValue());
         };
     }
@@ -144,20 +152,18 @@ public final class InputUtil {
         };
     }
 
-    // A copy of an input record with only the sneak flag changed.
     public static Input withShift(Input input, boolean shift) {
         return new Input(input.forward(), input.backward(), input.left(), input.right(),
             input.jump(), shift, input.sprint());
     }
 
-    // Turns the sneak flag on in an input packet on its way out.
     public static void keepShift(PacketSendEvent event) {
         if (event.getPacket() instanceof ServerboundPlayerInputPacket packet && !packet.input().shift()) {
             event.setPacket(new ServerboundPlayerInputPacket(withShift(packet.input(), true)));
         }
     }
 
-    // Tells the server the sneak flag by hand. Vanilla only resends the input on a change.
+    // Vanilla only resends the input on a change.
     public static void sendShift(boolean shift) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null) {
@@ -196,7 +202,6 @@ public final class InputUtil {
         }
     }
 
-    // Uses the item in the main hand. The arm swings when the game takes the use.
     public static boolean useMainHand() {
         Minecraft mc = OfflineClient.MC;
         if (!mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {

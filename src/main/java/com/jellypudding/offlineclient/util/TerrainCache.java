@@ -35,23 +35,18 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-// The land of every chunk you have seen on the server you play on as map tiles. Each dimension
-// keeps its own and a tile is read as its chunk arrives and again when the server changes a block
-// in it. With saving on the tiles sit in files per server and come back on the next visit. A visit
-// reads the colour of each saved chunk and the tiles of a region only once a view needs them. Saved
-// tiles no view needs are let go. A second layer holds the land at your own height round you for a
-// view under a roof. Game thread only apart from recording changed blocks.
+// Each dimension keeps its own tiles and a tile is read as its chunk arrives and again when the
+// server changes a block in it. A visit reads the colour of each saved chunk and the tiles of a
+// region only once a view needs them. A second layer holds the land at your own height round you
+// for a view under a roof. Game thread only apart from recording changed blocks.
 public final class TerrainCache {
 
     // How long each tick may spend reading chunks in nanoseconds. The rest wait their turn. A
     // chunk under the Nether roof takes far longer than one in the open.
     private static final long READ_NANOS = 3_000_000;
     private static final long CAVE_READ_NANOS = 2_000_000;
-    // Tiles wait this long after the last write before they are written.
     private static final long WRITE_GAP_MS = 10_000;
-    // The tiles of the land this many blocks round you stay whatever the map shows.
     private static final int KEEP_AROUND = 1024;
-    // Saved tiles no view needed for this long are let go.
     private static final long IDLE_MS = 30_000;
     // Region files read at once. Every other saved file of the client waits behind these.
     private static final int MOST_READS = 8;
@@ -68,7 +63,6 @@ public final class TerrainCache {
 
     private final BoolSetting save;
     private final TerrainColumns columns = new TerrainColumns();
-    // The tiles of the server you play on by dimension and the dimensions whose files were read.
     private final Map<String, TerrainLayer> layers = new HashMap<>();
     private final Set<String> filesAsked = new HashSet<>();
     private final TerrainLayer cave = new TerrainLayer();
@@ -80,46 +74,38 @@ public final class TerrainCache {
     // it is seen and the chunk is read on the tick after.
     private final Set<Long> changed = ConcurrentHashMap.newKeySet();
     private LongOpenHashSet due = new LongOpenHashSet();
-    // The chunks of the layer round you read at its height.
     private final LongOpenHashSet caveRead = new LongOpenHashSet();
     private int caveY = TerrainColumns.UNKNOWN;
     private long caveCentre = ChunkPos.INVALID_CHUNK_POS;
     private int caveRadius;
-    // A rejoin and a dimension change both hand out a new world.
     private final WorldWatch world = new WorldWatch();
     private TerrainLayer here;
     private String hereDimension;
-    // The server the tiles belong to. Null before the first world.
     private String server;
     // Moves on with every new server. An answer that comes back for an older one is dropped.
     private int generation;
     private boolean saving;
     private long lastWrite;
-    // Region files asked for that have not answered yet.
     private int reading;
 
-    // The switch that keeps the tiles in files.
     public TerrainCache(BoolSetting save) {
         this.save = save;
         ALL.add(this);
     }
 
-    // The tiles of the dimension you are in. Null before the first tick in a world.
+    // Null before the first tick in a world.
     public TerrainLayer here() {
         return here;
     }
 
-    // The land at your own height round you. Empty whilst nothing asks for it.
     public TerrainLayer cave() {
         return cave;
     }
 
-    // Reads every chunk already loaded on the next tick.
     public void start() {
         world.forget();
     }
 
-    // Writes what waits and lets go of what was queued. Saved tiles go at once.
     public void stop() {
         waiting.clear();
         changed.clear();
@@ -153,8 +139,6 @@ public final class TerrainCache {
         }
     }
 
-    // Once a client tick. A radius above nought keeps that many chunks of the layer round you
-    // up to date.
     public void tick(int caveChunks) {
         ClientLevel level = OfflineClient.MC.level;
         LocalPlayer player = OfflineClient.MC.player;
@@ -177,8 +161,8 @@ public final class TerrainCache {
         letGo(IDLE_MS);
     }
 
-    // The height to stand at in a column of the land the map shows. Under trees that is the
-    // ground. Your own height where the chunk is not loaded or holds nothing to stand on.
+    // Under trees that is the ground. Your own height where the chunk is not loaded or holds
+    // nothing to stand on.
     public int standY(int x, int z) {
         ClientLevel level = OfflineClient.MC.level;
         LocalPlayer player = OfflineClient.MC.player;
@@ -191,8 +175,7 @@ public final class TerrainCache {
         return y == TerrainColumns.UNKNOWN || y <= level.getMinY() ? player.getBlockY() : y;
     }
 
-    // True whilst something overhead keeps the sky from you. Where the sky gives no light a roof
-    // is any block above your head.
+    // Where the sky gives no light a roof is any block above your head.
     public static boolean underRoof(ClientLevel level, LocalPlayer player) {
         BlockPos head = BlockPos.containing(player.getX(), player.getEyeY(), player.getZ());
         if (level.dimensionType().hasSkyLight()) {
@@ -201,8 +184,6 @@ public final class TerrainCache {
         return level.getHeight(Heightmap.Types.WORLD_SURFACE, head.getX(), head.getZ()) > head.getY();
     }
 
-    // The tiles follow the server you play on. A new one writes what the last was waiting for and
-    // starts again from its own files.
     private void follow() {
         String now = ServerInfo.key();
         if (now.equals(server)) {
@@ -243,7 +224,6 @@ public final class TerrainCache {
         }
     }
 
-    // Asks once a visit for the colour of each chunk earlier visits saved of a dimension.
     private void load(String dimension, TerrainLayer layer) {
         if (!filesAsked.add(dimension)) {
             return;
@@ -257,7 +237,6 @@ public final class TerrainCache {
         });
     }
 
-    // Reads the tiles of the regions a view needs a few files at a time.
     private void readWanted() {
         LongList regions = here.takeWanted(MOST_READS - reading);
         if (regions.isEmpty()) {
@@ -278,7 +257,7 @@ public final class TerrainCache {
         }
     }
 
-    // Saved tiles no view needed for this long are let go. Without saving every tile stays.
+    // Without saving every tile stays.
     private void letGo(long idleMs) {
         if (saving) {
             layers.values().forEach(layer -> layer.letGo(idleMs));
@@ -324,8 +303,6 @@ public final class TerrainCache {
         }
     }
 
-    // Reads the land at your height round you nearest first. Rising or dropping a block starts it
-    // again and the chunks the server changes are read again.
     private void keepCave(ClientLevel level, LocalPlayer player, int radius) {
         if (radius <= 0) {
             clearCave();
@@ -381,8 +358,6 @@ public final class TerrainCache {
         return level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
     }
 
-    // Writes the tiles that wait once the pause after the last write has passed. Leaving a server
-    // writes them at once.
     private void writeDue(boolean now) {
         long time = System.currentTimeMillis();
         if (!saving || server == null || !now && time - lastWrite < WRITE_GAP_MS) {

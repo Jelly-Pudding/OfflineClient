@@ -5,7 +5,6 @@ package com.jellypudding.offlineclient.util;
 // the middle of the ball.
 public final class BlockRing {
 
-    // A block of a level cut by how far east and south of the middle it lies.
     @FunctionalInterface
     public interface Cell {
         void at(int dx, int dz);
@@ -17,15 +16,13 @@ public final class BlockRing {
     private BlockRing() {
     }
 
-    // True for a block of the skin of a ball with that radius.
     public static boolean onBall(long dx, long dy, long dz, int radius) {
         double distance = Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
         return distance >= radius - HALF && distance < radius + HALF;
     }
 
-    // Every block of the cut at one height that lies inside the window. Only the stretch of each
-    // column the ring crosses inside the window is looked at. A ring of any size costs no more
-    // than the part of it in the window.
+    // Only the stretch of each column the ring crosses inside the window is looked at. A ring of
+    // any size costs no more than the part of it in the window.
     public static void slice(int radius, long dy, int minDx, int maxDx, int minDz, int maxDz, Cell out) {
         double outer = radius + HALF;
         double inner = Math.max(0, radius - HALF);
@@ -51,8 +48,6 @@ public final class BlockRing {
         }
     }
 
-    // The blocks of one column between two distances from the middle row. The sign says
-    // whether they lie south or north.
     private static void column(int radius, int dx, long dy, long from, long to, int sign, Cell out) {
         for (long dz = from; dz <= to; dz++) {
             if (onBall(dx, dy, dz, radius)) {

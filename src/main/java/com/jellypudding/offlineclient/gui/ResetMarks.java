@@ -20,28 +20,18 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-// The marks in the strip left of a settings block. A mark says a row differs from how it
-// shipped and a press on it puts the row back. The reset row at the foot of a block is ResetFoot.
-// The ClickGUI module can hide both. A middle click and undo keep working whilst they are hidden.
+// A middle click and undo keep working whilst the marks are hidden.
 final class ResetMarks {
 
-    // The strip starts past the panel's resize band and ends where the rows start. Only its
-    // part left of the block's accent rule lights up.
     private static final int ZONE_LEFT = 2;
 
-    // The square mark and the gap between a name and the mark after it.
     private static final int MARK = 4;
     private static final int MARK_GAP = 3;
-    // How much room a module or piece row gives up whilst its name carries a mark.
     static final int MARK_ROOM = MARK_GAP + MARK;
-    // How far the mark sits below the top of the text it stands beside. Level with lower case.
     private static final int MARK_DROP = 2;
 
-    // A long default in a tooltip is cut to this width.
     private static final int DEFAULT_ROOM = 100;
-    // How strongly a row that was just put back is washed green.
     private static final float WASH = 0.125f;
-    // The forward arrow whilst the pointer is on its row but not on the arrow.
     private static final float UNDO_SHADE = 0.6f;
 
     // The last control a press reset or undid. A second press on it this soon is the tail
@@ -58,30 +48,26 @@ final class ResetMarks {
         return Modules.get(ClickGuiModule.class).showsResetMarks();
     }
 
-    // How many settings of a block differ from their defaults. Nought whilst the marks are hidden.
     static int shownChanges(SettingBlock block) {
         return shown() ? block.changed() : 0;
     }
 
-    // The hit zone of the strip beside a row. A tall row only takes part with its name band.
+    // A tall row only takes part with its name band.
     static boolean inZone(double mx, double my, int rowX, int top) {
         return SettingWidget.isOver(mx, my, rowX + ZONE_LEFT, top,
             SettingWidget.blockContentX(rowX) - rowX - ZONE_LEFT, GuiTheme.SETTING_HEIGHT);
     }
 
-    // A whole row from the strip to the right edge of the block.
     static boolean onLine(double mx, double my, int rowX, int right, int top, int height) {
         return SettingWidget.isOver(mx, my, rowX + ZONE_LEFT, top, right - rowX - ZONE_LEFT, height);
     }
 
-    // The part of the strip beside a row that lights up under the pointer.
     static void lightZone(GuiGraphicsExtractor context, int rowX, int top) {
         context.fill(rowX + ZONE_LEFT, top, rowX + SettingWidget.INDENT, top + GuiTheme.SETTING_HEIGHT,
             GuiTheme.HOVER_WASH);
         context.guiRenderState.up();
     }
 
-    // The arrow that puts a row back or brings back what it held.
     static void arrow(GuiGraphicsExtractor context, int rowX, int textTop, boolean forward, int colour) {
         RenderUtil.hookArrow(context, glyphX(rowX, RenderUtil.HOOK_WIDTH), glyphY(textTop, RenderUtil.HOOK_HEIGHT),
             forward, colour);
@@ -91,17 +77,14 @@ final class ResetMarks {
         RenderUtil.tick(context, glyphX(rowX, RenderUtil.TICK_SIZE), glyphY(textTop, RenderUtil.TICK_SIZE), colour);
     }
 
-    // Centred in the lit part of the strip.
     private static int glyphX(int rowX, int width) {
         return rowX + ZONE_LEFT + (SettingWidget.INDENT - ZONE_LEFT - width) / 2;
     }
 
-    // Centred on the text of the row.
     private static int glyphY(int textTop, int height) {
         return textTop + (GuiTheme.TEXT_HEIGHT - height) / 2;
     }
 
-    // The square after the name of a module or a piece with changed settings.
     static void headerMark(GuiGraphicsExtractor context, int nameRight, int textTop) {
         square(context, nameRight + MARK_GAP, textTop, GuiTheme.accentText(), true);
     }
@@ -116,17 +99,16 @@ final class ResetMarks {
         }
     }
 
-    // A description with how many settings differ from their defaults after it.
     static String withCount(String description, int changed) {
         return changed == 0 ? description : description + " " + Tally.counted(changed, "setting") + " changed.";
     }
 
-    // What chat calls the reset of one row. A bind is named after its module.
+    // A bind is named after its module.
     private static String nameOf(SettingBlock block, Setting<?> setting) {
         return setting == block.bind() ? block.name() + " bind" : setting.getName();
     }
 
-    // A middle press on a row puts that row back. An armed action stands down instead.
+    // An armed action stands down instead.
     static void middle(SettingBlock block, Setting<?> setting) {
         if (setting instanceof ActionSetting) {
             setting.reset();
@@ -135,7 +117,6 @@ final class ResetMarks {
         }
     }
 
-    // True for a press that lands too soon after one on the same control that changed something.
     static boolean tooSoon(Object control) {
         return control == lastControl
             && System.currentTimeMillis() - lastActedAt < MouseHandler.DOUBLE_CLICK_THRESHOLD_MS;
@@ -146,20 +127,17 @@ final class ResetMarks {
         lastActedAt = System.currentTimeMillis();
     }
 
-    // One block's strip worked out once for each draw and each press. A setting the layout hides
-    // answers to the nearest shown row above it in its family and rings that row whilst it differs.
+    // A setting the layout hides answers to the nearest shown row above it in its family and rings
+    // that row whilst it differs.
     static final class Strip {
 
         private final SettingBlock block;
         private final boolean marksShown;
         private final int left;
         private final int right;
-        // The shown row that answers for each hidden setting. Minus one for a shown row and
-        // for a hidden setting with no shown row above it.
+        // Minus one for a shown row and for a hidden setting with no shown row above it.
         private final int[] chargedTo;
-        // How many changed settings each shown row answers for.
         private final int[] hiddenChanged;
-        // The freshest reset or undo of each shown row and what it answers for.
         private final float[] fresh;
         private final int changed;
         private final int hidden;
@@ -227,7 +205,6 @@ final class ResetMarks {
             return -1;
         }
 
-        // The row and every hidden setting it answers for.
         private List<Setting<?>> family(int row) {
             List<Setting<?>> family = new ArrayList<>();
             family.add(block.row(row));
@@ -257,7 +234,6 @@ final class ResetMarks {
             return State.NONE;
         }
 
-        // A block armed for a reset shows in red what the reset would put back. Its bind stays.
         private boolean red(int row) {
             return foot == ResetFoot.State.ARMED && block.row(row) != block.bind();
         }
@@ -274,12 +250,11 @@ final class ResetMarks {
             return right;
         }
 
-        // How many settings differ from their defaults. The bind is left out.
+        // The bind is left out.
         int changed() {
             return changed;
         }
 
-        // How many of the changed settings the layout does not show.
         int hidden() {
             return hidden;
         }
@@ -292,7 +267,6 @@ final class ResetMarks {
             return ResetFoot.shows(block, foot);
         }
 
-        // A green wash under a row that was just put back or brought back.
         void wash(GuiGraphicsExtractor context, int row, int x, int top, int width, int height) {
             if (marksShown && fresh[row] > 0) {
                 context.fill(x, top, x + width, top + height, ColorUtil.fade(GuiTheme.GREEN, WASH * fresh[row]));
@@ -300,7 +274,6 @@ final class ResetMarks {
             }
         }
 
-        // The mark beside a row. With the pointer on the row it turns into the arrow that acts.
         void mark(GuiGraphicsExtractor context, int row, int top, int height, int textTop, int mouseX, int mouseY,
                   boolean hoverAllowed, SettingWidget.Host host) {
             if (!marksShown) {
@@ -332,8 +305,6 @@ final class ResetMarks {
             }
         }
 
-        // A press on the arrow beside a row. Nothing happens beside a row with nothing to do or
-        // whilst the marks are hidden.
         void press(int row, int button) {
             Setting<?> setting = block.row(row);
             if (!marksShown || tooSoon(setting)) {
@@ -383,7 +354,6 @@ final class ResetMarks {
             : "The default is " + start + ". Click here or middle click the row to put it back.";
     }
 
-    // A long default is cut short. Typed text keeps the quotes round it.
     private static String defaultWords(Setting<?> setting) {
         String text = setting.defaultText();
         Font font = ClientFonts.gui();

@@ -12,7 +12,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// ChestLink may keep the chest itself open. A copy is kept every time you open one.
 public final class EnderChestCommand extends Command {
 
     private static final int TINT = 0x80100010;

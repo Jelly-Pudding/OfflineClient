@@ -23,13 +23,10 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-// A message starting with a slash is sent as a command. The lines go at the pace of a macro and
-// wait whilst the server would count one more towards a kick for spam.
 public final class Spam extends Module {
 
     public enum Source { LIST, FILE }
 
-    // Tacked onto the end of a message when the variation calls for it.
     private static final String TAILS = "!.~";
 
     private final EnumSetting<Source> source = new EnumSetting<>("Source",
@@ -74,19 +71,14 @@ public final class Spam extends Module {
     private final BoolSetting stopOnDisconnect = new BoolSetting("Stop on disconnect",
         "Turns itself off when the disconnected screen opens.", true);
 
-    // What is left of the message under way. A long chat line split into pieces leaves several and
-    // a piece the server would not take yet waits here for the next tick.
     private final Deque<String> pieces = new ArrayDeque<>();
-    // Whether the message under way runs as a server command and whether it was split.
     private boolean command;
     private boolean splitting;
-    // Ticks from a whole message going out to the next one.
     private int after;
     private int timer;
     private boolean wasInGame;
     private int sent;
 
-    // The lines of the file and the name they were read from. Null until the file is read.
     private List<String> fileLines;
     private String fileName;
     private int fileNext;
@@ -141,7 +133,6 @@ public final class Spam extends Module {
         if (--timer > 0) {
             return;
         }
-        // The rest of a message goes out before the next line starts.
         if (pieces.isEmpty()) {
             timer = nextDelay();
             after = timer;
@@ -152,7 +143,6 @@ public final class Spam extends Module {
         sendPiece();
     }
 
-    // Readies the next message. False whilst there is nothing to send.
     private boolean take() {
         String text = nextLine();
         if (text == null) {
@@ -180,8 +170,7 @@ public final class Spam extends Module {
         return true;
     }
 
-    // A message counts as one once its last piece is out. A piece the server would not take yet
-    // is tried again on the next tick. A piece of a split message is chat whatever it starts with.
+    // A piece of a split message is chat whatever it starts with.
     private void sendPiece() {
         String piece = pieces.getFirst();
         if (!(command ? ChatPace.MACRO.say(piece) : ChatPace.MACRO.chat(piece))) {
@@ -205,7 +194,6 @@ public final class Spam extends Module {
         }
     }
 
-    // Switches off once every line of the file has gone out. True when it did.
     private boolean fileSpent() {
         if (!source.is(Source.FILE) || fileLines == null || fileNext < fileLines.size()) {
             return false;
@@ -215,7 +203,6 @@ public final class Spam extends Module {
         return true;
     }
 
-    // The next line of the list or the file. Null whilst there is nothing to send.
     private String nextLine() {
         if (source.is(Source.LIST)) {
             return lines.pickWhole();
@@ -229,7 +216,6 @@ public final class Spam extends Module {
         return fileSpent() ? null : SentLine.filled(fileLines.get(fileNext++));
     }
 
-    // A file that cannot be read or holds no text switches the module off and says why.
     private void readFile() {
         ListFile.Read read = ListFile.read(file.getValue());
         if (read.problem() != null) {
@@ -259,8 +245,6 @@ public final class Spam extends Module {
         return Math.max(1, (int) Math.round(seconds * SharedConstants.TICKS_PER_SECOND));
     }
 
-    // One small change to keep the message readable. A letter changes case or doubles up
-    // or the message gains a tail. With no letters only a number or tail is added.
     private static String vary(String text) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         List<Integer> letters = new ArrayList<>();

@@ -22,17 +22,15 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import java.util.Iterator;
 import java.util.List;
 
-// Renames the chosen items at an open anvil one stack after another. A rename costs one level
-// plus the work the item has had before and the anvil never calls a rename too expensive.
-// The anvil screen blanks the name each time a new item goes in and the name is typed again.
+// A rename costs one level plus the work the item has had before and the anvil never calls a rename
+// too expensive. The anvil screen blanks the name each time a new item goes in and the name is
+// typed again.
 public final class AutoRename extends StationModule<AnvilMenu> {
 
     public enum Source { TYPED, CONTENTS, NONE }
 
-    // Ticks between two rounds of clicks.
     private static final int PACE = 4;
 
-    // The words a typed name can count with.
     private static final String NUMBER = "{n}";
     private static final String COLUMN = "{column}";
     private static final String ROW = "{row}";
@@ -143,7 +141,6 @@ public final class AutoRename extends StationModule<AnvilMenu> {
         awaitServer(menu);
     }
 
-    // True once the module has stopped over a name the anvil would throw away.
     private boolean tooLong(String wanted) {
         if (wanted.length() <= AnvilMenu.MAX_NAME_LENGTH) {
             return false;
@@ -152,8 +149,7 @@ public final class AutoRename extends StationModule<AnvilMenu> {
         return true;
     }
 
-    // The name the anvil should give the stack. An empty one takes its name off. Null for a
-    // stack that is not chosen or carries the right name or is nothing an anvil will rename.
+    // An empty name takes the stack's name off. Null leaves the stack alone.
     private String nameFor(ItemStack stack) {
         if (!items.contains(stack.getItem()) || !EnchantmentHelper.canStoreEnchantments(stack)) {
             return null;
@@ -168,7 +164,6 @@ public final class AutoRename extends StationModule<AnvilMenu> {
         };
     }
 
-    // Null for no name at all and for the one the stack already shows.
     private static String differing(ItemStack stack, String wanted) {
         return wanted.isEmpty() || stack.getHoverName().getString().equals(wanted) ? null : wanted;
     }
@@ -192,8 +187,6 @@ public final class AutoRename extends StationModule<AnvilMenu> {
             .replace(ROW, String.valueOf(place / width + 1));
     }
 
-    // The name of the first item a box or bundle holds cut to what an anvil takes. Empty for
-    // an item that holds nothing.
     private static String firstInside(ItemStack stack) {
         ItemContainerContents box = stack.get(DataComponents.CONTAINER);
         BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);

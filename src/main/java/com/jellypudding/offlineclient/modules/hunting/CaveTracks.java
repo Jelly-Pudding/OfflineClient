@@ -35,9 +35,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-// Finds where players dug into cave air and where they broke nether portals. Structures and
-// caves carved before the cave generators changed are cave air. A broken block or a portal
-// block of a broken frame leaves plain air there.
+// Structures and caves carved before the cave generators changed are cave air. A broken block or a
+// portal block of a broken frame leaves plain air there.
 public final class CaveTracks extends Module implements FindSource {
 
     private static final String MINED = "mined block";
@@ -45,11 +44,9 @@ public final class CaveTracks extends Module implements FindSource {
     // A portal frame holds its inside and one block of obsidian round it.
     private static final int FRAME = 2;
     private static final int PERCENT = 100;
-    // Finds whose plain air was filled in are looked for this often.
     private static final int FILLED_CHECK_TICKS = 20;
-    // Far more shapes than a session sees. It only bounds the memory.
+    // It only bounds the memory.
     private static final int SHAPES_KEPT = 20_000;
-    // A burst of finds as a cave comes into view is told as one message now and then.
     private static final int QUIET_SECONDS = 5;
     // A small dig and the open air round it reach a few blocks past the chunk that keeps its
     // trace. A broken portal is kept beside its own edge.
@@ -98,8 +95,7 @@ public final class CaveTracks extends Module implements FindSource {
 
     private final ChunkScanner<Trace> scanner = new ChunkScanner<Trace>(2).borderReach(TRACE_BORDER)
         .onResult((_, traces) -> traces.forEach(this::found));
-    // The whole shape of each find seen this session. A find from an older session is drawn
-    // as its block until its chunk is scanned again.
+    // A find from an older session is drawn as its block until its chunk is scanned again.
     private final Map<Long, AABB> shapes = new BoundedMap<>(SHAPES_KEPT);
     private CaveTraces.Rules rules;
     private boolean ignoring;
@@ -177,7 +173,6 @@ public final class CaveTracks extends Module implements FindSource {
         }
     }
 
-    // A find whose plain air is gone was filled in or built over. Only loaded spots are looked at.
     private void forgetFilled() {
         for (FindLog.Find find : new ArrayList<>(finds.here())) {
             BlockPos pos = find.pos();
@@ -188,7 +183,6 @@ public final class CaveTracks extends Module implements FindSource {
         }
     }
 
-    // The finds of the kinds switched on in the dimension you are in.
     private List<FindLog.Find> visible() {
         if (mc.level == null) {
             return List.of();

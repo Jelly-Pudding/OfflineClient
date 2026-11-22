@@ -15,17 +15,15 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-// Puts settings back to how they started and remembers what they held. A change can be
-// taken back until its settings move on or the game closes. Everything runs on the client thread.
+// A change can be taken back until its settings move on or the game closes. Everything runs on the
+// client thread.
 public final class Defaults {
 
-    // How many changes Ctrl Z can walk back through.
     private static final int REMEMBERED = 32;
 
     // Newest first. Never saved.
     private static final Deque<Change> HISTORY = new ArrayDeque<>();
 
-    // When each setting was last put back or brought back. The GUI lights those rows up.
     private static final Map<Setting<?>, Long> TOUCHED = new IdentityHashMap<>();
 
     // Told after every reset and edit and undo which settings it changed. The HUD listens. A
@@ -37,8 +35,7 @@ public final class Defaults {
     private Defaults() {
     }
 
-    // What a setting held before a change and what the change left. A null after stands
-    // for its default.
+    // A null after stands for the default.
     private record Entry(Setting<?> setting, JsonElement before, JsonElement after) {
 
         // False once the player has moved the setting on.
@@ -47,7 +44,6 @@ public final class Defaults {
         }
     }
 
-    // One reset or one bulk edit of a list. Chat names it and a link takes it back by its id.
     public static final class Change {
 
         private final int id;
@@ -68,17 +64,14 @@ public final class Defaults {
             return name;
         }
 
-        // How many settings it changed.
         public int size() {
             return entries.size();
         }
     }
 
-    // What an undo brought back and how many settings it left alone because they had moved on.
     public record Undone(String name, int restored, int kept) {
     }
 
-    // How many of the settings differ from their defaults.
     public static int changed(Collection<? extends Setting<?>> settings) {
         int changed = 0;
         for (Setting<?> setting : settings) {
@@ -89,8 +82,7 @@ public final class Defaults {
         return changed;
     }
 
-    // Puts back every setting in scope that differs from its default as one change. Null when
-    // none did.
+    // Null when no setting in scope differed from its default.
     public static Change reset(String name, Collection<? extends Setting<?>> scope) {
         List<Entry> entries = new ArrayList<>();
         for (Setting<?> setting : scope) {
@@ -103,10 +95,8 @@ public final class Defaults {
         return remember(name, entries);
     }
 
-    // Puts the settings in scope back the way the edit does it where their own defaults are
-    // not the place to go. What each held before and after is remembered as one change. The
-    // name is asked for once the edit has run and can say what it changed. Null when the edit
-    // changed nothing.
+    // For settings whose own defaults are not the place to go. The name is asked for once the edit
+    // has run. Null when the edit changed nothing.
     public static Change reset(Supplier<String> name, Collection<? extends Setting<?>> scope, Runnable edit) {
         List<Entry> entries = changedBy(scope, edit);
         for (Entry entry : entries) {
@@ -115,13 +105,11 @@ public final class Defaults {
         return entries.isEmpty() ? null : remember(name.get(), entries);
     }
 
-    // Runs an edit on a setting and remembers what it held before. Null when the edit changed
-    // nothing.
+    // Null when the edit changed nothing.
     public static Change record(String name, Setting<?> setting, Runnable edit) {
         return remember(name, changedBy(List.of(setting), edit));
     }
 
-    // Runs the edit and lists the settings it changed with what each held before and after.
     private static List<Entry> changedBy(Collection<? extends Setting<?>> scope, Runnable edit) {
         List<JsonElement> before = new ArrayList<>();
         for (Setting<?> setting : scope) {
@@ -161,7 +149,6 @@ public final class Defaults {
         return change;
     }
 
-    // True whilst the newest change of the setting still holds and can be taken back.
     public static boolean canUndo(Setting<?> setting) {
         for (Change change : HISTORY) {
             for (Entry entry : change.entries) {
@@ -173,7 +160,6 @@ public final class Defaults {
         return false;
     }
 
-    // True whilst the change is remembered and any of its settings still holds.
     public static boolean canUndo(Change change) {
         if (!HISTORY.contains(change)) {
             return false;
@@ -186,8 +172,6 @@ public final class Defaults {
         return false;
     }
 
-    // Takes back the newest change of each setting where it still holds. Hands back how many
-    // settings came back.
     public static int undo(Collection<? extends Setting<?>> settings) {
         List<Setting<?>> restored = new ArrayList<>();
         for (Setting<?> setting : settings) {
@@ -224,7 +208,7 @@ public final class Defaults {
         return false;
     }
 
-    // Takes back a whole change and forgets it. Null when the history does not hold it.
+    // Null when the history does not hold the change.
     public static Undone undo(Change change) {
         if (change == null || !HISTORY.remove(change)) {
             return null;
@@ -240,12 +224,10 @@ public final class Defaults {
         return new Undone(change.name(), restored.size(), change.size() - restored.size());
     }
 
-    // The newest change. Null when nothing is remembered.
     public static Undone undoNewest() {
         return undo(HISTORY.peekFirst());
     }
 
-    // Null when no remembered change has that id.
     public static Change find(int id) {
         for (Change change : HISTORY) {
             if (change.id() == id) {
@@ -261,7 +243,6 @@ public final class Defaults {
         return at == null ? 0f : Flash.strength(at + Flash.SHOWN_MS);
     }
 
-    // The freshest of the settings.
     public static float freshness(Collection<? extends Setting<?>> settings) {
         float freshest = 0f;
         for (Setting<?> setting : settings) {
@@ -285,8 +266,6 @@ public final class Defaults {
         TOUCHED.put(setting, System.currentTimeMillis());
     }
 
-    // Every reset and edit and undo saves and tells the listeners which settings it changed.
-    // Rows that finished lighting up are dropped.
     private static void saveAndTell(Collection<Setting<?>> changed) {
         long now = System.currentTimeMillis();
         TOUCHED.values().removeIf(at -> at + Flash.SHOWN_MS < now);

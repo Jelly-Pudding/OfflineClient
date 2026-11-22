@@ -81,14 +81,13 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
             this.item = item;
         }
 
-        // The kind of a find from what the finds call it. Every other name is where a map leads.
+        // Every other name is where a map leads.
         private static Kind named(String name) {
             return name.equals(LODESTONE_NAME) ? LODESTONE : name.equals(FLOWERS_NAME) ? FLOWERS : MAP;
         }
     }
 
-    // Where an item was seen. The label names the place and the chat line tells it in
-    // full around the name of the item.
+    // The label names the place and the chat line tells it in full around the name of the item.
     private record Carrier(String label, String lead, String tail) {
 
         String phrase(Kind kind) {
@@ -96,19 +95,16 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // A spot an item points to and what the finds call it.
     private record Pointer(GlobalPos spot, Kind kind, String name) {
 
         String dimension() {
             return spot.dimension().identifier().toString();
         }
 
-        // Such as Lodestone or Woodland mansion.
         String title() {
             return ChatUtil.capitalised(name);
         }
 
-        // Such as a lodestone or a woodland mansion.
         String news() {
             return switch (kind) {
                 case LODESTONE -> "a lodestone";
@@ -118,7 +114,6 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // A find told about since the module was switched on and when.
     private record Told(Carrier carrier, long time) {
     }
 
@@ -139,10 +134,10 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
     // Deep enough for a bundle inside a bundle inside a shulker box.
     private static final int MAX_DEPTH = 4;
 
-    // Far more finds than a session meets. It only bounds the memory.
+    // It only bounds the memory.
     private static final int MAX_TOLD = 1024;
 
-    // The newest finds the leaks list shows. Older ones stay in the finds.
+    // Older ones stay in the finds.
     private static final int MAX_LEAKS = 64;
 
     private static final double LABEL_LIFT = 1.5;
@@ -171,11 +166,9 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
     private final Notice notice = new Notice(this, Notice.Where.CHAT);
     private final FindLines marks = new FindLines(finds, false);
 
-    // What was told since the module was switched on. A toggle tells it all again.
     private final Map<Pointer, Told> told = new BoundedMap<>(MAX_TOLD);
-    // The newest of them as the leaks list shows them. Rebuilt every tick.
     private final List<Leak> leaks = new ArrayList<>();
-    // The spots the item being looked at points to. Reused for every item.
+    // Reused for every item.
     private final List<Pointer> pointed = new ArrayList<>();
     private final ServerWatch server = new ServerWatch();
 
@@ -298,7 +291,6 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         return new Carrier(type, "the ", " the §f" + type + " §7carries");
     }
 
-    // Fills the pointed list and says whether it found anything.
     private boolean points(ItemStack stack) {
         pointed.clear();
         if (!stack.isEmpty()) {
@@ -307,7 +299,6 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         return !pointed.isEmpty();
     }
 
-    // Every spot the item points to and those of anything packed inside it.
     private void targets(ItemInstance item, int depth) {
         LodestoneTracker tracker = item.get(DataComponents.LODESTONE_TRACKER);
         if (tracker != null) {
@@ -344,13 +335,10 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // Where a map marker leads in words such as woodland mansion.
     private static String destination(Holder<MapDecorationType> type) {
         return type.value().equals(MapDecorationTypes.RED_X.value()) ? TREASURE : ChatUtil.words(type.value().assetId());
     }
 
-    // Every spot goes in the finds. Each is told once since the module was switched on and
-    // a spot new to the finds takes a waypoint.
     private void note(Carrier carrier) {
         long now = System.currentTimeMillis();
         for (Pointer pointer : pointed) {

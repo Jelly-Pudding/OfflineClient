@@ -67,7 +67,6 @@ public enum SpawnerPlace {
         this.home = home;
     }
 
-    // The name the place picker shows.
     public String label() {
         return label;
     }
@@ -77,7 +76,6 @@ public enum SpawnerPlace {
         return where;
     }
 
-    // The place of a mob spawner from its mob and the dimension and the block under it.
     public static SpawnerPlace of(EntityType<?> mob, ResourceKey<Level> dimension, BlockState below) {
         SpawnerPlace place = byMob(mob, below);
         return place.belongsIn(dimension) ? place : PLACED;
@@ -111,13 +109,10 @@ public enum SpawnerPlace {
         return home == null || !vanilla || dimension.equals(home);
     }
 
-    // True for a place whose room shows where a player broke a block.
     public boolean hasRoom() {
         return this == DUNGEON || this == MINESHAFT || this == STRONGHOLD;
     }
 
-    // The count an untouched spawner of this place holds. The bastion and mansion templates
-    // save theirs at nought and every other spawner starts at twenty.
     public int untouchedCount() {
         return this == BASTION || this == MANSION ? TEMPLATE_COUNT : FRESH_COUNT;
     }
@@ -149,7 +144,6 @@ public enum SpawnerPlace {
         return type == EntityTypes.CHEST_MINECART && home != Level.NETHER;
     }
 
-    // True for a light the caves round this place or a structure that often meets it makes.
     // Mineshaft beams and stronghold walls carry wall torches of their own.
     public boolean makesLight(SeenBlocks world, BlockPos pos, BlockState state) {
         if (CAVE_LIGHTS.contains(state.getBlock())) {
@@ -162,7 +156,6 @@ public enum SpawnerPlace {
         return TORCH_SUPPORTS.contains(world.at(support.getX(), support.getY(), support.getZ()).getBlock());
     }
 
-    // True for a mob that light keeps from spawning.
     public static boolean lightShy(EntityType<?> mob) {
         return LIGHT_SHY.contains(mob);
     }

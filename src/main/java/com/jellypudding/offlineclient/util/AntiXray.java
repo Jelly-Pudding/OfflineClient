@@ -51,13 +51,11 @@ public final class AntiXray {
         return openNear(view::get, x, y, z);
     }
 
-    // The same for a block of the world the client holds.
     public static boolean shownTruly(BlockGetter level, BlockPos pos) {
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         return openNear((x, y, z) -> level.getBlockState(at.set(x, y, z)), pos.getX(), pos.getY(), pos.getZ());
     }
 
-    // True when the block or one of its six neighbours is see through.
     private static boolean openNear(SeenBlocks world, int x, int y, int z) {
         if (seeThrough(world.at(x, y, z))) {
             return true;

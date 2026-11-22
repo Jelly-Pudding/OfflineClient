@@ -32,7 +32,6 @@ public final class AntiBed extends RespawnBlockBreaker {
 
     private final SlotSwap stringSlots = new SlotSwap();
 
-    // The head bed already sent to the server. Null once it is gone.
     private BlockPos headBed;
 
     public AntiBed() {

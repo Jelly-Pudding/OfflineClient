@@ -20,8 +20,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Puts the camera in the eyes of another entity. Your body stays where it stands and
-// stays yours to move. CameraMixin places the view the same way it does for Freecam.
+// CameraMixin places the view the same way it does for Freecam.
 public final class RemoteView extends Module implements AwayView {
 
     public enum Pick { NEAREST, NAME }
@@ -49,7 +48,6 @@ public final class RemoteView extends Module implements AwayView {
 
     // The network id of whoever was viewed last. A second ask for the same name starts after it.
     private int lastViewed = -1;
-    // Whose eyes the next switch on borrows when a caller already knows.
     private Entity asked;
 
     public RemoteView() {
@@ -70,7 +68,6 @@ public final class RemoteView extends Module implements AwayView {
         return viewed == null ? null : EntityUtil.displayNameOf(viewed);
     }
 
-    // Switches on in the eyes of this entity whatever the filter and the name say.
     public void view(Entity entity) {
         setEnabled(false);
         asked = entity;
@@ -100,7 +97,6 @@ public final class RemoteView extends Module implements AwayView {
         }
     }
 
-    // The nearest one that fits. A name is walked through from near to far one ask at a time.
     private Entity pickTarget() {
         List<Entity> fits = EntityUtil.ranked(SEARCH_RANGE, TargetPriority.NEAREST, this::viewable);
         if (fits.isEmpty()) {

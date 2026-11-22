@@ -41,13 +41,11 @@ public final class WindLaunch {
             && spot.distanceTo(blast.center()) <= BLAST_REACH;
     }
 
-    // Whether a charge is to hand at all. The offhand counts as well.
     public static boolean hasCharge(boolean wholeInventory) {
         return MC.player.getOffhandItem().is(Items.WIND_CHARGE)
             || InventoryUtil.findSlot(Items.WIND_CHARGE, limit(wholeInventory)) != -1;
     }
 
-    // Standing on the ground with a charge to hand and the last throw cooled down.
     public static boolean canThrow(boolean wholeInventory) {
         LocalPlayer player = MC.player;
         return player.onGround() && !player.isUsingItem() && hasCharge(wholeInventory)
@@ -58,8 +56,6 @@ public final class WindLaunch {
         return wholeInventory ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
     }
 
-    // Throws from the offhand when a charge sits there. Otherwise one is borrowed into the
-    // main hand for the throw. False when nothing could be thrown.
     public boolean start(boolean wholeInventory) {
         if (jumpNext || !canThrow(wholeInventory)) {
             return false;
@@ -95,7 +91,6 @@ public final class WindLaunch {
         return true;
     }
 
-    // True between the throw and the jump.
     public boolean busy() {
         return jumpNext;
     }

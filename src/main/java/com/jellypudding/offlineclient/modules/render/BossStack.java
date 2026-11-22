@@ -24,7 +24,6 @@ public final class BossStack extends Module {
     private final NumberSetting gap = new NumberSetting("Bar gap",
         "Pixels of space between one bar and the next.", 10, 0, 20, 1, " px");
 
-    // How many bars each drawn name stands for this frame.
     private final Map<String, Integer> counts = new HashMap<>();
 
     public BossStack() {
@@ -33,7 +32,6 @@ public final class BossStack extends Module {
         searchTags("boss bar", "wither", "dragon");
     }
 
-    // The bars to draw with the copies of a name folded into the first one.
     public Iterator<LerpingBossEvent> bars(Iterator<LerpingBossEvent> all) {
         counts.clear();
         if (!isEnabled() || !stack.isOn()) {

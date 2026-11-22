@@ -10,8 +10,8 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Supplier;
 
-// What a blast of your own may cost you and your friends. Most modules that blow something up
-// hold all three rows. A module with its own rule for friends holds only the two rows for you.
+// Most modules that blow something up hold all three rows. A module with its own rule for friends
+// holds only the two rows for you.
 public final class BlastLimits {
 
     private final NumberSetting maxSelfDamage;
@@ -33,7 +33,6 @@ public final class BlastLimits {
             maxDamage, 0, sliderMax, 0.5) : null;
     }
 
-    // Only Max self damage and Anti suicide.
     public static BlastLimits selfOnly(double maxDamage, double sliderMax) {
         return new BlastLimits(maxDamage, sliderMax, false);
     }
@@ -43,7 +42,6 @@ public final class BlastLimits {
             : new Setting<?>[] {maxSelfDamage, maxFriendDamage, antiSuicide};
     }
 
-    // Shows the rows only whilst the parent holds the value.
     public <E extends Enum<E>> BlastLimits under(EnumSetting<E> parent, E value) {
         Setting.under(settings(), parent, value);
         return this;
@@ -56,7 +54,6 @@ public final class BlastLimits {
         return this;
     }
 
-    // Hides the rows whilst the supplier returns false.
     public BlastLimits visibleWhen(Supplier<Boolean> visibility) {
         for (Setting<?> row : settings()) {
             row.visibleWhen(visibility);
@@ -64,16 +61,13 @@ public final class BlastLimits {
         return this;
     }
 
-    // True when a blast of this power at the point stays within every limit. The ignored
-    // blocks are gone by the time it goes off.
+    // The ignored blocks are gone by the time the blast goes off.
     public boolean allows(Vec3 source, float power, BlockPos... ignored) {
         return selfTakes(ExplosionUtil.blastDamage(OfflineClient.MC.player, source, power, Vec3.ZERO, ignored))
             && (maxFriendDamage == null
                 || ExplosionUtil.friendsSafe(source, power, maxFriendDamage.getFloat(), ignored));
     }
 
-    // True when you may take this much from blasts of your own. Anti suicide refuses anything
-    // that could kill.
     public boolean selfTakes(float damage) {
         return damage <= maxSelfDamage.getFloat()
             && (!antiSuicide.isOn() || damage < EntityUtil.totalHealth(OfflineClient.MC.player));

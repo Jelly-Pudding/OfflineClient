@@ -13,8 +13,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
-// Every right click runs several times in the same tick. A stack of pearls or snowballs goes
-// out in one go.
 public final class Throw extends Module {
 
     // A use aimed at a block sends a click on the block and then a use of the item. The real

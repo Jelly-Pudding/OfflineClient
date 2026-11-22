@@ -9,9 +9,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.function.Consumer;
 
-// The map files waiting in offlineclient/mapart. Each holds the picture of one map in any format
-// a build file comes in. They are printed from A to Z and a printed one moves into the finished
-// folder inside.
+// A printed file moves into the finished folder inside.
 public final class MapFiles {
 
     private static final String FOLDER = "mapart";
@@ -24,17 +22,14 @@ public final class MapFiles {
         return DataFiles.path(FOLDER);
     }
 
-    // The folder as a player finds it from the game directory.
     public static String shown() {
         return "offlineclient/" + FOLDER;
     }
 
-    // The files waiting from A to Z. Empty when the folder is missing.
     public static List<String> waiting() {
         return BuildFiles.names(folder());
     }
 
-    // Makes the folder when it is missing. The log says why it could not be made.
     public static void makeFolder() {
         try {
             Files.createDirectories(folder());
@@ -48,8 +43,6 @@ public final class MapFiles {
         BuildFiles.readOnce(folder(), fileName, then);
     }
 
-    // Moves a printed file into the finished folder. A file of that name there makes way. False
-    // after logging why it could not be moved.
     public static boolean finish(String fileName) {
         Path root = folder().toAbsolutePath().normalize();
         Path file = root.resolve(fileName).normalize();

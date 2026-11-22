@@ -2,11 +2,9 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.setting.EnumSetting;
 
-// Where a module may pick up the item it uses.
 public enum TakeFrom {
     HANDS, HOTBAR, INVENTORY;
 
-    // How many inventory slots from the first a search may look through.
     public int limit() {
         return switch (this) {
             case HANDS -> 0;
